@@ -1,0 +1,23 @@
+from datetime import datetime
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
+from app.database.session import Base
+
+
+class ImpactAnalysis(Base):
+    __tablename__ = "impact_analysis"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    requirement: Mapped[str] = mapped_column(Text, nullable=False)
+    risk_level: Mapped[str] = mapped_column(String(10), nullable=False)
+    files_impacted: Mapped[int] = mapped_column(Integer, nullable=False)
+    modules_impacted: Mapped[int] = mapped_column(Integer, nullable=False)
+    analysis_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class ImpactedFile(Base):
+    __tablename__ = "impacted_files"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    analysis_id: Mapped[str] = mapped_column(String(36), ForeignKey("impact_analysis.id"), nullable=False)
+    file_path: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
