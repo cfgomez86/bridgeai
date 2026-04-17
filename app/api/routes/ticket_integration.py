@@ -93,12 +93,14 @@ def create_ticket(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except HTTPError as exc:
         retryable = exc.code not in (400, 401, 403)
+        jira_body = getattr(exc, "jira_error_body", None)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={
                 "error": f"HTTP {exc.code}: {exc.reason}",
                 "provider": body.integration_type,
                 "retryable": retryable,
+                **({"jira_detail": jira_body} if jira_body else {}),
             },
         )
     except NotImplementedError as exc:

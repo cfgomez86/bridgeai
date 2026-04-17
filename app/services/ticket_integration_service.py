@@ -195,11 +195,14 @@ class TicketIntegrationService:
 
         except HTTPError as exc:
             duration_ms = int((time.monotonic() - start) * 1000)
+            jira_body = getattr(exc, "jira_error_body", None)
             error_msg = f"HTTP {exc.code}: {exc.reason}"
+            if jira_body:
+                error_msg = f"{error_msg} — {jira_body}"
             self._integration_repo.update_status(
                 integration_model.id,
                 status="FAILED",
-                error_message=error_msg,
+                error_message=error_msg[:1000],
             )
             self._audit(
                 story_id=story_id,

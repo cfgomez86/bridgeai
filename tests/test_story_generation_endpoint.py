@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime, timezone
 import pytest
@@ -7,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.main import create_app
-from app.database.session import Base
+from app.database.session import Base, get_db
 from app.api.routes.story_generation import get_story_service
 from app.repositories.requirement_repository import RequirementRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
@@ -18,6 +19,7 @@ from app.services.story_generation_service import StoryGenerationService
 from app.services.story_points_calculator import StoryPointsCalculator
 from app.models.requirement import Requirement
 from app.models.impact_analysis import ImpactAnalysis
+from app.models.user_story import UserStory
 from app.core.config import Settings
 
 
@@ -132,3 +134,95 @@ def test_nonexistent_analysis_returns_404(client):
         json={"requirement_id": "req-endpoint-1", "impact_analysis_id": "does-not-exist", "project_id": "proj"},
     )
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Helpers for GET /stories/{story_id} tests
+# ---------------------------------------------------------------------------
+
+_KNOWN_STORY_ID = "story-get-test-1"
+_KNOWN_STORY_CREATED_AT = datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+
+
+def make_client_with_story():
+    """In-memory DB pre-seeded with one UserStory row; overrides both get_db and get_story_service."""
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    TestSession = sessionmaker(bind=engine)
+
+    db = TestSession()
+    db.add(UserStory(
+        id=_KNOWN_STORY_ID,
+        requirement_id="req-get-1",
+        impact_analysis_id="ana-get-1",
+        project_id="proj-get",
+        title="User Registration with Email Confirmation",
+        story_description="As a user, I want to register with email so I can access the platform.",
+        acceptance_criteria=json.dumps(["User can register", "Email is validated", "Confirmation sent"]),
+        technical_tasks=json.dumps(["Create endpoint", "Add validation", "Send email"]),
+        definition_of_done=json.dumps(["Code reviewed", "Tests passing", "Deployed"]),
+        risk_notes=json.dumps(["External email dependency"]),
+        story_points=5,
+        risk_level="LOW",
+        generation_time_seconds=1.23,
+        created_at=_KNOWN_STORY_CREATED_AT,
+    ))
+    db.commit()
+    db.close()
+
+    def override_get_db():
+        session = TestSession()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app = create_app()
+    app.dependency_overrides[get_db] = override_get_db
+    return TestClient(app)
+
+
+@pytest.fixture(scope="module")
+def story_client():
+    return make_client_with_story()
+
+
+def test_get_story_returns_full_details(story_client):
+    response = story_client.get(f"/api/v1/stories/{_KNOWN_STORY_ID}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["story_id"] == _KNOWN_STORY_ID
+    assert data["requirement_id"] == "req-get-1"
+    assert data["impact_analysis_id"] == "ana-get-1"
+    assert data["project_id"] == "proj-get"
+    assert data["title"] == "User Registration with Email Confirmation"
+    assert data["story_points"] == 5
+    assert data["risk_level"] == "LOW"
+    assert isinstance(data["acceptance_criteria"], list)
+    assert len(data["acceptance_criteria"]) == 3
+    assert isinstance(data["technical_tasks"], list)
+    assert len(data["technical_tasks"]) == 3
+    assert isinstance(data["definition_of_done"], list)
+    assert len(data["definition_of_done"]) == 3
+    assert isinstance(data["risk_notes"], list)
+    assert len(data["risk_notes"]) == 1
+    # SQLite strips timezone info; compare the datetime portion only
+    assert data["created_at"].startswith("2025-01-15T10:30:00")
+
+
+def test_get_story_returns_404_for_missing(story_client):
+    response = story_client.get("/api/v1/stories/does-not-exist")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_get_story_acceptance_criteria_is_list(story_client):
+    response = story_client.get(f"/api/v1/stories/{_KNOWN_STORY_ID}")
+    assert response.status_code == 200
+    criteria = response.json()["acceptance_criteria"]
+    assert isinstance(criteria, list)
+    assert all(isinstance(item, str) for item in criteria)

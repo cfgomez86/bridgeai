@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     JIRA_REQUEST_TIMEOUT_SECONDS: int = 10
     JIRA_MAX_RETRIES: int = 3
     JIRA_RETRY_DELAY_SECONDS: int = 5
+    # Override issue type names when your Jira project uses a different language.
+    # Format: "Story=Historia,Task=Tarea,Bug=Error"
+    JIRA_ISSUE_TYPE_MAP: str = ""
 
     # Azure DevOps integration
     AZURE_DEVOPS_TOKEN: str = ""

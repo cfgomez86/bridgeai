@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Install (first time or after dependency changes)
+# Install Python dependencies (first time or after dependency changes)
 python -m pip install -e ".[dev]"
 
 # Run the API
@@ -16,8 +16,9 @@ uvicorn app.main:app --reload
 # ReDoc       → http://localhost:8000/redoc
 # OpenAPI JSON→ http://localhost:8000/openapi.json
 
-# Run the Streamlit UI (separate terminal)
-streamlit run ui/app.py
+# Run the Next.js frontend (separate terminal)
+cd frontend && npm install && npm run dev
+# UI → http://localhost:3000
 
 # Run all tests
 python -m pytest
@@ -52,9 +53,11 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 **Database** (`app/database/session.py`) — `Base` (DeclarativeBase) lives here; all ORM models must inherit from it so `init_db()` picks them up automatically. Use `get_db()` as a FastAPI dependency for route handlers; use `check_db_connection()` for health checks only.
 
-**Domain objects** (`app/domain/`) — frozen dataclasses with no SQLAlchemy or FastAPI imports. `FileInfo` is the first example; new domain entities follow the same pattern.
+**Domain objects** (`app/domain/`) — frozen dataclasses with no SQLAlchemy or FastAPI imports. Key entities: `FileInfo`, `RequirementUnderstanding`, `UserStory`, `TicketResult`, `TicketIntegration`.
 
-**Services** (`app/services/`) — accept `Settings` via constructor injection (default: `get_settings()`). `CodeScanner` is the first service; it reads `PROJECT_ROOT` from settings and returns `list[FileInfo]`.
+**Services** (`app/services/`) — accept `Settings` via constructor injection (default: `get_settings()`). Ticket providers live in `app/services/ticket_providers/` and follow the `TicketProvider` ABC — `JiraTicketProvider` and `AzureDevOpsTicketProvider` are the two implementations.
+
+**Ticket integration** (`app/services/ticket_integration_service.py`) — orchestrates idempotency check, payload build (for audit), provider call with exponential-backoff retry, and audit log persistence. Supports `jira` and `azure_devops` integration types.
 
 **Logging** (`app/core/logging.py`) — `RequestLoggingMiddleware` attaches a `request_id` UUID to `request.state` on every request. Access it in route handlers via `request.state.request_id`. Use `get_logger(__name__)` everywhere else.
 
@@ -76,6 +79,21 @@ Copy `.env.example` to `.env` before running. Relevant variables:
 | `PROJECT_ROOT` | `.` | Root path scanned by `CodeScanner` |
 | `LOG_LEVEL` | `INFO` | Standard Python logging level |
 | `DRY_RUN` | `false` | Prevents side-effects in future write operations |
+| `AI_PROVIDER` | `stub` | `stub` \| `anthropic` \| `openai` |
+| `ANTHROPIC_API_KEY` | — | Required when `AI_PROVIDER=anthropic` |
+| `JIRA_BASE_URL` | — | e.g. `https://your-org.atlassian.net` |
+| `JIRA_USER_EMAIL` | — | Jira account email |
+| `JIRA_API_TOKEN` | — | Jira API token (generate at id.atlassian.com) |
+| `JIRA_ISSUE_TYPE_MAP` | — | e.g. `Story=Historia,Task=Tarea` for non-English projects |
+| `AZURE_DEVOPS_TOKEN` | — | Azure DevOps Personal Access Token |
+| `AZURE_ORG_URL` | — | e.g. `https://dev.azure.com/your-org` |
+| `AZURE_PROJECT` | — | Azure DevOps project name |
+
+Frontend env — create `frontend/.env.local`:
+
+```
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
 ## Development agents (`.claude/agents/`)
 
@@ -88,12 +106,17 @@ Specialized Claude Code roles for common development tasks:
 | `api-route-builder` | Scaffold a full vertical slice (domain → service → route → test) |
 | `test-specialist` | Write or expand tests for any layer |
 | `phase-implementer` | Implement an entire roadmap phase end-to-end |
+| `nextjs-frontend-builder` | Build, extend, or fix any part of the Next.js frontend in `frontend/` |
 
-## Roadmap phases
+## Roadmap phases — status
 
-The codebase is structured to evolve through:
-1. Code Indexing — extend `CodeScanner`, persist `FileInfo` via a repository
-2. Impact Analysis — new service over indexed files
-3. Requirement Understanding — LLM integration layer
-4. Story Generation — output formatting and templates
-5. Jira / Azure DevOps Integration — external API adapters in `repositories/`
+| Phase | Feature | Status |
+|---|---|---|
+| 1 | Code Indexing | Done |
+| 2 | Impact Analysis | Done |
+| 3 | Requirement Understanding (LLM) | Done |
+| 4 | Story Generation | Done |
+| 5a | Jira integration — provider pattern, idempotency, audit log | Done |
+| 5b | Hardening — exponential backoff, Retry-After, full audit payload | Done |
+| 5c | Azure DevOps integration | Done |
+| 6 | Next.js frontend (replaces Streamlit) | Done |

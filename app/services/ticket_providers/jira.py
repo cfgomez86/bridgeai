@@ -14,16 +14,49 @@ from app.services.ticket_providers.base import TicketProvider
 
 logger = get_logger(__name__)
 
-_PRIORITY_MAP = {
-    "HIGH": "High",
-    "MEDIUM": "Medium",
-    "LOW": "Low",
+# Normalizes common English names → pass-through; unknown names pass as-is.
+# Jira projects can use any language — the actual name must match what's
+# configured in the project (e.g. "Historia" in Spanish, "Story" in English).
+_ISSUE_TYPE_ALIASES: dict[str, list[str]] = {
+    "Story":  ["story", "historia", "user story", "user_story"],
+    "Task":   ["task", "tarea"],
+    "Bug":    ["bug", "error", "defect"],
+    "Epic":   ["epic"],
+    "Subtask": ["subtask", "subtarea"],
 }
 
 
 class JiraTicketProvider(TicketProvider):
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
+        self._issue_type_map = self._parse_issue_type_map()
+
+    def _parse_issue_type_map(self) -> dict[str, str]:
+        """Parse JIRA_ISSUE_TYPE_MAP env var into a lookup dict.
+        Input:  "Story=Historia,Task=Tarea,Bug=Error"
+        Output: {"story": "Historia", "historia": "Historia", "task": "Tarea", ...}
+        """
+        result: dict[str, str] = {}
+        raw = self._settings.JIRA_ISSUE_TYPE_MAP.strip()
+        if not raw:
+            return result
+        for pair in raw.split(","):
+            pair = pair.strip()
+            if "=" not in pair:
+                continue
+            canonical, jira_name = pair.split("=", 1)
+            jira_name = jira_name.strip()
+            # Map both the canonical and the jira_name to jira_name
+            result[canonical.strip().lower()] = jira_name
+            result[jira_name.lower()] = jira_name
+        return result
+
+    def _resolve_issue_type(self, issue_type: str) -> str:
+        """Return the Jira issue type name to use, applying any configured mapping."""
+        key = issue_type.strip().lower()
+        if key in self._issue_type_map:
+            return self._issue_type_map[key]
+        return issue_type
 
     def _auth_header(self) -> str:
         raw = f"{self._settings.JIRA_USER_EMAIL}:{self._settings.JIRA_API_TOKEN}"
@@ -85,15 +118,15 @@ class JiraTicketProvider(TicketProvider):
     def build_payload(
         self, story: UserStory, project_key: str, issue_type: str
     ) -> dict:
-        priority = _PRIORITY_MAP.get(story.risk_level.upper(), "Medium")
+        # Only send required fields — priority and labels are screen-dependent
+        # and cause HTTP 400 when not configured in the project's create screen.
+        resolved_type = self._resolve_issue_type(issue_type)
         return {
             "fields": {
                 "project": {"key": project_key},
                 "summary": story.title,
                 "description": self._build_description_doc(story),
-                "issuetype": {"name": issue_type},
-                "priority": {"name": priority},
-                "labels": ["BridgeAI", "generated"],
+                "issuetype": {"name": resolved_type},
             }
         }
 
@@ -101,8 +134,17 @@ class JiraTicketProvider(TicketProvider):
         data = json.dumps(body).encode() if body else None
         req = Request(url, data=data, headers=self._headers(), method=method)
         timeout = self._settings.JIRA_REQUEST_TIMEOUT_SECONDS
-        with urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode())
+        try:
+            with urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode())
+        except HTTPError as exc:
+            try:
+                error_body = exc.read().decode()
+                logger.error("jira_api_error status=%s body=%s", exc.code, error_body)
+                exc.jira_error_body = error_body  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            raise
 
     def _backoff_seconds(self, attempt: int, base_delay: int, exc: Exception | None = None) -> float:
         """Exponential backoff with full jitter. Respects Retry-After on 429."""

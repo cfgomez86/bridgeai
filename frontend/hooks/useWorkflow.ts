@@ -1,0 +1,104 @@
+"use client"
+
+import { useState } from "react"
+
+export type WorkflowState = {
+  projectId: string
+  requirementText: string
+  requirementId: string | null
+  intent: string | null
+  featureType: string | null
+  complexity: string | null
+  keywords: string[]
+  analysisId: string | null
+  filesImpacted: number | null
+  modulesImpacted: string[]
+  riskLevel: string | null
+  storyId: string | null
+  currentStep: 1 | 2 | 3 | 4
+}
+
+const initialState: WorkflowState = {
+  projectId: "my-project",
+  requirementText: "",
+  requirementId: null,
+  intent: null,
+  featureType: null,
+  complexity: null,
+  keywords: [],
+  analysisId: null,
+  filesImpacted: null,
+  modulesImpacted: [],
+  riskLevel: null,
+  storyId: null,
+  currentStep: 1,
+}
+
+export function useWorkflow() {
+  const [state, setState] = useState<WorkflowState>(initialState)
+
+  function setProjectId(projectId: string) {
+    setState((prev) => ({ ...prev, projectId }))
+  }
+
+  function setRequirementText(requirementText: string) {
+    setState((prev) => ({ ...prev, requirementText }))
+  }
+
+  function completeStep1(data: {
+    requirementId: string
+    intent: string
+    featureType: string
+    complexity: string
+    keywords: string[]
+  }) {
+    setState((prev) => ({
+      ...prev,
+      requirementId: data.requirementId,
+      intent: data.intent,
+      featureType: data.featureType,
+      complexity: data.complexity,
+      keywords: data.keywords,
+      currentStep: 2,
+    }))
+  }
+
+  function completeStep2(data: {
+    analysisId: string
+    filesImpacted: number
+    modulesImpacted: string[]
+    riskLevel: string
+  }) {
+    setState((prev) => ({
+      ...prev,
+      analysisId: data.analysisId,
+      filesImpacted: data.filesImpacted,
+      modulesImpacted: data.modulesImpacted,
+      riskLevel: data.riskLevel,
+      currentStep: 3,
+    }))
+  }
+
+  function completeStep3(storyId: string) {
+    setState((prev) => ({ ...prev, storyId, currentStep: 4 }))
+  }
+
+  function completeStep4() {
+    // Stay on step 4 showing success; reset handled by reset()
+  }
+
+  function reset() {
+    setState(initialState)
+  }
+
+  return {
+    state,
+    setProjectId,
+    setRequirementText,
+    completeStep1,
+    completeStep2,
+    completeStep3,
+    completeStep4,
+    reset,
+  }
+}

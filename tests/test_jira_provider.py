@@ -20,6 +20,7 @@ def make_settings(**kwargs) -> Settings:
         JIRA_REQUEST_TIMEOUT_SECONDS=5,
         JIRA_MAX_RETRIES=2,
         JIRA_RETRY_DELAY_SECONDS=0,
+        JIRA_ISSUE_TYPE_MAP="",
     )
     defaults.update(kwargs)
     return Settings(**defaults)
@@ -66,7 +67,7 @@ class TestJiraAuth:
 
 class TestJiraPayloadMapping:
     def test_payload_maps_story_fields(self):
-        settings = make_settings()
+        settings = make_settings()  # no JIRA_ISSUE_TYPE_MAP → pass-through
         provider = JiraTicketProvider(settings)
         story = make_story()
         payload = provider.build_payload(story, "PROJ", "Story")
@@ -75,8 +76,27 @@ class TestJiraPayloadMapping:
         assert fields["project"]["key"] == "PROJ"
         assert fields["summary"] == story.title
         assert fields["issuetype"]["name"] == "Story"
-        assert "BridgeAI" in fields["labels"]
-        assert "generated" in fields["labels"]
+        # priority and labels are omitted to avoid HTTP 400 on restricted screens
+        assert "priority" not in fields
+        assert "labels" not in fields
+
+    def test_issue_type_map_translates_story_to_historia(self):
+        settings = make_settings(JIRA_ISSUE_TYPE_MAP="Story=Historia,Task=Tarea,Bug=Error")
+        provider = JiraTicketProvider(settings)
+        payload = provider.build_payload(make_story(), "PROJ", "Story")
+        assert payload["fields"]["issuetype"]["name"] == "Historia"
+
+    def test_issue_type_map_is_case_insensitive(self):
+        settings = make_settings(JIRA_ISSUE_TYPE_MAP="Story=Historia")
+        provider = JiraTicketProvider(settings)
+        payload = provider.build_payload(make_story(), "PROJ", "story")
+        assert payload["fields"]["issuetype"]["name"] == "Historia"
+
+    def test_issue_type_unknown_passes_through(self):
+        settings = make_settings(JIRA_ISSUE_TYPE_MAP="Story=Historia")
+        provider = JiraTicketProvider(settings)
+        payload = provider.build_payload(make_story(), "PROJ", "Epic")
+        assert payload["fields"]["issuetype"]["name"] == "Epic"
 
     def test_description_contains_acceptance_criteria(self):
         settings = make_settings()
@@ -97,14 +117,13 @@ class TestJiraPayloadMapping:
         description_json = json.dumps(payload["fields"]["description"])
         assert "Add endpoint" in description_json
 
-    def test_priority_maps_risk_level(self):
+    def test_payload_only_contains_required_fields(self):
         settings = make_settings()
         provider = JiraTicketProvider(settings)
-
-        for risk, expected_priority in [("HIGH", "High"), ("MEDIUM", "Medium"), ("LOW", "Low")]:
-            story = make_story(risk_level=risk)
-            payload = provider.build_payload(story, "PROJ", "Story")
-            assert payload["fields"]["priority"]["name"] == expected_priority
+        payload = provider.build_payload(make_story(), "PROJ", "Story")
+        fields = set(payload["fields"].keys())
+        # Only required fields — optional ones cause 400 on restricted project screens
+        assert fields == {"project", "summary", "description", "issuetype"}
 
 
 class TestJiraCreateTicket:

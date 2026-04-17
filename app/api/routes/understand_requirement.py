@@ -26,6 +26,7 @@ class UnderstandResponse(BaseModel):
     intent: str
     feature_type: str
     estimated_complexity: str
+    keywords: list[str]
     processing_time_seconds: float
     request_id: str
 
@@ -69,6 +70,7 @@ def understand_requirement(
         intent=result.intent,
         feature_type=result.feature_type,
         estimated_complexity=result.estimated_complexity,
+        keywords=result.keywords,
         processing_time_seconds=result.processing_time_seconds,
         request_id=request_id,
     )

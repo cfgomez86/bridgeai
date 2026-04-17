@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class ImpactAnalysisResult:
     analysis_id: str
     files_impacted: int
-    modules_impacted: int
+    modules_impacted: list[str]
     risk_level: str
     duration_seconds: float
 
@@ -127,6 +127,7 @@ class ImpactAnalysisService:
             analysis_summary=f"Analyzed {len(file_analyses)} files, {total_impacted} impacted",
             created_at=now,
         )
+        module_names = sorted(modules)
 
         impacted_file_models = [
             ImpactedFile(analysis_id=analysis_id, file_path=path, reason=reason)
@@ -147,7 +148,7 @@ class ImpactAnalysisService:
         return ImpactAnalysisResult(
             analysis_id=analysis_id,
             files_impacted=total_impacted,
-            modules_impacted=len(modules),
+            modules_impacted=module_names,
             risk_level=risk_level,
             duration_seconds=duration,
         )

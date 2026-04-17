@@ -72,8 +72,11 @@ logs/
 # Jupyter
 .ipynb_checkpoints/
 
-# Streamlit
-.streamlit/
+# Next.js / Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*.local
 
 # OS
 ehthumbs.db

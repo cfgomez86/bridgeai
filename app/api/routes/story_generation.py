@@ -13,6 +13,7 @@ from app.services.ai_story_generator import AIStoryGenerator
 from app.services.story_ai_provider import get_story_ai_provider
 from app.services.story_generation_service import StoryGenerationService
 from app.services.story_points_calculator import StoryPointsCalculator
+from app.utils.json_utils import parse_json_field
 
 logger = get_logger(__name__)
 
@@ -32,6 +33,23 @@ class StoryGenerationResponse(BaseModel):
     risk_level: str
     generation_time_seconds: float
     request_id: str
+
+
+class StoryDetailResponse(BaseModel):
+    story_id: str
+    requirement_id: str
+    impact_analysis_id: str
+    project_id: str
+    title: str
+    story_description: str
+    acceptance_criteria: list[str]
+    technical_tasks: list[str]
+    definition_of_done: list[str]
+    risk_notes: list[str]
+    story_points: int
+    risk_level: str
+    generation_time_seconds: float
+    created_at: str
 
 
 def get_story_service(
@@ -83,4 +101,37 @@ def generate_story(
         risk_level=result.risk_level,
         generation_time_seconds=result.generation_time_seconds,
         request_id=request_id,
+    )
+
+
+@router.get("/stories/{story_id}", response_model=StoryDetailResponse)
+def get_story(
+    story_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> StoryDetailResponse:
+    request_id = str(getattr(request.state, "request_id", uuid.uuid4()))
+    logger.info("GET /stories/%s request_id=%s", story_id, request_id)
+    story = UserStoryRepository(db).find_by_id(story_id)
+    if story is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Story {story_id!r} not found",
+        )
+    logger.info("GET /stories/%s completed request_id=%s", story_id, request_id)
+    return StoryDetailResponse(
+        story_id=story.id,
+        requirement_id=story.requirement_id,
+        impact_analysis_id=story.impact_analysis_id,
+        project_id=story.project_id,
+        title=story.title,
+        story_description=story.story_description,
+        acceptance_criteria=parse_json_field(story.acceptance_criteria),
+        technical_tasks=parse_json_field(story.technical_tasks),
+        definition_of_done=parse_json_field(story.definition_of_done),
+        risk_notes=parse_json_field(story.risk_notes),
+        story_points=story.story_points,
+        risk_level=story.risk_level,
+        generation_time_seconds=story.generation_time_seconds,
+        created_at=story.created_at.isoformat(),
     )

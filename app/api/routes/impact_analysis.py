@@ -24,7 +24,7 @@ class ImpactAnalysisRequest(BaseModel):
 class ImpactAnalysisResponse(BaseModel):
     analysis_id: str
     files_impacted: int
-    modules_impacted: int
+    modules_impacted: list[str]
     risk_level: str
     duration_seconds: float
     request_id: str
