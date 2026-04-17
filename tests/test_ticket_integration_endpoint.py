@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -89,7 +89,7 @@ class TestCreateTicketEndpoint:
             "app.services.ticket_integration_service.TicketIntegrationService._get_provider"
         ) as mock_factory:
             mock_provider = MagicMock()
-            mock_provider.create_ticket.return_value = mock_result
+            mock_provider.create_ticket = AsyncMock(return_value=mock_result)
             mock_provider.build_payload.return_value = {"fields": {"summary": "Test Story"}}
             mock_factory.return_value = mock_provider
 
@@ -139,7 +139,7 @@ class TestCreateTicketEndpoint:
             "app.services.ticket_integration_service.TicketIntegrationService._get_provider"
         ) as mock_factory:
             mock_provider = MagicMock()
-            mock_provider.create_ticket.return_value = mock_result
+            mock_provider.create_ticket = AsyncMock(return_value=mock_result)
             mock_provider.build_payload.return_value = {"fields": {"summary": "Dup Story"}}
             mock_factory.return_value = mock_provider
 
@@ -177,7 +177,7 @@ class TestCreateTicketEndpoint:
             "app.services.ticket_integration_service.TicketIntegrationService._get_provider"
         ) as mock_factory:
             mock_provider = MagicMock()
-            mock_provider.create_ticket.return_value = mock_result
+            mock_provider.create_ticket = AsyncMock(return_value=mock_result)
             mock_provider.build_payload.return_value = {
                 "work_item_type": "User Story",
                 "fields": [{"op": "add", "path": "/fields/System.Title", "value": "Test"}],

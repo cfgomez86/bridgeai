@@ -18,6 +18,6 @@ class ImpactAnalysis(Base):
 class ImpactedFile(Base):
     __tablename__ = "impacted_files"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    analysis_id: Mapped[str] = mapped_column(String(36), ForeignKey("impact_analysis.id"), nullable=False)
+    analysis_id: Mapped[str] = mapped_column(String(36), ForeignKey("impact_analysis.id"), nullable=False, index=True)
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)

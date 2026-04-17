@@ -1,14 +1,17 @@
 from datetime import datetime
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database.session import Base
 
 
 class TicketIntegration(Base):
     __tablename__ = "ticket_integrations"
+    __table_args__ = (
+        Index("ix_ticket_integrations_story_provider", "story_id", "provider"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    story_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    story_id: Mapped[str] = mapped_column(String(36), nullable=False)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     project_key: Mapped[str] = mapped_column(String(100), nullable=False)
     issue_type: Mapped[str] = mapped_column(String(100), nullable=False)

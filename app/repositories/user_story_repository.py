@@ -14,7 +14,7 @@ class UserStoryRepository:
         return story
 
     def find_by_id(self, story_id: str) -> Optional[UserStory]:
-        return self._db.query(UserStory).filter(UserStory.id == story_id).first()
+        return self._db.get(UserStory, story_id)
 
     def find_by_requirement_and_analysis(
         self, requirement_id: str, analysis_id: str

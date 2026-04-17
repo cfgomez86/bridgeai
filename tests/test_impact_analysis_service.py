@@ -31,7 +31,7 @@ def test_simple_requirement_matches_file(tmp_path, repos):
         "class UserService:\n    def validate_email(self): pass\n"
     )
 
-    code_repo.list_all.return_value = [make_code_file("user_service.py")]
+    code_repo.iter_all.return_value = [make_code_file("user_service.py")]
     impact_repo.save.return_value = MagicMock()
 
     service = make_service(code_repo, impact_repo, str(tmp_path))
@@ -49,7 +49,7 @@ def test_direct_dependency_is_detected(tmp_path, repos):
         "from validator import EmailValidator\nclass Registration:\n    pass\n"
     )
 
-    code_repo.list_all.return_value = [
+    code_repo.iter_all.return_value = [
         make_code_file("validator.py"),
         make_code_file("registration.py"),
     ]
@@ -72,7 +72,7 @@ def test_indirect_dependency_propagates(tmp_path, repos):
         "import registration\nclass Unrelated: pass\n"
     )
 
-    code_repo.list_all.return_value = [
+    code_repo.iter_all.return_value = [
         make_code_file("validator.py"),
         make_code_file("registration.py"),
         make_code_file("unrelated.py"),
@@ -94,7 +94,7 @@ def test_risk_calculation(tmp_path, repos):
         (tmp_path / fname).write_text(f"# user module {i}\nclass Module{i}:\n    pass\n")
         file_mocks.append(make_code_file(fname))
 
-    code_repo.list_all.return_value = file_mocks
+    code_repo.iter_all.return_value = file_mocks
     impact_repo.save.return_value = MagicMock()
 
     service = make_service(code_repo, impact_repo, str(tmp_path))
@@ -106,7 +106,7 @@ def test_risk_calculation(tmp_path, repos):
 def test_empty_requirement_raises_value_error(tmp_path, repos):
     code_repo, impact_repo = repos
 
-    code_repo.list_all.return_value = []
+    code_repo.iter_all.return_value = []
 
     service = make_service(code_repo, impact_repo, str(tmp_path))
 

@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -41,7 +42,7 @@ def get_understanding_service(
 
 
 @router.post("/understand-requirement", response_model=UnderstandResponse)
-def understand_requirement(
+async def understand_requirement(
     body: UnderstandRequest,
     request: Request,
     service: RequirementUnderstandingService = Depends(get_understanding_service),
@@ -49,7 +50,7 @@ def understand_requirement(
     request_id = str(getattr(request.state, "request_id", uuid.uuid4()))
     logger.info("POST /understand-requirement request_id=%s requirement=%.100s", request_id, body.requirement)
     try:
-        result = service.understand(body.requirement, body.project_id)
+        result = await asyncio.to_thread(service.understand, body.requirement, body.project_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception as exc:

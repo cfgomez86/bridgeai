@@ -34,9 +34,12 @@ def make_client_with_data():
 
     # Pre-insert requirement and analysis
     db = Session()
+    import hashlib
+    _req_text = "Register with email"
     req = Requirement(
         id="req-endpoint-1",
-        requirement_text="Register with email",
+        requirement_text=_req_text,
+        requirement_text_hash=hashlib.sha256(_req_text.encode()).hexdigest(),
         project_id="proj",
         intent="create_account",
         action="create",

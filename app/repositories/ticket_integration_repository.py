@@ -37,11 +37,7 @@ class TicketIntegrationRepository:
         error_message: Optional[str] = None,
         retry_count: Optional[int] = None,
     ) -> Optional[TicketIntegration]:
-        integration = (
-            self._db.query(TicketIntegration)
-            .filter(TicketIntegration.id == integration_id)
-            .first()
-        )
+        integration = self._db.get(TicketIntegration, integration_id)
         if not integration:
             return None
 

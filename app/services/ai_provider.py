@@ -3,6 +3,18 @@ from abc import ABC, abstractmethod
 from app.core.config import Settings
 from app.utils.json_utils import extract_json
 
+try:
+    import anthropic as _anthropic_lib
+except ImportError:
+    _anthropic_lib = None  # type: ignore[assignment]
+
+try:
+    import openai as _openai_lib
+except ImportError:
+    _openai_lib = None  # type: ignore[assignment]
+
+_provider_cache: dict[str, "AIProvider"] = {}
+
 
 VALID_FEATURE_TYPES = {"feature", "bugfix", "refactor", "enhancement", "configuration", "performance", "security"}
 VALID_COMPLEXITIES = {"LOW", "MEDIUM", "HIGH"}
@@ -63,8 +75,9 @@ class StubAIProvider(AIProvider):
 
 class AnthropicAIProvider(AIProvider):
     def __init__(self, settings: Settings) -> None:
-        import anthropic as _anthropic
-        self._client = _anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        if _anthropic_lib is None:
+            raise ImportError("anthropic package is required")
+        self._client = _anthropic_lib.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self._model = settings.AI_MODEL or "claude-haiku-4-5-20251001"
         self._timeout = settings.AI_TIMEOUT_SECONDS
 
@@ -83,8 +96,9 @@ class AnthropicAIProvider(AIProvider):
 
 class OpenAIAIProvider(AIProvider):
     def __init__(self, settings: Settings) -> None:
-        import openai as _openai
-        self._client = _openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+        if _openai_lib is None:
+            raise ImportError("openai package is required")
+        self._client = _openai_lib.OpenAI(api_key=settings.OPENAI_API_KEY)
         self._model = settings.AI_MODEL or "gpt-4o-mini"
         self._timeout = settings.AI_TIMEOUT_SECONDS
 
@@ -102,8 +116,12 @@ class OpenAIAIProvider(AIProvider):
 
 
 def get_ai_provider(settings: Settings) -> AIProvider:
-    if settings.AI_PROVIDER == "anthropic":
-        return AnthropicAIProvider(settings)
-    if settings.AI_PROVIDER == "openai":
-        return OpenAIAIProvider(settings)
-    return StubAIProvider()
+    key = settings.AI_PROVIDER
+    if key not in _provider_cache:
+        if key == "anthropic":
+            _provider_cache[key] = AnthropicAIProvider(settings)
+        elif key == "openai":
+            _provider_cache[key] = OpenAIAIProvider(settings)
+        else:
+            _provider_cache[key] = StubAIProvider()
+    return _provider_cache[key]

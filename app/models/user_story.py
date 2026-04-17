@@ -1,11 +1,14 @@
 from datetime import datetime
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database.session import Base
 
 
 class UserStory(Base):
     __tablename__ = "user_stories"
+    __table_args__ = (
+        Index("ix_user_stories_req_analysis", "requirement_id", "impact_analysis_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     requirement_id: Mapped[str] = mapped_column(String(36), nullable=False)

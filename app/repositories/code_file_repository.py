@@ -28,5 +28,18 @@ class CodeFileRepository:
             .first()
         )
 
+    def save_batch(self, code_files: list[CodeFile]) -> None:
+        for cf in code_files:
+            self._db.add(cf)
+        self._db.commit()
+
+    def update_batch(self, code_files: list[CodeFile]) -> None:
+        for cf in code_files:
+            self._db.merge(cf)
+        self._db.commit()
+
     def list_all(self) -> list[CodeFile]:
         return self._db.query(CodeFile).all()
+
+    def iter_all(self, chunk_size: int = 500):
+        yield from self._db.query(CodeFile).yield_per(chunk_size)

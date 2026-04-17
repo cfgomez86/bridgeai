@@ -15,4 +15,12 @@ class ImpactAnalysisRepository:
         return analysis
 
     def find_by_id(self, analysis_id: str) -> Optional[ImpactAnalysis]:
-        return self._db.query(ImpactAnalysis).filter(ImpactAnalysis.id == analysis_id).first()
+        return self._db.get(ImpactAnalysis, analysis_id)
+
+    def find_files_page(
+        self, analysis_id: str, offset: int = 0, limit: int = 100
+    ) -> tuple[list[ImpactedFile], int]:
+        base = self._db.query(ImpactedFile).filter(ImpactedFile.analysis_id == analysis_id)
+        total = base.count()
+        files = base.offset(offset).limit(limit).all()
+        return files, total

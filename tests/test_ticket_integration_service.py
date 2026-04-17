@@ -1,7 +1,6 @@
 import json
-import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import create_engine
@@ -66,26 +65,25 @@ def insert_story(db, story_id: str = "story-1") -> UserStoryModel:
 
 
 class TestCreateTicket:
-    def test_raises_story_not_found(self):
+    async def test_raises_story_not_found(self):
         db = make_db_session()
         service = TicketIntegrationService(db, make_settings())
 
         with pytest.raises(StoryNotFoundError):
-            service.create_ticket("nonexistent-id", "jira", "PROJ", "Story")
+            await service.create_ticket("nonexistent-id", "jira", "PROJ", "Story")
 
-    def test_raises_unsupported_provider(self):
+    async def test_raises_unsupported_provider(self):
         db = make_db_session()
         insert_story(db)
         service = TicketIntegrationService(db, make_settings())
 
         with pytest.raises(UnsupportedProviderError):
-            service.create_ticket("story-1", "servicenow", "PROJ", "Story")
+            await service.create_ticket("story-1", "servicenow", "PROJ", "Story")
 
-    def test_creates_ticket_successfully(self):
+    async def test_creates_ticket_successfully(self):
         db = make_db_session()
         insert_story(db)
-        settings = make_settings()
-        service = TicketIntegrationService(db, settings)
+        service = TicketIntegrationService(db, make_settings())
 
         mock_result = TicketResult(
             external_id="PROJ-1",
@@ -98,23 +96,20 @@ class TestCreateTicket:
             "app.services.ticket_integration_service.TicketIntegrationService._get_provider"
         ) as mock_provider_factory:
             mock_provider = MagicMock()
-            mock_provider.create_ticket.return_value = mock_result
+            mock_provider.create_ticket = AsyncMock(return_value=mock_result)
             mock_provider.build_payload.return_value = {"fields": {"summary": "Test Story"}}
             mock_provider_factory.return_value = mock_provider
 
-            result, is_duplicate = service.create_ticket(
-                "story-1", "jira", "PROJ", "Story"
-            )
+            result, is_duplicate = await service.create_ticket("story-1", "jira", "PROJ", "Story")
 
         assert result.external_id == "PROJ-1"
         assert result.status == "CREATED"
         assert is_duplicate is False
 
-    def test_returns_duplicate_on_second_call(self):
+    async def test_returns_duplicate_on_second_call(self):
         db = make_db_session()
         insert_story(db)
-        settings = make_settings()
-        service = TicketIntegrationService(db, settings)
+        service = TicketIntegrationService(db, make_settings())
 
         mock_result = TicketResult(
             external_id="PROJ-1",
@@ -127,40 +122,36 @@ class TestCreateTicket:
             "app.services.ticket_integration_service.TicketIntegrationService._get_provider"
         ) as mock_provider_factory:
             mock_provider = MagicMock()
-            mock_provider.create_ticket.return_value = mock_result
+            mock_provider.create_ticket = AsyncMock(return_value=mock_result)
             mock_provider.build_payload.return_value = {"fields": {"summary": "Test Story"}}
             mock_provider_factory.return_value = mock_provider
 
-            # First call
-            service.create_ticket("story-1", "jira", "PROJ", "Story")
-            # Second call — should be duplicate
-            result, is_duplicate = service.create_ticket("story-1", "jira", "PROJ", "Story")
+            await service.create_ticket("story-1", "jira", "PROJ", "Story")
+            result, is_duplicate = await service.create_ticket("story-1", "jira", "PROJ", "Story")
 
         assert is_duplicate is True
         assert result.status == "DUPLICATE"
-        # Provider should only have been called once
         assert mock_provider.create_ticket.call_count == 1
 
-    def test_persists_failed_status_on_error(self):
+    async def test_persists_failed_status_on_error(self):
         from urllib.error import HTTPError
 
         db = make_db_session()
         insert_story(db)
-        settings = make_settings()
-        service = TicketIntegrationService(db, settings)
+        service = TicketIntegrationService(db, make_settings())
 
         with patch(
             "app.services.ticket_integration_service.TicketIntegrationService._get_provider"
         ) as mock_provider_factory:
             mock_provider = MagicMock()
-            mock_provider.create_ticket.side_effect = HTTPError(
+            mock_provider.create_ticket = AsyncMock(side_effect=HTTPError(
                 url="", code=401, msg="Unauthorized", hdrs=None, fp=None
-            )
+            ))
             mock_provider.build_payload.return_value = {"fields": {"summary": "Test Story"}}
             mock_provider_factory.return_value = mock_provider
 
             with pytest.raises(HTTPError):
-                service.create_ticket("story-1", "jira", "PROJ", "Story")
+                await service.create_ticket("story-1", "jira", "PROJ", "Story")
 
         from app.models.ticket_integration import TicketIntegration
         record = db.query(TicketIntegration).filter_by(story_id="story-1").first()
@@ -169,29 +160,25 @@ class TestCreateTicket:
 
 
 class TestHealthCheck:
-    def test_health_check_not_configured(self):
+    async def test_health_check_not_configured(self):
         db = make_db_session()
         settings = make_settings(JIRA_BASE_URL="", JIRA_API_TOKEN="")
         service = TicketIntegrationService(db, settings)
 
-        result = service.health_check()
+        result = await service.health_check()
         assert result["jira"] == "not_configured"
         assert result["azure_devops"] == "not_configured"
 
-    def test_health_check_jira_healthy(self):
-        import json as _json
-        from unittest.mock import MagicMock
-
+    async def test_health_check_jira_healthy(self):
         db = make_db_session()
         settings = make_settings()
         service = TicketIntegrationService(db, settings)
 
-        mock_response = MagicMock()
-        mock_response.read.return_value = _json.dumps({"accountId": "abc"}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
-
-        with patch("app.services.ticket_providers.jira.urlopen", return_value=mock_response):
-            result = service.health_check()
+        with patch(
+            "app.services.ticket_providers.jira.JiraTicketProvider._request",
+            new_callable=AsyncMock,
+            return_value={"accountId": "abc"},
+        ):
+            result = await service.health_check()
 
         assert result["jira"] == "healthy"

@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from urllib.error import HTTPError
 
@@ -67,7 +68,7 @@ def get_integration_service(
 
 
 @router.post("/tickets", response_model=CreateTicketResponse)
-def create_ticket(
+async def create_ticket(
     body: CreateTicketRequest,
     request: Request,
     response: Response,
@@ -80,7 +81,7 @@ def create_ticket(
     )
 
     try:
-        result, is_duplicate = service.create_ticket(
+        result, is_duplicate = await service.create_ticket(
             story_id=body.story_id,
             provider_name=body.integration_type,
             project_key=body.project_key,
@@ -128,11 +129,11 @@ def create_ticket(
 
 
 @router.get("/tickets/{story_id}", response_model=list[TicketStatusResponse])
-def get_ticket_status(
+async def get_ticket_status(
     story_id: str,
     service: TicketIntegrationService = Depends(get_integration_service),
 ):
-    records = service.get_integrations(story_id)
+    records = await asyncio.to_thread(service.get_integrations, story_id)
     return [
         TicketStatusResponse(
             integration_id=r.id,
@@ -152,11 +153,11 @@ def get_ticket_status(
 
 
 @router.get("/tickets/{story_id}/audit", response_model=list[AuditLogEntry])
-def get_ticket_audit(
+async def get_ticket_audit(
     story_id: str,
     service: TicketIntegrationService = Depends(get_integration_service),
 ):
-    logs = service.get_audit_logs(story_id)
+    logs = await asyncio.to_thread(service.get_audit_logs, story_id)
     return [
         AuditLogEntry(
             id=log.id,
@@ -173,7 +174,7 @@ def get_ticket_audit(
 
 
 @router.get("/integration/health")
-def integration_health(
+async def integration_health(
     service: TicketIntegrationService = Depends(get_integration_service),
 ):
-    return service.health_check()
+    return await service.health_check()

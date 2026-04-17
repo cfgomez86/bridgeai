@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import uuid
@@ -35,6 +36,27 @@ class RequirementUnderstandingService:
             if re.search(pattern, requirement_text, re.IGNORECASE):
                 raise ValueError("Requirement contains disallowed patterns")
 
+        text_hash = hashlib.sha256(requirement_text.encode()).hexdigest()
+        cached = self._repo.find_by_text_and_project(text_hash, project_id)
+        if cached:
+            self._logger.info("Cache hit for requirement hash=%s project=%s", text_hash[:8], project_id)
+            return RequirementUnderstanding(
+                requirement_id=cached.id,
+                requirement_text=cached.requirement_text,
+                project_id=cached.project_id,
+                intent=cached.intent,
+                action=cached.action,
+                entity=cached.entity,
+                feature_type=cached.feature_type,
+                priority=cached.priority,
+                business_domain=cached.business_domain,
+                technical_scope=cached.technical_scope,
+                estimated_complexity=cached.estimated_complexity,
+                keywords=json.loads(cached.keywords),
+                created_at=cached.created_at,
+                processing_time_seconds=cached.processing_time_seconds,
+            )
+
         self._logger.info("Processing requirement: %.100s", requirement_text)
         start = datetime.now(timezone.utc)
 
@@ -47,6 +69,7 @@ class RequirementUnderstandingService:
         orm_model = Requirement(
             id=requirement_id,
             requirement_text=requirement_text,
+            requirement_text_hash=text_hash,
             project_id=project_id,
             intent=parsed["intent"],
             action=parsed["action"],

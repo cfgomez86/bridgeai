@@ -3,6 +3,10 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
+# Module-level cache: survives across DependencyAnalyzer instances (one per request).
+# Key: (file_path, content_hash) — stale entries evicted when file content changes.
+_analysis_cache: dict[tuple[str, int], "FileAnalysis"] = {}
+
 
 @dataclass(frozen=True)
 class FileAnalysis:
@@ -21,10 +25,17 @@ class DependencyAnalyzer:
         }
 
     def analyze(self, file_path: str, content: str, language: str) -> FileAnalysis:
+        key = (file_path, hash(content))
+        cached = _analysis_cache.get(key)
+        if cached is not None:
+            return cached
         parser = self._parsers.get(language)
         if parser is None:
-            return FileAnalysis(file_path=file_path, language=language, imports=[], classes=[], functions=[])
-        return parser(file_path, content)
+            result = FileAnalysis(file_path=file_path, language=language, imports=[], classes=[], functions=[])
+        else:
+            result = parser(file_path, content)
+        _analysis_cache[key] = result
+        return result
 
     def _analyze_python(self, file_path: str, content: str) -> FileAnalysis:
         try:

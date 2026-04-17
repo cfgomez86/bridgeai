@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -67,7 +68,7 @@ def get_story_service(
 
 
 @router.post("/generate-story", response_model=StoryGenerationResponse)
-def generate_story(
+async def generate_story(
     body: StoryGenerationRequest,
     request: Request,
     service: StoryGenerationService = Depends(get_story_service),
@@ -78,7 +79,7 @@ def generate_story(
         request_id, body.requirement_id, body.impact_analysis_id,
     )
     try:
-        result = service.generate(body.requirement_id, body.impact_analysis_id, body.project_id)
+        result = await asyncio.to_thread(service.generate, body.requirement_id, body.impact_analysis_id, body.project_id)
     except ValueError as exc:
         msg = str(exc)
         if "not found" in msg.lower():
@@ -105,7 +106,7 @@ def generate_story(
 
 
 @router.get("/stories/{story_id}", response_model=StoryDetailResponse)
-def get_story(
+async def get_story(
     story_id: str,
     request: Request,
     db: Session = Depends(get_db),

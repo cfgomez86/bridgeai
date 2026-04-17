@@ -2,7 +2,7 @@
 import json
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -98,30 +98,20 @@ class TestJitterBackoff:
             assert 0 <= wait <= cap
 
     def test_backoff_uses_retry_after_on_429(self):
-        from urllib.error import HTTPError
-
         settings = make_settings()
         provider = JiraTicketProvider(settings)
 
-        class FakeHTTPError(HTTPError):
-            def __init__(self):
-                super().__init__(url="", code=429, msg="Too Many Requests", hdrs=None, fp=None)
-                self.headers = {"Retry-After": "30"}
-
-        wait = provider._backoff_seconds(0, 5, FakeHTTPError())
+        wait = provider._backoff_seconds(0, 5, retry_after="30")
         assert wait == 30.0
 
     def test_backoff_falls_back_to_jitter_on_missing_retry_after(self):
-        from urllib.error import HTTPError
-
         settings = make_settings(JIRA_RETRY_DELAY_SECONDS=2)
         provider = JiraTicketProvider(settings)
-        exc = HTTPError(url="", code=429, msg="Too Many Requests", hdrs=None, fp=None)
 
-        wait = provider._backoff_seconds(0, 2, exc)
+        wait = provider._backoff_seconds(0, 2, retry_after=None)
         assert 0 <= wait <= 2
 
-    def test_429_triggers_retry(self):
+    async def test_429_triggers_retry(self):
         from urllib.error import HTTPError
 
         settings = make_settings(JIRA_MAX_RETRIES=2, JIRA_RETRY_DELAY_SECONDS=0)
@@ -129,20 +119,15 @@ class TestJitterBackoff:
         story = make_domain_story()
 
         error_429 = HTTPError(url="", code=429, msg="Too Many Requests", hdrs=None, fp=None)
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"key": "PROJ-99"}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("app.services.ticket_providers.jira.urlopen",
-                   side_effect=[error_429, mock_response]):
-            result = provider.create_ticket(story, "PROJ", "Story")
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=[error_429, {"key": "PROJ-99"}])):
+            result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert result.status == "CREATED"
 
 
 class TestAuditPayloadCapture:
-    def test_audit_log_stores_full_jira_payload(self):
+    async def test_audit_log_stores_full_jira_payload(self):
         db = make_db()
         insert_story(db, "story-audit-payload")
         settings = make_settings()
@@ -159,13 +144,13 @@ class TestAuditPayloadCapture:
             "app.services.ticket_integration_service.TicketIntegrationService._get_provider"
         ) as mock_factory:
             mock_provider = MagicMock()
-            mock_provider.create_ticket.return_value = mock_result
+            mock_provider.create_ticket = AsyncMock(return_value=mock_result)
             mock_provider.build_payload.return_value = {
                 "fields": {"summary": "Hardening Story", "project": {"key": "PROJ"}}
             }
             mock_factory.return_value = mock_provider
 
-            service.create_ticket("story-audit-payload", "jira", "PROJ", "Story")
+            await service.create_ticket("story-audit-payload", "jira", "PROJ", "Story")
 
         logs = db.query(IntegrationAuditLog).filter_by(story_id="story-audit-payload").all()
         assert len(logs) == 1

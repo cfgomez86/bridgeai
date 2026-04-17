@@ -5,8 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
+# Start PostgreSQL (required before running the API)
+docker compose up -d
+
 # Install Python dependencies (first time or after dependency changes)
 python -m pip install -e ".[dev]"
+# psycopg2-binary is included; no extra install needed for PostgreSQL support
 
 # Run the API
 uvicorn app.main:app --reload

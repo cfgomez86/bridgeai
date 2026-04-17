@@ -3,6 +3,18 @@ from abc import ABC, abstractmethod
 from app.core.config import Settings
 from app.utils.json_utils import extract_json
 
+try:
+    import anthropic as _anthropic_lib
+except ImportError:
+    _anthropic_lib = None  # type: ignore[assignment]
+
+try:
+    import openai as _openai_lib
+except ImportError:
+    _openai_lib = None  # type: ignore[assignment]
+
+_provider_cache: dict[str, "StoryAIProvider"] = {}
+
 _STUB_STORY_RESPONSE = {
     "title": "User Registration with Email Confirmation",
     "story_description": (
@@ -85,8 +97,9 @@ class StubStoryProvider(StoryAIProvider):
 
 class AnthropicStoryProvider(StoryAIProvider):
     def __init__(self, settings: Settings) -> None:
-        import anthropic as _anthropic
-        self._client = _anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        if _anthropic_lib is None:
+            raise ImportError("anthropic package is required")
+        self._client = _anthropic_lib.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self._model = settings.AI_MODEL or "claude-haiku-4-5-20251001"
         self._timeout = settings.AI_TIMEOUT_SECONDS
 
@@ -105,8 +118,9 @@ class AnthropicStoryProvider(StoryAIProvider):
 
 class OpenAIStoryProvider(StoryAIProvider):
     def __init__(self, settings: Settings) -> None:
-        import openai as _openai
-        self._client = _openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+        if _openai_lib is None:
+            raise ImportError("openai package is required")
+        self._client = _openai_lib.OpenAI(api_key=settings.OPENAI_API_KEY)
         self._model = settings.AI_MODEL or "gpt-4o-mini"
         self._timeout = settings.AI_TIMEOUT_SECONDS
 
@@ -124,8 +138,12 @@ class OpenAIStoryProvider(StoryAIProvider):
 
 
 def get_story_ai_provider(settings: Settings) -> StoryAIProvider:
-    if settings.AI_PROVIDER == "anthropic":
-        return AnthropicStoryProvider(settings)
-    if settings.AI_PROVIDER == "openai":
-        return OpenAIStoryProvider(settings)
-    return StubStoryProvider()
+    key = settings.AI_PROVIDER
+    if key not in _provider_cache:
+        if key == "anthropic":
+            _provider_cache[key] = AnthropicStoryProvider(settings)
+        elif key == "openai":
+            _provider_cache[key] = OpenAIStoryProvider(settings)
+        else:
+            _provider_cache[key] = StubStoryProvider()
+    return _provider_cache[key]

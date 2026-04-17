@@ -22,9 +22,12 @@ def make_repo():
 
 
 def make_requirement(req_id: str = "test-id-1", project_id: str = "proj-a") -> Requirement:
+    import hashlib
+    text = "Add user registration"
     return Requirement(
         id=req_id,
-        requirement_text="Add user registration",
+        requirement_text=text,
+        requirement_text_hash=hashlib.sha256(text.encode()).hexdigest(),
         project_id=project_id,
         intent="create_user_account",
         action="create",

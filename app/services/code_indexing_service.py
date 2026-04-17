@@ -62,18 +62,35 @@ class CodeIndexingService:
         files_updated = 0
         files_skipped = 0
 
+        new_batch: list = []
+        update_batch: list = []
+
         for file_path in self._walk_files():
             files_scanned += 1
             try:
-                result = self._process_file(file_path, force)
-                if result == "indexed":
+                action, obj = self._prepare_file(file_path, force)
+                if action == "new":
+                    new_batch.append(obj)
                     files_indexed += 1
-                elif result == "updated":
+                elif action == "update":
+                    update_batch.append(obj)
                     files_updated += 1
-                elif result == "skipped":
+                else:
                     files_skipped += 1
+
+                if len(new_batch) >= self._batch_size:
+                    self._repository.save_batch(new_batch)
+                    new_batch = []
+                if len(update_batch) >= self._batch_size:
+                    self._repository.update_batch(update_batch)
+                    update_batch = []
             except Exception as e:
                 logger.warning("Error processing %s: %s", file_path, e)
+
+        if new_batch:
+            self._repository.save_batch(new_batch)
+        if update_batch:
+            self._repository.update_batch(update_batch)
 
         duration = time.monotonic() - start
         logger.info(
@@ -115,13 +132,14 @@ class CodeIndexingService:
                     continue
                 yield full_path
 
-    def _process_file(self, full_path: str, force: bool) -> str:
+    def _prepare_file(self, full_path: str, force: bool) -> tuple[str, object]:
+        """Returns (action, obj) where action is 'new'|'update'|'skip' and obj is the model."""
         rel_path = os.path.relpath(full_path, self._project_root)
         file_hash = self._calculate_hash(full_path)
         existing = self._repository.find_by_path(rel_path)
 
         if existing is not None and not force and existing.hash == file_hash:
-            return "skipped"
+            return "skip", None
 
         stat = os.stat(full_path)
         ext = os.path.splitext(full_path)[1].lower()
@@ -142,8 +160,7 @@ class CodeIndexingService:
                 indexed_at=indexed_at,
             )
             logger.debug("Indexing new file: %s", rel_path)
-            self._repository.save(code_file)
-            return "indexed"
+            return "new", code_file
         else:
             existing.hash = file_hash
             existing.size = stat.st_size
@@ -151,8 +168,7 @@ class CodeIndexingService:
             existing.lines_of_code = lines
             existing.indexed_at = indexed_at
             logger.debug("Updating file: %s", rel_path)
-            self._repository.update(existing)
-            return "updated"
+            return "update", existing
 
     @staticmethod
     def _calculate_hash(file_path: str) -> str:

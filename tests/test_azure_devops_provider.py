@@ -2,7 +2,7 @@ import base64
 import json
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -155,41 +155,31 @@ class TestAzurePayloadMapping:
 
 
 class TestAzureCreateTicket:
-    def test_create_ticket_success(self):
+    async def test_create_ticket_success(self):
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
         story = make_story()
 
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"id": 42, "url": "https://..."}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
-
-        with patch("app.services.ticket_providers.azure_devops.urlopen", return_value=mock_response):
-            result = provider.create_ticket(story, "PROJ", "Story")
+        with patch.object(provider, "_request", new=AsyncMock(return_value={"id": 42})):
+            result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert result.external_id == "42"
         assert "42" in result.url
         assert result.provider == "azure_devops"
         assert result.status == "CREATED"
 
-    def test_create_ticket_url_contains_org_and_project(self):
+    async def test_create_ticket_url_contains_org_and_project(self):
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
         story = make_story()
 
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"id": 7}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
-
-        with patch("app.services.ticket_providers.azure_devops.urlopen", return_value=mock_response):
-            result = provider.create_ticket(story, "PROJ", "Story")
+        with patch.object(provider, "_request", new=AsyncMock(return_value={"id": 7})):
+            result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert "test-org" in result.url
         assert "MyProject" in result.url
 
-    def test_create_ticket_retries_on_5xx(self):
+    async def test_create_ticket_retries_on_5xx(self):
         from urllib.error import HTTPError
 
         settings = make_settings(AZURE_MAX_RETRIES=2, AZURE_RETRY_DELAY_SECONDS=0)
@@ -197,20 +187,12 @@ class TestAzureCreateTicket:
         story = make_story()
 
         error_503 = HTTPError(url="", code=503, msg="Unavailable", hdrs=None, fp=None)
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"id": 5}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
-
-        with patch(
-            "app.services.ticket_providers.azure_devops.urlopen",
-            side_effect=[error_503, mock_response],
-        ):
-            result = provider.create_ticket(story, "PROJ", "Story")
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=[error_503, {"id": 5}])):
+            result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert result.status == "CREATED"
 
-    def test_create_ticket_does_not_retry_on_401(self):
+    async def test_create_ticket_does_not_retry_on_401(self):
         from urllib.error import HTTPError
 
         settings = make_settings()
@@ -218,14 +200,13 @@ class TestAzureCreateTicket:
         story = make_story()
 
         error_401 = HTTPError(url="", code=401, msg="Unauthorized", hdrs=None, fp=None)
-
-        with patch("app.services.ticket_providers.azure_devops.urlopen", side_effect=error_401):
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=error_401)):
             with pytest.raises(HTTPError) as exc_info:
-                provider.create_ticket(story, "PROJ", "Story")
+                await provider.create_ticket(story, "PROJ", "Story")
 
         assert exc_info.value.code == 401
 
-    def test_create_ticket_raises_after_max_retries(self):
+    async def test_create_ticket_raises_after_max_retries(self):
         from urllib.error import HTTPError
 
         settings = make_settings(AZURE_MAX_RETRIES=1, AZURE_RETRY_DELAY_SECONDS=0)
@@ -233,12 +214,11 @@ class TestAzureCreateTicket:
         story = make_story()
 
         error_500 = HTTPError(url="", code=500, msg="Error", hdrs=None, fp=None)
-
-        with patch("app.services.ticket_providers.azure_devops.urlopen", side_effect=error_500):
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=error_500)):
             with pytest.raises(HTTPError):
-                provider.create_ticket(story, "PROJ", "Story")
+                await provider.create_ticket(story, "PROJ", "Story")
 
-    def test_429_triggers_retry_with_jitter(self):
+    async def test_429_triggers_retry_with_jitter(self):
         from urllib.error import HTTPError
 
         settings = make_settings(AZURE_MAX_RETRIES=2, AZURE_RETRY_DELAY_SECONDS=0)
@@ -246,53 +226,40 @@ class TestAzureCreateTicket:
         story = make_story()
 
         error_429 = HTTPError(url="", code=429, msg="Too Many Requests", hdrs=None, fp=None)
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"id": 99}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
-
-        with patch(
-            "app.services.ticket_providers.azure_devops.urlopen",
-            side_effect=[error_429, mock_response],
-        ):
-            result = provider.create_ticket(story, "PROJ", "Story")
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=[error_429, {"id": 99}])):
+            result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert result.status == "CREATED"
 
 
 class TestAzureValidateConnection:
-    def test_returns_false_when_not_configured(self):
+    async def test_returns_false_when_not_configured(self):
         settings = make_settings(AZURE_ORG_URL="", AZURE_DEVOPS_TOKEN="")
         provider = AzureDevOpsTicketProvider(settings)
-        assert provider.validate_connection() is False
+        assert await provider.validate_connection() is False
 
-    def test_returns_true_on_success(self):
+    async def test_returns_true_on_success(self):
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
 
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"value": []}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
+        with patch.object(provider, "_request", new=AsyncMock(return_value={"value": []})):
+            assert await provider.validate_connection() is True
 
-        with patch("app.services.ticket_providers.azure_devops.urlopen", return_value=mock_response):
-            assert provider.validate_connection() is True
-
-    def test_returns_false_on_error(self):
+    async def test_returns_false_on_error(self):
         from urllib.error import HTTPError
 
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
 
-        with patch(
-            "app.services.ticket_providers.azure_devops.urlopen",
-            side_effect=HTTPError(url="", code=401, msg="Unauthorized", hdrs=None, fp=None),
+        with patch.object(
+            provider, "_request",
+            new=AsyncMock(side_effect=HTTPError(url="", code=401, msg="Unauthorized", hdrs=None, fp=None)),
         ):
-            assert provider.validate_connection() is False
+            assert await provider.validate_connection() is False
 
 
 class TestHealthCheckWithAzure:
-    def test_health_shows_azure_not_configured(self):
+    async def test_health_shows_azure_not_configured(self):
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
         from sqlalchemy.pool import StaticPool
@@ -312,12 +279,12 @@ class TestHealthCheckWithAzure:
             AZURE_ORG_URL="", AZURE_DEVOPS_TOKEN="",
         )
         service = TicketIntegrationService(db, settings)
-        result = service.health_check()
+        result = await service.health_check()
 
         assert result["jira"] == "not_configured"
         assert result["azure_devops"] == "not_configured"
 
-    def test_health_shows_azure_healthy(self):
+    async def test_health_shows_azure_healthy(self):
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
         from sqlalchemy.pool import StaticPool
@@ -335,12 +302,11 @@ class TestHealthCheckWithAzure:
         settings = make_settings(JIRA_BASE_URL="", JIRA_API_TOKEN="")
         service = TicketIntegrationService(db, settings)
 
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"value": []}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
-
-        with patch("app.services.ticket_providers.azure_devops.urlopen", return_value=mock_response):
-            result = service.health_check()
+        with patch(
+            "app.services.ticket_providers.azure_devops.AzureDevOpsTicketProvider._request",
+            new_callable=AsyncMock,
+            return_value={"value": []},
+        ):
+            result = await service.health_check()
 
         assert result["azure_devops"] == "healthy"

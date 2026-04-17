@@ -43,9 +43,12 @@ def make_service(engine):
 
 
 def insert_requirement(db, req_id: str = "req-1") -> Requirement:
+    import hashlib
+    text = "User registration with email"
     req = Requirement(
         id=req_id,
-        requirement_text="User registration with email",
+        requirement_text=text,
+        requirement_text_hash=hashlib.sha256(text.encode()).hexdigest(),
         project_id="proj",
         intent="create_user_account",
         action="create",

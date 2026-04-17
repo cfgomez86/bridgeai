@@ -46,41 +46,37 @@ class ImpactAnalysisService:
 
         start = time.monotonic()
 
-        all_files = self._code_file_repo.list_all()
-        logger.info("Files available for analysis: %d", len(all_files))
-
         keywords = self._extract_keywords(requirement)
 
         file_analyses: dict[str, FileAnalysis] = {}
-        file_contents: dict[str, str] = {}
-        for cf in all_files:
+        seed_files: set[str] = set()
+        impacted_reasons: dict[str, str] = {}
+        files_seen = 0
+
+        for cf in self._code_file_repo.iter_all():
+            files_seen += 1
             full_path = os.path.join(self._project_root, cf.file_path)
             try:
-                content = Path(full_path).read_text(encoding="utf-8", errors="ignore")
+                content = self._read_capped(full_path)
                 fa = self._analyzer.analyze(cf.file_path, content, cf.language)
                 file_analyses[cf.file_path] = fa
-                file_contents[cf.file_path] = content
             except OSError:
                 continue
 
-        seed_files: set[str] = set()
-        impacted_reasons: dict[str, str] = {}
-
-        for path, fa in file_analyses.items():
             search_text = (
-                path.lower()
+                cf.file_path.lower()
                 + " "
                 + " ".join(fa.classes).lower()
                 + " "
                 + " ".join(fa.functions).lower()
                 + " "
-                + file_contents.get(path, "").lower()
+                + content.lower()
             )
             if any(keyword in search_text for keyword in keywords):
-                seed_files.add(path)
-                impacted_reasons[path] = "keyword_match"
+                seed_files.add(cf.file_path)
+                impacted_reasons[cf.file_path] = "keyword_match"
 
-        logger.info("Files matched by keywords: %d", len(seed_files))
+        logger.info("Files available for analysis: %d, keyword matches: %d", files_seen, len(seed_files))
 
         dep_map: dict[str, set[str]] = {}
         for path, fa in file_analyses.items():
@@ -160,6 +156,11 @@ class ImpactAnalysisService:
         }
         words = re.findall(r'[a-zA-Z][a-zA-Z0-9_]*', requirement.lower())
         return [w for w in words if w not in stop_words and len(w) >= 3]
+
+    @staticmethod
+    def _read_capped(full_path: str, max_bytes: int = 51_200) -> str:
+        with open(full_path, encoding="utf-8", errors="ignore") as f:
+            return f.read(max_bytes)
 
     def _resolve_import(self, import_str: str, language: str) -> Optional[str]:
         lang = language.lower()

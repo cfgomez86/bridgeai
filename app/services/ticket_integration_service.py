@@ -1,6 +1,7 @@
 import json
 import time
 import uuid
+import asyncio
 from datetime import datetime, timezone
 from urllib.error import HTTPError
 
@@ -98,7 +99,7 @@ class TicketIntegrationService:
         )
         self._integration_repo.add_audit_log(log)
 
-    def create_ticket(
+    async def create_ticket(
         self,
         story_id: str,
         provider_name: str,
@@ -164,7 +165,7 @@ class TicketIntegrationService:
 
         start = time.monotonic()
         try:
-            result = provider.create_ticket(story, project_key, issue_type)
+            result = await provider.create_ticket(story, project_key, issue_type)
             duration_ms = int((time.monotonic() - start) * 1000)
 
             self._integration_repo.update_status(
@@ -258,7 +259,7 @@ class TicketIntegrationService:
     def get_audit_logs(self, story_id: str) -> list:
         return self._integration_repo.get_audit_logs(story_id)
 
-    def health_check(self) -> dict[str, str]:
+    async def health_check(self) -> dict[str, str]:
         results: dict[str, str] = {}
 
         if not self._settings.JIRA_BASE_URL or not self._settings.JIRA_API_TOKEN:
@@ -266,7 +267,7 @@ class TicketIntegrationService:
         else:
             try:
                 jira = JiraTicketProvider(self._settings)
-                results["jira"] = "healthy" if jira.validate_connection() else "unhealthy"
+                results["jira"] = "healthy" if await jira.validate_connection() else "unhealthy"
             except Exception:
                 results["jira"] = "unhealthy"
 
@@ -275,7 +276,7 @@ class TicketIntegrationService:
         else:
             try:
                 azure = AzureDevOpsTicketProvider(self._settings)
-                results["azure_devops"] = "healthy" if azure.validate_connection() else "unhealthy"
+                results["azure_devops"] = "healthy" if await azure.validate_connection() else "unhealthy"
             except Exception:
                 results["azure_devops"] = "unhealthy"
 

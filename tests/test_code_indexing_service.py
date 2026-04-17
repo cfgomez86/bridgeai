@@ -29,8 +29,8 @@ def test_new_file_is_inserted(repo: MagicMock, tmp_path: Path) -> None:
     service = CodeIndexingService(repository=repo, project_root=str(tmp_path))
     result = service.index_repository()
 
-    assert repo.save.called is True
-    assert repo.update.called is False
+    assert repo.save_batch.called is True
+    assert repo.update_batch.called is False
     assert result.files_indexed == 1
     assert result.files_skipped == 0
 
@@ -46,8 +46,8 @@ def test_modified_file_is_updated(repo: MagicMock, tmp_path: Path) -> None:
     service = CodeIndexingService(repository=repo, project_root=str(tmp_path))
     result = service.index_repository()
 
-    assert repo.update.called is True
-    assert repo.save.called is False
+    assert repo.update_batch.called is True
+    assert repo.save_batch.called is False
     assert result.files_updated == 1
 
 
@@ -63,8 +63,8 @@ def test_unchanged_file_is_skipped(repo: MagicMock, tmp_path: Path) -> None:
     service = CodeIndexingService(repository=repo, project_root=str(tmp_path))
     result = service.index_repository()
 
-    assert repo.save.called is False
-    assert repo.update.called is False
+    assert repo.save_batch.called is False
+    assert repo.update_batch.called is False
     assert result.files_skipped == 1
 
 
@@ -78,7 +78,7 @@ def test_ignored_directory_is_not_scanned(repo: MagicMock, tmp_path: Path) -> No
     service = CodeIndexingService(repository=repo, project_root=str(tmp_path))
     service.index_repository()
 
-    assert repo.save.call_count == 1
+    assert repo.save_batch.call_count == 1
 
 
 def test_force_reindexes_unchanged_file(repo: MagicMock, tmp_path: Path) -> None:
@@ -93,7 +93,7 @@ def test_force_reindexes_unchanged_file(repo: MagicMock, tmp_path: Path) -> None
     service = CodeIndexingService(repository=repo, project_root=str(tmp_path))
     result = service.index_repository(force=True)
 
-    assert repo.update.called is True
+    assert repo.update_batch.called is True
     assert result.files_updated == 1
     assert result.files_skipped == 0
 

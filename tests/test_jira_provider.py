@@ -2,7 +2,7 @@ import base64
 import json
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -67,7 +67,7 @@ class TestJiraAuth:
 
 class TestJiraPayloadMapping:
     def test_payload_maps_story_fields(self):
-        settings = make_settings()  # no JIRA_ISSUE_TYPE_MAP → pass-through
+        settings = make_settings()
         provider = JiraTicketProvider(settings)
         story = make_story()
         payload = provider.build_payload(story, "PROJ", "Story")
@@ -76,7 +76,6 @@ class TestJiraPayloadMapping:
         assert fields["project"]["key"] == "PROJ"
         assert fields["summary"] == story.title
         assert fields["issuetype"]["name"] == "Story"
-        # priority and labels are omitted to avoid HTTP 400 on restricted screens
         assert "priority" not in fields
         assert "labels" not in fields
 
@@ -103,7 +102,6 @@ class TestJiraPayloadMapping:
         provider = JiraTicketProvider(settings)
         story = make_story()
         payload = provider.build_payload(story, "PROJ", "Story")
-
         description_json = json.dumps(payload["fields"]["description"])
         assert "Email is validated" in description_json
         assert "Password is hashed" in description_json
@@ -113,7 +111,6 @@ class TestJiraPayloadMapping:
         provider = JiraTicketProvider(settings)
         story = make_story()
         payload = provider.build_payload(story, "PROJ", "Story")
-
         description_json = json.dumps(payload["fields"]["description"])
         assert "Add endpoint" in description_json
 
@@ -122,30 +119,24 @@ class TestJiraPayloadMapping:
         provider = JiraTicketProvider(settings)
         payload = provider.build_payload(make_story(), "PROJ", "Story")
         fields = set(payload["fields"].keys())
-        # Only required fields — optional ones cause 400 on restricted project screens
         assert fields == {"project", "summary", "description", "issuetype"}
 
 
 class TestJiraCreateTicket:
-    def test_create_ticket_success(self):
+    async def test_create_ticket_success(self):
         settings = make_settings()
         provider = JiraTicketProvider(settings)
         story = make_story()
 
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"key": "PROJ-42"}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
-
-        with patch("app.services.ticket_providers.jira.urlopen", return_value=mock_response):
-            result = provider.create_ticket(story, "PROJ", "Story")
+        with patch.object(provider, "_request", new=AsyncMock(return_value={"key": "PROJ-42"})):
+            result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert result.external_id == "PROJ-42"
         assert "PROJ-42" in result.url
         assert result.provider == "jira"
         assert result.status == "CREATED"
 
-    def test_create_ticket_retries_on_5xx(self):
+    async def test_create_ticket_retries_on_5xx(self):
         from urllib.error import HTTPError
 
         settings = make_settings(JIRA_MAX_RETRIES=2, JIRA_RETRY_DELAY_SECONDS=0)
@@ -153,20 +144,16 @@ class TestJiraCreateTicket:
         story = make_story()
 
         error_500 = HTTPError(url="", code=500, msg="Server Error", hdrs=None, fp=None)
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"key": "PROJ-1"}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch(
-            "app.services.ticket_providers.jira.urlopen",
-            side_effect=[error_500, mock_response],
+        with patch.object(
+            provider, "_request",
+            new=AsyncMock(side_effect=[error_500, {"key": "PROJ-1"}]),
         ):
-            result = provider.create_ticket(story, "PROJ", "Story")
+            result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert result.status == "CREATED"
 
-    def test_create_ticket_does_not_retry_on_401(self):
+    async def test_create_ticket_does_not_retry_on_401(self):
         from urllib.error import HTTPError
 
         settings = make_settings()
@@ -175,13 +162,13 @@ class TestJiraCreateTicket:
 
         error_401 = HTTPError(url="", code=401, msg="Unauthorized", hdrs=None, fp=None)
 
-        with patch("app.services.ticket_providers.jira.urlopen", side_effect=error_401):
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=error_401)):
             with pytest.raises(HTTPError) as exc_info:
-                provider.create_ticket(story, "PROJ", "Story")
+                await provider.create_ticket(story, "PROJ", "Story")
 
         assert exc_info.value.code == 401
 
-    def test_create_ticket_raises_after_max_retries(self):
+    async def test_create_ticket_raises_after_max_retries(self):
         from urllib.error import HTTPError
 
         settings = make_settings(JIRA_MAX_RETRIES=1, JIRA_RETRY_DELAY_SECONDS=0)
@@ -190,37 +177,32 @@ class TestJiraCreateTicket:
 
         error_503 = HTTPError(url="", code=503, msg="Unavailable", hdrs=None, fp=None)
 
-        with patch("app.services.ticket_providers.jira.urlopen", side_effect=error_503):
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=error_503)):
             with pytest.raises(HTTPError):
-                provider.create_ticket(story, "PROJ", "Story")
+                await provider.create_ticket(story, "PROJ", "Story")
 
 
 class TestJiraValidateConnection:
-    def test_validate_connection_returns_false_when_not_configured(self):
+    async def test_validate_connection_returns_false_when_not_configured(self):
         settings = make_settings(JIRA_BASE_URL="", JIRA_API_TOKEN="")
         provider = JiraTicketProvider(settings)
-        assert provider.validate_connection() is False
+        assert await provider.validate_connection() is False
 
-    def test_validate_connection_returns_true_on_success(self):
+    async def test_validate_connection_returns_true_on_success(self):
         settings = make_settings()
         provider = JiraTicketProvider(settings)
 
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"accountId": "abc"}).encode()
-        mock_response.__enter__ = lambda s: s
-        mock_response.__exit__ = MagicMock(return_value=False)
+        with patch.object(provider, "_request", new=AsyncMock(return_value={"accountId": "abc"})):
+            assert await provider.validate_connection() is True
 
-        with patch("app.services.ticket_providers.jira.urlopen", return_value=mock_response):
-            assert provider.validate_connection() is True
-
-    def test_validate_connection_returns_false_on_error(self):
+    async def test_validate_connection_returns_false_on_error(self):
         from urllib.error import HTTPError
 
         settings = make_settings()
         provider = JiraTicketProvider(settings)
 
-        with patch(
-            "app.services.ticket_providers.jira.urlopen",
-            side_effect=HTTPError(url="", code=401, msg="Unauthorized", hdrs=None, fp=None),
+        with patch.object(
+            provider, "_request",
+            new=AsyncMock(side_effect=HTTPError(url="", code=401, msg="Unauthorized", hdrs=None, fp=None)),
         ):
-            assert provider.validate_connection() is False
+            assert await provider.validate_connection() is False
