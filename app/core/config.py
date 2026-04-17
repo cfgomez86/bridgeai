@@ -21,6 +21,30 @@ class Settings(BaseSettings):
     # Feature flags
     DRY_RUN: bool = False
 
+    # AI Provider
+    AI_PROVIDER: str = "stub"
+    ANTHROPIC_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+    AI_MODEL: str = ""
+    AI_TIMEOUT_SECONDS: int = 30
+    AI_MAX_RETRIES: int = 2
+
+    # Jira integration
+    JIRA_BASE_URL: str = ""
+    JIRA_USER_EMAIL: str = ""
+    JIRA_API_TOKEN: str = ""
+    JIRA_REQUEST_TIMEOUT_SECONDS: int = 10
+    JIRA_MAX_RETRIES: int = 3
+    JIRA_RETRY_DELAY_SECONDS: int = 5
+
+    # Azure DevOps integration
+    AZURE_DEVOPS_TOKEN: str = ""
+    AZURE_ORG_URL: str = ""       # https://dev.azure.com/your-org
+    AZURE_PROJECT: str = ""
+    AZURE_REQUEST_TIMEOUT_SECONDS: int = 10
+    AZURE_MAX_RETRIES: int = 3
+    AZURE_RETRY_DELAY_SECONDS: int = 5
+
     @property
     def project_root_path(self) -> Path:
         return Path(self.PROJECT_ROOT).resolve()
