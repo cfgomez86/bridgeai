@@ -24,3 +24,12 @@ class ImpactAnalysisRepository:
         total = base.count()
         files = base.offset(offset).limit(limit).all()
         return files, total
+
+    def find_file_paths(self, analysis_id: str, limit: int = 20) -> list[str]:
+        rows = (
+            self._db.query(ImpactedFile.file_path)
+            .filter(ImpactedFile.analysis_id == analysis_id)
+            .limit(limit)
+            .all()
+        )
+        return [r[0] for r in rows]

@@ -14,6 +14,7 @@ class UserStory(Base):
     requirement_id: Mapped[str] = mapped_column(String(36), nullable=False)
     impact_analysis_id: Mapped[str] = mapped_column(String(36), nullable=False)
     project_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="es")
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     story_description: Mapped[str] = mapped_column(Text, nullable=False)
     acceptance_criteria: Mapped[str] = mapped_column(Text, nullable=False)  # JSON list

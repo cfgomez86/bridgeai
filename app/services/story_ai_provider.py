@@ -58,15 +58,18 @@ Contexto del impacto técnico:
 - Archivos impactados: {files_impacted}
 - Módulos impactados: {modules_impacted}
 - Nivel de riesgo: {risk_level}
+- Archivos concretos del codebase que requieren cambios:
+{impacted_file_paths_formatted}
 
 Genera ÚNICAMENTE un JSON válido con estos campos exactos:
 - title: string corto y descriptivo (máximo 80 caracteres)
-- story_description: string en formato "As a [tipo de usuario], I want [acción] so that [beneficio]"
+- story_description: string en formato de historia de usuario estándar: "Como [tipo de usuario], quiero [acción] para que [beneficio]". Usa el mismo idioma que el texto del requerimiento.
 - acceptance_criteria: array de strings (mínimo 3 criterios verificables)
-- technical_tasks: array de strings (mínimo 3 tareas técnicas concretas)
+- technical_tasks: array de strings (mínimo 3 tareas técnicas concretas). Cada tarea DEBE referenciar el archivo específico del codebase donde se realizará el cambio, usando los archivos listados arriba.
 - definition_of_done: array de strings (mínimo 3 criterios de completitud)
 - risk_notes: array de strings (riesgos identificados, puede ser vacío)
 
+IMPORTANTE: Genera TODOS los valores del JSON en este idioma: {language}.
 Sin texto adicional. Sin explicaciones. Solo el JSON válido.\
 """
 
@@ -77,6 +80,14 @@ class StoryAIProvider(ABC):
         ...
 
     def _build_prompt(self, context: dict) -> str:
+        paths = context.get("impacted_file_paths", [])
+        formatted_paths = "\n".join(f"  - {p}" for p in paths) if paths else "  (no hay archivos específicos identificados)"
+        language_names = {
+            "es": "español", "en": "English", "fr": "français",
+            "de": "Deutsch", "pt": "português",
+        }
+        lang_code = context.get("language", "es")
+        language_label = language_names.get(lang_code, lang_code)
         return _STORY_PROMPT_TEMPLATE.format(
             requirement_text=context.get("requirement_text", ""),
             intent=context.get("intent", ""),
@@ -87,6 +98,8 @@ class StoryAIProvider(ABC):
             files_impacted=context.get("files_impacted", 0),
             modules_impacted=context.get("modules_impacted", 0),
             risk_level=context.get("risk_level", ""),
+            impacted_file_paths_formatted=formatted_paths,
+            language=language_label,
         )
 
 

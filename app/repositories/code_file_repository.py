@@ -43,3 +43,15 @@ class CodeFileRepository:
 
     def iter_all(self, chunk_size: int = 500):
         yield from self._db.query(CodeFile).yield_per(chunk_size)
+
+    def delete_by_paths(self, paths: set[str]) -> int:
+        deleted = (
+            self._db.query(CodeFile)
+            .filter(CodeFile.file_path.in_(paths))
+            .delete(synchronize_session=False)
+        )
+        self._db.commit()
+        return deleted
+
+    def get_all_paths(self) -> set[str]:
+        return {row[0] for row in self._db.query(CodeFile.file_path).all()}

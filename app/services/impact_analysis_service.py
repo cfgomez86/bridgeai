@@ -12,6 +12,7 @@ from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.services.dependency_analyzer import DependencyAnalyzer, FileAnalysis
+from app.services.semantic_impact_filter import SemanticImpactFilter
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +33,13 @@ class ImpactAnalysisService:
         impact_repo: ImpactAnalysisRepository,
         project_root: str,
         analyzer: DependencyAnalyzer | None = None,
+        semantic_filter: SemanticImpactFilter | None = None,
     ) -> None:
         self._code_file_repo = code_file_repo
         self._impact_repo = impact_repo
         self._project_root = os.path.abspath(project_root)
         self._analyzer = analyzer if analyzer is not None else DependencyAnalyzer()
+        self._semantic_filter = semantic_filter
 
     def analyze(self, requirement: str, project_id: str) -> ImpactAnalysisResult:
         if requirement.strip() == "":
@@ -78,6 +81,11 @@ class ImpactAnalysisService:
 
         logger.info("Files available for analysis: %d, keyword matches: %d", files_seen, len(seed_files))
 
+        if self._semantic_filter is not None and seed_files:
+            seed_candidates = {p: file_analyses[p] for p in seed_files if p in file_analyses}
+            seed_files = self._semantic_filter.filter(requirement, seed_candidates)
+            logger.info("After semantic filter: %d seed files", len(seed_files))
+
         dep_map: dict[str, set[str]] = {}
         for path, fa in file_analyses.items():
             resolved_deps: set[str] = set()
@@ -109,7 +117,7 @@ class ImpactAnalysisService:
 
         logger.info("Risk calculated: %s", risk_level)
 
-        modules = {p.split("/")[0] for p in impacted_reasons if "/" in p}
+        modules = {Path(p).parts[0] for p in impacted_reasons if len(Path(p).parts) > 1}
 
         analysis_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -151,11 +159,17 @@ class ImpactAnalysisService:
 
     def _extract_keywords(self, requirement: str) -> list[str]:
         stop_words = {
+            # English
             "the", "a", "an", "in", "of", "for", "to", "and", "or",
             "is", "are", "with", "on", "at", "by", "that", "this", "add", "change",
+            # Spanish
+            "que", "con", "del", "los", "las", "una", "uno", "por", "para",
+            "como", "cuando", "donde", "quiero", "tener", "poder", "hacer",
+            "este", "esta", "estos", "estas", "cual", "cuales", "sea", "ser",
+            "hay", "han", "sus", "sin", "más", "mas", "nos", "les", "fue",
         }
-        words = re.findall(r'[a-zA-Z][a-zA-Z0-9_]*', requirement.lower())
-        return [w for w in words if w not in stop_words and len(w) >= 3]
+        words = re.findall(r'[a-zA-Z\u00c0-\u024f][a-zA-Z0-9_\u00c0-\u024f]*', requirement.lower())
+        return [w for w in words if w not in stop_words and len(w) >= 4]
 
     @staticmethod
     def _read_capped(full_path: str, max_bytes: int = 51_200) -> str:

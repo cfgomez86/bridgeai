@@ -18,7 +18,11 @@ _provider_cache: dict[str, "AIProvider"] = {}
 
 VALID_FEATURE_TYPES = {"feature", "bugfix", "refactor", "enhancement", "configuration", "performance", "security"}
 VALID_COMPLEXITIES = {"LOW", "MEDIUM", "HIGH"}
-VALID_DOMAINS = {"authentication", "billing", "orders", "notifications", "reporting", "integration", "user_management"}
+VALID_DOMAINS = {
+    "authentication", "billing", "orders", "notifications", "reporting",
+    "integration", "user_management", "configuration", "ui_ux", "devops",
+    "data_management",
+}
 VALID_SCOPES = {"backend", "frontend", "fullstack", "infrastructure", "data"}
 
 _STUB_RESPONSE = {
@@ -42,7 +46,13 @@ Campos obligatorios del JSON:
 - entity: entidad principal del dominio (sustantivo en singular, ej: "user")
 - feature_type: uno de [feature, bugfix, refactor, enhancement, configuration, performance, security]
 - priority: uno de [low, medium, high]
-- business_domain: uno de [authentication, billing, orders, notifications, reporting, integration, user_management]
+- business_domain: uno de los siguientes (elige el más específico):
+    authentication (login, tokens, permisos), billing (pagos, suscripciones),
+    orders (pedidos, carrito), notifications (emails, alertas, push),
+    reporting (dashboards, métricas, exports), integration (APIs externas, webhooks),
+    user_management (usuarios, roles, perfiles), configuration (ajustes, preferencias, flags),
+    ui_ux (interfaz, diseño, accesibilidad), devops (infra, CI/CD, despliegue),
+    data_management (migraciones, modelos de datos, storage)
 - technical_scope: uno de [backend, frontend, fullstack, infrastructure, data]
 - estimated_complexity: uno de [LOW, MEDIUM, HIGH]
 - keywords: array de strings con términos clave del requerimiento (máximo 8)

@@ -5,6 +5,7 @@ import { useState } from "react"
 export type WorkflowState = {
   projectId: string
   requirementText: string
+  language: string
   requirementId: string | null
   intent: string | null
   featureType: string | null
@@ -21,6 +22,7 @@ export type WorkflowState = {
 const initialState: WorkflowState = {
   projectId: "my-project",
   requirementText: "",
+  language: "es",
   requirementId: null,
   intent: null,
   featureType: null,
@@ -43,6 +45,10 @@ export function useWorkflow() {
 
   function setRequirementText(requirementText: string) {
     setState((prev) => ({ ...prev, requirementText }))
+  }
+
+  function setLanguage(language: string) {
+    setState((prev) => ({ ...prev, language }))
   }
 
   function completeStep1(data: {
@@ -95,6 +101,7 @@ export function useWorkflow() {
     state,
     setProjectId,
     setRequirementText,
+    setLanguage,
     completeStep1,
     completeStep2,
     completeStep3,

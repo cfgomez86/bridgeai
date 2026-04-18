@@ -17,13 +17,14 @@ class UserStoryRepository:
         return self._db.get(UserStory, story_id)
 
     def find_by_requirement_and_analysis(
-        self, requirement_id: str, analysis_id: str
+        self, requirement_id: str, analysis_id: str, language: str = "es"
     ) -> Optional[UserStory]:
         return (
             self._db.query(UserStory)
             .filter(
                 UserStory.requirement_id == requirement_id,
                 UserStory.impact_analysis_id == analysis_id,
+                UserStory.language == language,
             )
             .first()
         )

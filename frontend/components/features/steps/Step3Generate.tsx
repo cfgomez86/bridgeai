@@ -28,7 +28,8 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
       const genResult = await generateStory(
         state.requirementId,
         state.analysisId,
-        state.projectId
+        state.projectId,
+        state.language
       )
       const detail = await getStoryDetail(genResult.story_id)
       setStory(detail)

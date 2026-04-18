@@ -25,6 +25,7 @@ DEFAULT_IGNORE_PATTERNS: list[str] = [
     "dist",
     "build",
     "target",
+    ".next",
 ]
 
 
@@ -64,10 +65,13 @@ class CodeIndexingService:
 
         new_batch: list = []
         update_batch: list = []
+        scanned_rel_paths: set[str] = set()
 
         for file_path in self._walk_files():
             files_scanned += 1
             try:
+                rel_path = os.path.relpath(file_path, self._project_root)
+                scanned_rel_paths.add(rel_path)
                 action, obj = self._prepare_file(file_path, force)
                 if action == "new":
                     new_batch.append(obj)
@@ -91,6 +95,11 @@ class CodeIndexingService:
             self._repository.save_batch(new_batch)
         if update_batch:
             self._repository.update_batch(update_batch)
+
+        stale_paths = self._repository.get_all_paths() - scanned_rel_paths
+        if stale_paths:
+            self._repository.delete_by_paths(stale_paths)
+            logger.info("Removed %d stale entries from index", len(stale_paths))
 
         duration = time.monotonic() - start
         logger.info(

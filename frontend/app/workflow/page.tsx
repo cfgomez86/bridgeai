@@ -31,6 +31,7 @@ export default function WorkflowPage() {
             state={state}
             setProjectId={workflow.setProjectId}
             setRequirementText={workflow.setRequirementText}
+            setLanguage={workflow.setLanguage}
             completeStep1={workflow.completeStep1}
           />
         )}

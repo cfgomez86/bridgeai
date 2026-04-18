@@ -31,8 +31,8 @@ class StoryGenerationService:
         self._settings = settings or get_settings()
         self._logger = get_logger(__name__)
 
-    def generate(self, requirement_id: str, analysis_id: str, project_id: str) -> UserStory:
-        cached = self._story_repo.find_by_requirement_and_analysis(requirement_id, analysis_id)
+    def generate(self, requirement_id: str, analysis_id: str, project_id: str, language: str = "es") -> UserStory:
+        cached = self._story_repo.find_by_requirement_and_analysis(requirement_id, analysis_id, language)
         if cached:
             self._logger.info("Cache hit for requirement_id=%s analysis_id=%s", requirement_id, analysis_id)
             return self._to_domain(cached)
@@ -45,6 +45,8 @@ class StoryGenerationService:
         if not analysis:
             raise ValueError(f"ImpactAnalysis {analysis_id} not found")
 
+        impacted_file_paths = self._impact_repo.find_file_paths(analysis_id)
+
         context = {
             "requirement_text": requirement.requirement_text,
             "intent": requirement.intent,
@@ -55,6 +57,8 @@ class StoryGenerationService:
             "files_impacted": analysis.files_impacted,
             "modules_impacted": analysis.modules_impacted,
             "risk_level": analysis.risk_level,
+            "impacted_file_paths": impacted_file_paths,
+            "language": language,
         }
 
         start = datetime.now(timezone.utc)
@@ -75,6 +79,7 @@ class StoryGenerationService:
             requirement_id=requirement_id,
             impact_analysis_id=analysis_id,
             project_id=project_id,
+            language=language,
             title=parsed["title"],
             story_description=parsed["story_description"],
             acceptance_criteria=json.dumps(parsed["acceptance_criteria"]),

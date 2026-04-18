@@ -8,7 +8,7 @@ from app.domain.file_info import FileInfo
 logger = get_logger(__name__)
 
 IGNORED_DIRS: frozenset[str] = frozenset(
-    {".git", "node_modules", "venv", "__pycache__", ".venv", "dist", "build"}
+    {".git", "node_modules", "venv", "__pycache__", ".venv", "dist", "build", ".next"}
 )
 
 SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(

@@ -11,6 +11,7 @@ from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.services.dependency_analyzer import DependencyAnalyzer
 from app.services.impact_analysis_service import ImpactAnalysisService
+from app.services.semantic_impact_filter import get_semantic_filter
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,13 @@ def get_impact_service(
 ) -> ImpactAnalysisService:
     code_repo = CodeFileRepository(db)
     impact_repo = ImpactAnalysisRepository(db)
-    return ImpactAnalysisService(code_repo, impact_repo, settings.PROJECT_ROOT, DependencyAnalyzer())
+    return ImpactAnalysisService(
+        code_repo,
+        impact_repo,
+        settings.PROJECT_ROOT,
+        DependencyAnalyzer(),
+        get_semantic_filter(settings),
+    )
 
 
 @router.post("/impact-analysis", response_model=ImpactAnalysisResponse)

@@ -25,6 +25,7 @@ class StoryGenerationRequest(BaseModel):
     requirement_id: str
     impact_analysis_id: str
     project_id: str
+    language: str = "es"
 
 
 class StoryGenerationResponse(BaseModel):
@@ -79,7 +80,7 @@ async def generate_story(
         request_id, body.requirement_id, body.impact_analysis_id,
     )
     try:
-        result = await asyncio.to_thread(service.generate, body.requirement_id, body.impact_analysis_id, body.project_id)
+        result = await asyncio.to_thread(service.generate, body.requirement_id, body.impact_analysis_id, body.project_id, body.language)
     except ValueError as exc:
         msg = str(exc)
         if "not found" in msg.lower():

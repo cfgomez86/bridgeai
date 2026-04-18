@@ -7,12 +7,21 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Search } from "lucide-react"
+import { Loader2, Search, Globe } from "lucide-react"
+
+const LANGUAGES = [
+  { code: "es", label: "Español" },
+  { code: "en", label: "English" },
+  { code: "fr", label: "Français" },
+  { code: "de", label: "Deutsch" },
+  { code: "pt", label: "Português" },
+]
 
 interface Step1Props {
   state: WorkflowState
   setProjectId: (id: string) => void
   setRequirementText: (text: string) => void
+  setLanguage: (lang: string) => void
   completeStep1: (data: {
     requirementId: string
     intent: string
@@ -26,6 +35,7 @@ export function Step1Understand({
   state,
   setProjectId,
   setRequirementText,
+  setLanguage,
   completeStep1,
 }: Step1Props) {
   const [loading, setLoading] = useState(false)
@@ -77,6 +87,30 @@ export function Step1Understand({
             onChange={(e) => setProjectId(e.target.value)}
             placeholder="my-project"
           />
+        </div>
+
+        {/* Language selector */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+            <Globe className="h-3.5 w-3.5 text-slate-400" />
+            Story language
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {LANGUAGES.map((lang) => (
+              <button
+                key={lang.code}
+                type="button"
+                onClick={() => setLanguage(lang.code)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                  state.language === lang.code
+                    ? "bg-indigo-600 text-white border-indigo-600"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"
+                }`}
+              >
+                {lang.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Requirement text */}
