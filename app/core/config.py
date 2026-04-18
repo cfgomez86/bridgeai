@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     API_BASE_URL: str = "http://localhost:8000"
 
+    # First-party OAuth credentials (SaaS mode — set these in .env to skip per-user config)
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
+    GITLAB_CLIENT_ID: str = ""
+    GITLAB_CLIENT_SECRET: str = ""
+    AZURE_DEVOPS_CLIENT_ID: str = ""
+    AZURE_DEVOPS_CLIENT_SECRET: str = ""
+
     @property
     def project_root_path(self) -> Path:
         return Path(self.PROJECT_ROOT).resolve()

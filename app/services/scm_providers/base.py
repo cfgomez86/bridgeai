@@ -1,4 +1,12 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class RemoteFileEntry:
+    path: str    # relative path in repo, e.g. "app/main.py"
+    sha: str     # git blob SHA — used as content hash
+    size: int    # bytes
 
 
 class ScmProvider(ABC):
@@ -33,4 +41,14 @@ class ScmProvider(ABC):
 
         Returns list of dicts with keys: full_name, name, owner, default_branch, private.
         """
+        ...
+
+    @abstractmethod
+    def list_tree(self, access_token: str, repo_full_name: str, branch: str) -> list[RemoteFileEntry]:
+        """Return all blob entries in the repo tree recursively."""
+        ...
+
+    @abstractmethod
+    def get_file_content(self, access_token: str, repo_full_name: str, path: str) -> str:
+        """Return decoded text content of a single file."""
         ...

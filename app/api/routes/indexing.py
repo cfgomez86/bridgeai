@@ -9,7 +9,9 @@ from app.core.config import Settings, get_settings
 from app.database.session import get_db
 from app.models.code_file import CodeFile  # noqa: F401 — ensures table is registered
 from app.repositories.code_file_repository import CodeFileRepository
+from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.code_indexing_service import CodeIndexingService
+from app.services.scm_providers import get_provider
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,8 @@ class IndexResponse(BaseModel):
     files_updated: int
     duration_seconds: float
     request_id: str
+    source: str = "local"
+    repo_full_name: str | None = None
 
 
 def get_indexing_service(
@@ -41,30 +45,44 @@ def get_indexing_service(
 async def index_repository(
     body: IndexRequest,
     request: Request,
+    db: Session = Depends(get_db),
     service: CodeIndexingService = Depends(get_indexing_service),
 ) -> IndexResponse:
     request_id = str(uuid.uuid4())
+    logger.info("POST /index started request_id=%s force=%s", request_id, body.force)
 
-    logger.info(
-        "POST /index started request_id=%s force=%s", request_id, body.force
-    )
+    source = "local"
+    repo_full_name = None
 
     try:
-        result = service.index_repository(force=body.force)
+        conn_repo = SourceConnectionRepository(db)
+        active = conn_repo.get_active()
+
+        if active and active.repo_full_name and active.access_token:
+            provider = get_provider(active.platform)
+            branch = active.default_branch or "main"
+            result = service.index_remote(
+                provider=provider,
+                access_token=active.access_token,
+                repo_full_name=active.repo_full_name,
+                branch=branch,
+                force=body.force,
+            )
+            source = "remote"
+            repo_full_name = active.repo_full_name
+        else:
+            result = service.index_repository(force=body.force)
+
     except Exception as exc:
-        logger.error(
-            "POST /index failed request_id=%s error=%s", request_id, exc
-        )
+        logger.error("POST /index failed request_id=%s error=%s", request_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Indexing failed: {exc}",
         ) from exc
 
     logger.info(
-        "POST /index completed request_id=%s duration=%.2fs files_indexed=%d",
-        request_id,
-        result.duration_seconds,
-        result.files_indexed,
+        "POST /index completed request_id=%s source=%s duration=%.2fs files_indexed=%d",
+        request_id, source, result.duration_seconds, result.files_indexed,
     )
 
     return IndexResponse(
@@ -74,4 +92,6 @@ async def index_repository(
         files_updated=result.files_updated,
         duration_seconds=result.duration_seconds,
         request_id=request_id,
+        source=source,
+        repo_full_name=repo_full_name,
     )

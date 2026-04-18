@@ -1,7 +1,7 @@
 import urllib.parse
 import urllib.request
 import json
-from app.services.scm_providers.base import ScmProvider
+from app.services.scm_providers.base import ScmProvider, RemoteFileEntry
 
 
 class GitLabProvider(ScmProvider):
@@ -80,3 +80,33 @@ class GitLabProvider(ScmProvider):
                 break
             page += 1
         return repos
+
+    def list_tree(self, access_token: str, repo_full_name: str, branch: str) -> list[RemoteFileEntry]:
+        encoded_project = urllib.parse.quote(repo_full_name, safe="")
+        entries: list[RemoteFileEntry] = []
+        page = 1
+        while True:
+            url = (
+                f"{self._API_BASE}/projects/{encoded_project}/repository/tree"
+                f"?recursive=true&per_page=100&page={page}&ref={urllib.parse.quote(branch, safe='')}"
+            )
+            req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                batch = json.loads(resp.read())
+            if not batch:
+                break
+            for item in batch:
+                if item.get("type") == "blob":
+                    entries.append(RemoteFileEntry(path=item["path"], sha=item["id"], size=0))
+            if len(batch) < 100:
+                break
+            page += 1
+        return entries
+
+    def get_file_content(self, access_token: str, repo_full_name: str, path: str) -> str:
+        encoded_project = urllib.parse.quote(repo_full_name, safe="")
+        encoded_path = urllib.parse.quote(path, safe="")
+        url = f"{self._API_BASE}/projects/{encoded_project}/repository/files/{encoded_path}/raw"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.read().decode("utf-8", errors="replace")

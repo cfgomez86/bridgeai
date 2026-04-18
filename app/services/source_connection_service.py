@@ -44,6 +44,18 @@ class SourceConnectionService:
         api_base = self._settings.API_BASE_URL.rstrip("/")
         return f"{api_base}/api/v1/connections/oauth/callback/{platform}"
 
+    def _get_server_credentials(self, platform: str) -> dict | None:
+        """Return first-party OAuth credentials from .env, or None if not set."""
+        mapping = {
+            "github": (self._settings.GITHUB_CLIENT_ID, self._settings.GITHUB_CLIENT_SECRET),
+            "gitlab": (self._settings.GITLAB_CLIENT_ID, self._settings.GITLAB_CLIENT_SECRET),
+            "azure_devops": (self._settings.AZURE_DEVOPS_CLIENT_ID, self._settings.AZURE_DEVOPS_CLIENT_SECRET),
+        }
+        client_id, client_secret = mapping.get(platform, ("", ""))
+        if client_id and client_secret:
+            return {"client_id": client_id, "client_secret": client_secret}
+        return None
+
     # ── Platform configs ────────────────────────────────────────────────────
 
     def list_platforms(self) -> list[dict]:
@@ -51,11 +63,14 @@ class SourceConnectionService:
         result = []
         for platform in SUPPORTED_PLATFORMS:
             config = configs.get(platform)
+            server_creds = self._get_server_credentials(platform)
             result.append({
                 "platform": platform,
                 "label": _PLATFORM_LABELS.get(platform, platform),
                 "configured": config is not None,
                 "client_id": config.client_id if config else None,
+                "server_configured": server_creds is not None,
+                "redirect_uri": self._redirect_uri(platform),
             })
         return result
 
@@ -70,28 +85,38 @@ class SourceConnectionService:
 
     # ── OAuth flow ──────────────────────────────────────────────────────────
 
-    def get_authorize_url(self, platform: str) -> str:
+    def _resolve_credentials(self, platform: str) -> tuple[str, str]:
+        """Return (client_id, client_secret): user DB config takes priority, then server .env."""
         config = self._repo.get_platform_config(platform)
-        if not config:
-            raise ValueError(f"Platform {platform!r} is not configured. Set client_id and client_secret first.")
+        if config:
+            return config.client_id, config.client_secret
+        server = self._get_server_credentials(platform)
+        if server:
+            return server["client_id"], server["client_secret"]
+        raise ValueError(
+            f"Platform {platform!r} is not configured. "
+            "Either set client_id/secret in the UI or configure server-side credentials in .env."
+        )
+
+    def get_authorize_url(self, platform: str) -> str:
+        client_id, _ = self._resolve_credentials(platform)
         provider = get_provider(platform)
         state = str(uuid.uuid4())
         self._repo.create_pending(platform, state)
         redirect_uri = self._redirect_uri(platform)
-        url = provider.get_authorize_url(config.client_id, redirect_uri, state)
-        logger.info("OAuth authorize initiated platform=%s state=%s", platform, state)
+        url = provider.get_authorize_url(client_id, redirect_uri, state)
+        logger.info("OAuth authorize initiated platform=%s state=%s mode=%s",
+                    platform, state, "byoa" if self._repo.get_platform_config(platform) else "server")
         return url
 
     def handle_callback(self, platform: str, code: str, state: str) -> SourceConnection:
         pending = self._repo.find_by_state(state)
         if not pending:
             raise ValueError("Invalid or expired OAuth state parameter.")
-        config = self._repo.get_platform_config(platform)
-        if not config:
-            raise ValueError(f"Platform {platform!r} config not found.")
+        client_id, client_secret = self._resolve_credentials(platform)
         provider = get_provider(platform)
         redirect_uri = self._redirect_uri(platform)
-        tokens = provider.exchange_code(code, config.client_id, config.client_secret, redirect_uri)
+        tokens = provider.exchange_code(code, client_id, client_secret, redirect_uri)
         user_info = provider.get_user_info(tokens["access_token"])
         orm = self._repo.update_after_oauth(
             pending.id,

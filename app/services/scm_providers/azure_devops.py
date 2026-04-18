@@ -2,7 +2,7 @@ import urllib.parse
 import urllib.request
 import json
 import base64
-from app.services.scm_providers.base import ScmProvider
+from app.services.scm_providers.base import ScmProvider, RemoteFileEntry
 
 
 class AzureDevOpsProvider(ScmProvider):
@@ -98,3 +98,36 @@ class AzureDevOpsProvider(ScmProvider):
             except Exception:
                 continue
         return repos
+
+    def list_tree(self, access_token: str, repo_full_name: str, branch: str) -> list[RemoteFileEntry]:
+        # repo_full_name = "org/project/repo"
+        parts = repo_full_name.split("/", 2)
+        org, project, repo = parts[0], parts[1], parts[2] if len(parts) > 2 else parts[-1]
+        url = (
+            f"https://dev.azure.com/{org}/{project}/_apis/git/repositories/{repo}/items"
+            f"?recursionLevel=Full&versionDescriptor.version={urllib.parse.quote(branch, safe='')}"
+            f"&versionDescriptor.versionType=branch&api-version=7.1"
+        )
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+        entries: list[RemoteFileEntry] = []
+        for item in data.get("value", []):
+            if item.get("gitObjectType") == "blob":
+                entries.append(RemoteFileEntry(
+                    path=item["path"].lstrip("/"),
+                    sha=item.get("objectId", ""),
+                    size=item.get("contentMetadata", {}).get("encoding", 0) if False else 0,
+                ))
+        return entries
+
+    def get_file_content(self, access_token: str, repo_full_name: str, path: str) -> str:
+        parts = repo_full_name.split("/", 2)
+        org, project, repo = parts[0], parts[1], parts[2] if len(parts) > 2 else parts[-1]
+        url = (
+            f"https://dev.azure.com/{org}/{project}/_apis/git/repositories/{repo}/items"
+            f"?path={urllib.parse.quote('/' + path.lstrip('/'), safe='/')}&api-version=7.1"
+        )
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}", "Accept": "text/plain"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.read().decode("utf-8", errors="replace")

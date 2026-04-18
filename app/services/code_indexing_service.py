@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from app.models.code_file import CodeFile
 from app.repositories.code_file_repository import CodeFileRepository
+from app.services.scm_providers.base import ScmProvider
 
 logger = logging.getLogger(__name__)
 
@@ -194,3 +195,100 @@ class CodeIndexingService:
                 return sum(1 for line in f if line.strip())
         except OSError:
             return 0
+
+    def index_remote(
+        self,
+        provider: ScmProvider,
+        access_token: str,
+        repo_full_name: str,
+        branch: str,
+        force: bool = False,
+    ) -> IndexingResult:
+        logger.info("Starting remote indexing repo=%s branch=%s", repo_full_name, branch)
+        start = time.monotonic()
+
+        files_scanned = 0
+        files_indexed = 0
+        files_updated = 0
+        files_skipped = 0
+
+        entries = provider.list_tree(access_token, repo_full_name, branch)
+        relevant = [
+            e for e in entries
+            if os.path.splitext(e.path)[1].lower() in self._language_map
+            and not any(pat in e.path for pat in self._ignore_patterns)
+        ]
+        files_scanned = len(relevant)
+
+        new_batch: list = []
+        update_batch: list = []
+        scanned_paths: set[str] = set()
+
+        for entry in relevant:
+            scanned_paths.add(entry.path)
+            existing = self._repository.find_by_path(entry.path)
+            if existing is not None and not force and existing.hash == entry.sha:
+                files_skipped += 1
+                continue
+            try:
+                content = provider.get_file_content(access_token, repo_full_name, entry.path)
+            except Exception as exc:
+                logger.warning("Failed to fetch remote file %s: %s", entry.path, exc)
+                continue
+
+            ext = os.path.splitext(entry.path)[1].lower()
+            lines = sum(1 for line in content.splitlines() if line.strip())
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+            if existing is None:
+                code_file = CodeFile(
+                    file_path=entry.path,
+                    file_name=os.path.basename(entry.path),
+                    extension=ext,
+                    language=self._language_map[ext],
+                    size=entry.size or len(content.encode()),
+                    last_modified=now,
+                    hash=entry.sha,
+                    lines_of_code=lines,
+                    indexed_at=now,
+                )
+                new_batch.append(code_file)
+                files_indexed += 1
+            else:
+                existing.hash = entry.sha
+                existing.size = entry.size or len(content.encode())
+                existing.last_modified = now
+                existing.lines_of_code = lines
+                existing.indexed_at = now
+                update_batch.append(existing)
+                files_updated += 1
+
+            if len(new_batch) >= self._batch_size:
+                self._repository.save_batch(new_batch)
+                new_batch = []
+            if len(update_batch) >= self._batch_size:
+                self._repository.update_batch(update_batch)
+                update_batch = []
+
+        if new_batch:
+            self._repository.save_batch(new_batch)
+        if update_batch:
+            self._repository.update_batch(update_batch)
+
+        stale_paths = self._repository.get_all_paths() - scanned_paths
+        if stale_paths:
+            self._repository.delete_by_paths(stale_paths)
+            logger.info("Removed %d stale entries from remote index", len(stale_paths))
+
+        duration = time.monotonic() - start
+        logger.info(
+            "Remote indexing complete: scanned=%d indexed=%d updated=%d skipped=%d duration=%.2fs",
+            files_scanned, files_indexed, files_updated, files_skipped, duration,
+        )
+        return IndexingResult(
+            files_scanned=files_scanned,
+            files_indexed=files_indexed,
+            files_skipped=files_skipped,
+            files_updated=files_updated,
+            duration_seconds=duration,
+        )

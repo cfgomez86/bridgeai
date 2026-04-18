@@ -1,7 +1,8 @@
+import base64
 import urllib.parse
 import urllib.request
 import json
-from app.services.scm_providers.base import ScmProvider
+from app.services.scm_providers.base import ScmProvider, RemoteFileEntry
 
 
 class GitHubProvider(ScmProvider):
@@ -77,3 +78,27 @@ class GitHubProvider(ScmProvider):
                 break
             page += 1
         return repos
+
+    def list_tree(self, access_token: str, repo_full_name: str, branch: str) -> list[RemoteFileEntry]:
+        url = f"{self._API_BASE}/repos/{repo_full_name}/git/trees/{urllib.parse.quote(branch, safe='')}?recursive=1"
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+        return [
+            RemoteFileEntry(path=item["path"], sha=item["sha"], size=item.get("size", 0))
+            for item in data.get("tree", [])
+            if item["type"] == "blob"
+        ]
+
+    def get_file_content(self, access_token: str, repo_full_name: str, path: str) -> str:
+        url = f"{self._API_BASE}/repos/{repo_full_name}/contents/{urllib.parse.quote(path)}"
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        return base64.b64decode(data.get("content", "")).decode("utf-8", errors="replace")

@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { savePlatformConfig, deletePlatformConfig, getOAuthAuthorizeUrl, type PlatformResponse } from "@/lib/api-client"
-import { Settings, Plug, Trash2, CheckCircle2, AlertCircle, Loader2, Copy, Check } from "lucide-react"
-
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+import { Settings, Plug, Trash2, CheckCircle2, AlertCircle, Loader2, Copy, Check, Zap } from "lucide-react"
 
 const PLATFORM_ICONS: Record<string, string> = {
   github: "GH",
@@ -30,7 +28,8 @@ export function PlatformCard({ platform, onUpdated }: PlatformCardProps) {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  const redirectUri = `${BASE}/api/v1/connections/oauth/callback/${platform.platform}`
+  const redirectUri = platform.redirect_uri ?? ""
+  const isReady = platform.configured || platform.server_configured
 
   function handleCopy() {
     navigator.clipboard.writeText(redirectUri)
@@ -92,23 +91,37 @@ export function PlatformCard({ platform, onUpdated }: PlatformCardProps) {
             </span>
             <span>{platform.label}</span>
           </div>
-          {platform.configured ? (
-            <Badge className="bg-green-50 text-green-700 border-green-200 gap-1">
-              <CheckCircle2 className="h-3 w-3" /> Configured
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="text-slate-400 gap-1">
-              <AlertCircle className="h-3 w-3" /> Not set up
-            </Badge>
-          )}
+          <div className="flex items-center gap-1.5">
+            {platform.server_configured && (
+              <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 gap-1 text-xs">
+                <Zap className="h-3 w-3" /> SaaS
+              </Badge>
+            )}
+            {platform.configured ? (
+              <Badge className="bg-green-50 text-green-700 border-green-200 gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Configured
+              </Badge>
+            ) : !platform.server_configured ? (
+              <Badge variant="outline" className="text-slate-400 gap-1">
+                <AlertCircle className="h-3 w-3" /> Not set up
+              </Badge>
+            ) : null}
+          </div>
         </CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-3">
-        {error && (
-          <p className="text-xs text-red-600">{error}</p>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+
+        {/* SaaS mode banner — visible when server creds are configured */}
+        {platform.server_configured && !editing && (
+          <div className="rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+            Managed credentials active — users connect directly without configuring an OAuth App.
+          </div>
         )}
 
         {editing ? (
+          /* ── BYOA form ── */
           <div className="space-y-2">
             <Input
               placeholder="Client ID"
@@ -155,24 +168,40 @@ export function PlatformCard({ platform, onUpdated }: PlatformCardProps) {
                 Cancel
               </Button>
               {platform.configured && (
-                <Button size="sm" variant="outline" onClick={handleDelete} disabled={saving} className="ml-auto text-red-500 hover:text-red-700">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDelete}
+                  disabled={saving}
+                  className="ml-auto text-red-500 hover:text-red-700"
+                >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
           </div>
         ) : (
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setEditing(true)}
-              className="gap-1.5"
-            >
-              <Settings className="h-3.5 w-3.5" />
-              {platform.configured ? "Edit" : "Configure"}
-            </Button>
-            {platform.configured && (
+          /* ── Action buttons ── */
+          <div className="flex flex-wrap gap-2">
+            {/* SaaS direct connect — prominent when server creds are active */}
+            {platform.server_configured && (
+              <Button
+                size="sm"
+                onClick={handleConnect}
+                disabled={connecting}
+                className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                {connecting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Plug className="h-3.5 w-3.5" />
+                )}
+                Connect with {platform.label}
+              </Button>
+            )}
+
+            {/* BYOA connect — when only user credentials are configured */}
+            {!platform.server_configured && platform.configured && (
               <Button
                 size="sm"
                 onClick={handleConnect}
@@ -187,6 +216,17 @@ export function PlatformCard({ platform, onUpdated }: PlatformCardProps) {
                 Connect
               </Button>
             )}
+
+            {/* BYOA configure — secondary option, always visible */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setEditing(true)}
+              className="gap-1.5"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              {platform.configured ? "Edit credentials" : "Use own OAuth App"}
+            </Button>
           </div>
         )}
       </CardContent>

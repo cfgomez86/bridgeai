@@ -35,6 +35,8 @@ class PlatformResponse(BaseModel):
     label: str
     configured: bool
     client_id: str | None
+    server_configured: bool = False
+    redirect_uri: str | None = None
 
 
 class ConnectionResponse(BaseModel):
@@ -76,7 +78,15 @@ def save_platform_config(
 ):
     try:
         config = service.save_platform_config(platform, body.client_id, body.client_secret)
-        return {"platform": config.platform, "label": platform, "configured": True, "client_id": config.client_id}
+        platforms = {p["platform"]: p for p in service.list_platforms()}
+        p = platforms.get(platform, {})
+        return {
+            "platform": config.platform,
+            "label": p.get("label", platform),
+            "configured": True,
+            "client_id": config.client_id,
+            "server_configured": p.get("server_configured", False),
+        }
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
