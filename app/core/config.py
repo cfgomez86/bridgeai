@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     AZURE_MAX_RETRIES: int = 3
     AZURE_RETRY_DELAY_SECONDS: int = 5
 
+    # URLs used for OAuth flow
+    FRONTEND_URL: str = "http://localhost:3000"
+    API_BASE_URL: str = "http://localhost:8000"
+
     @property
     def project_root_path(self) -> Path:
         return Path(self.PROJECT_ROOT).resolve()

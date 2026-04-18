@@ -16,6 +16,8 @@ export type WorkflowState = {
   modulesImpacted: string[]
   riskLevel: string | null
   storyId: string | null
+  storyTitle: string | null
+  storyPoints: number | null
   currentStep: 1 | 2 | 3 | 4
 }
 
@@ -33,6 +35,8 @@ const initialState: WorkflowState = {
   modulesImpacted: [],
   riskLevel: null,
   storyId: null,
+  storyTitle: null,
+  storyPoints: null,
   currentStep: 1,
 }
 
@@ -85,8 +89,8 @@ export function useWorkflow() {
     }))
   }
 
-  function completeStep3(storyId: string) {
-    setState((prev) => ({ ...prev, storyId, currentStep: 4 }))
+  function completeStep3(storyId: string, storyTitle: string, storyPoints: number) {
+    setState((prev) => ({ ...prev, storyId, storyTitle, storyPoints, currentStep: 4 }))
   }
 
   function completeStep4() {

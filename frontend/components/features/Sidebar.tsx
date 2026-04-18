@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Wand2, Database } from "lucide-react"
+import { Home, Wand2, Database, GitBranch } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/workflow", label: "New Story", icon: Wand2 },
   { href: "/indexing", label: "Code Index", icon: Database },
+  { href: "/connections", label: "Connections", icon: GitBranch },
 ]
 
 export function Sidebar() {

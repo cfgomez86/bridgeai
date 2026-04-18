@@ -10,6 +10,7 @@ from app.api.routes import impact_analysis as impact_analysis_router
 from app.api.routes import understand_requirement as understand_requirement_router
 from app.api.routes import story_generation as story_generation_router
 from app.api.routes import ticket_integration as ticket_integration_router
+from app.api.routes import connections as connections_router
 from app.core.config import get_settings
 from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.core.security import SecurityMiddleware, add_cors
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(understand_requirement_router.router, prefix="/api/v1", tags=["requirement-understanding"])
     app.include_router(story_generation_router.router, prefix="/api/v1", tags=["story-generation"])
     app.include_router(ticket_integration_router.router, prefix="/api/v1", tags=["ticket-integration"])
+    app.include_router(connections_router.router, prefix="/api/v1", tags=["connections"])
 
     return app
 

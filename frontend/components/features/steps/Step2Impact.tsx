@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { RiskBadge } from "@/components/features/RiskBadge"
-import { Loader2, Zap } from "lucide-react"
+import { StepSummaryCard } from "@/components/features/StepSummaryCard"
+import { Loader2, Zap, Search } from "lucide-react"
+
+const truncate = (text: string, max: number) =>
+  text.length > max ? text.slice(0, max) + "…" : text
 
 interface Step2Props {
   state: WorkflowState
@@ -43,44 +47,40 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
 
   return (
     <div className="space-y-4">
-      {/* Step 1 results summary */}
-      <Card className="bg-slate-50 border-slate-200">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Requirement Analysis</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      {/* Step 1 collapsible summary */}
+      <StepSummaryCard
+        title="Paso 1: Requirement Analysis"
+        icon={<Search className="h-3.5 w-3.5" />}
+      >
+        <p className="text-sm text-slate-600 italic">
+          &ldquo;{truncate(state.requirementText, 120)}&rdquo;
+        </p>
+        <div className="flex flex-wrap gap-2 items-center">
           {state.intent && (
-            <div>
-              <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                Intent
-              </span>
-              <p className="text-sm mt-0.5">{state.intent}</p>
-            </div>
+            <span className="text-xs text-slate-500">
+              Intent: <span className="font-medium text-slate-700">{state.intent}</span>
+            </span>
           )}
-          <div className="flex flex-wrap gap-2 items-center">
-            {state.featureType && (
-              <Badge variant="secondary">{state.featureType}</Badge>
-            )}
-            {state.complexity && (
-              <Badge variant="outline">Complexity: {state.complexity}</Badge>
-            )}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {state.featureType && <Badge variant="secondary">{state.featureType}</Badge>}
+          {state.complexity && <Badge variant="outline">Complexity: {state.complexity}</Badge>}
+          {state.language && (
+            <Badge variant="outline" className="capitalize">
+              Lang: {state.language}
+            </Badge>
+          )}
+        </div>
+        {state.keywords.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {state.keywords.map((kw) => (
+              <Badge key={kw} variant="outline" className="text-xs">
+                {kw}
+              </Badge>
+            ))}
           </div>
-          {state.keywords.length > 0 && (
-            <div>
-              <span className="text-xs font-medium text-slate-500 uppercase tracking-wide block mb-1.5">
-                Keywords
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {state.keywords.map((kw) => (
-                  <Badge key={kw} variant="outline" className="text-xs">
-                    {kw}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        )}
+      </StepSummaryCard>
 
       {/* Impact analysis card */}
       <Card>
@@ -100,7 +100,6 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
             </div>
           )}
 
-          {/* Show impact results if already completed (back-navigation) */}
           {state.filesImpacted !== null && (
             <div className="space-y-3 mb-4">
               <div className="flex items-center gap-3">

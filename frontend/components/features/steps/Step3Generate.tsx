@@ -8,11 +8,15 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { RiskBadge } from "@/components/features/RiskBadge"
-import { Loader2, GitPullRequest, CheckCircle, Code, ListChecks, FileText } from "lucide-react"
+import { StepSummaryCard } from "@/components/features/StepSummaryCard"
+import { Loader2, GitPullRequest, CheckCircle, Code, ListChecks, FileText, Search, Zap } from "lucide-react"
+
+const truncate = (text: string, max: number) =>
+  text.length > max ? text.slice(0, max) + "…" : text
 
 interface Step3Props {
   state: WorkflowState
-  completeStep3: (storyId: string) => void
+  completeStep3: (storyId: string, storyTitle: string, storyPoints: number) => void
 }
 
 export function Step3Generate({ state, completeStep3 }: Step3Props) {
@@ -33,7 +37,7 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
       )
       const detail = await getStoryDetail(genResult.story_id)
       setStory(detail)
-      completeStep3(genResult.story_id)
+      completeStep3(genResult.story_id, detail.title, detail.story_points)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate story")
     } finally {
@@ -43,37 +47,62 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
 
   return (
     <div className="space-y-4">
-      {/* Impact summary */}
-      <Card className="bg-slate-50 border-slate-200">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Impact Summary</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex flex-wrap gap-3 items-center">
-            {state.filesImpacted !== null && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-slate-500">Files:</span>
-                <Badge variant="secondary">{state.filesImpacted}</Badge>
-              </div>
-            )}
-            {state.riskLevel && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-slate-500">Risk:</span>
-                <RiskBadge risk={state.riskLevel} />
-              </div>
-            )}
+      {/* Step 1 collapsible summary */}
+      <StepSummaryCard
+        title="Paso 1: Requirement Analysis"
+        icon={<Search className="h-3.5 w-3.5" />}
+      >
+        <p className="text-sm text-slate-600 italic">
+          &ldquo;{truncate(state.requirementText, 120)}&rdquo;
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {state.featureType && <Badge variant="secondary">{state.featureType}</Badge>}
+          {state.complexity && <Badge variant="outline">Complexity: {state.complexity}</Badge>}
+          {state.language && (
+            <Badge variant="outline" className="capitalize">Lang: {state.language}</Badge>
+          )}
+        </div>
+        {state.intent && (
+          <p className="text-xs text-slate-500">
+            Intent: <span className="font-medium text-slate-700">{state.intent}</span>
+          </p>
+        )}
+        {state.keywords.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {state.keywords.map((kw) => (
+              <Badge key={kw} variant="outline" className="text-xs">{kw}</Badge>
+            ))}
           </div>
-          {state.modulesImpacted.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {state.modulesImpacted.map((m) => (
-                <Badge key={m} variant="outline" className="text-xs">
-                  {m}
-                </Badge>
-              ))}
+        )}
+      </StepSummaryCard>
+
+      {/* Step 2 collapsible summary */}
+      <StepSummaryCard
+        title="Paso 2: Impact Analysis"
+        icon={<Zap className="h-3.5 w-3.5" />}
+      >
+        <div className="flex flex-wrap gap-3 items-center">
+          {state.filesImpacted !== null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-slate-500">Files:</span>
+              <Badge variant="secondary">{state.filesImpacted}</Badge>
             </div>
           )}
-        </CardContent>
-      </Card>
+          {state.riskLevel && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-slate-500">Risk:</span>
+              <RiskBadge risk={state.riskLevel} />
+            </div>
+          )}
+        </div>
+        {state.modulesImpacted.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {state.modulesImpacted.map((m) => (
+              <Badge key={m} variant="outline" className="text-xs">{m}</Badge>
+            ))}
+          </div>
+        )}
+      </StepSummaryCard>
 
       {/* Generate card */}
       <Card>
