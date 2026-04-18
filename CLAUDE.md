@@ -51,7 +51,7 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 ### Key patterns
 
-**Settings** (`app/core/config.py`) — single `Settings` class via `pydantic-settings`, cached with `@lru_cache`. Always inject via `get_settings()`, never instantiate directly. Switching from SQLite to PostgreSQL requires only changing `DATABASE_URL` in `.env`.
+**Settings** (`app/core/config.py`) — single `Settings` class via `pydantic-settings`, cached with `@lru_cache`. Always inject via `get_settings()`, never instantiate directly. Database is PostgreSQL only; configure `DATABASE_URL` in `.env`.
 
 **App factory** (`app/main.py`) — `create_app()` returns a configured `FastAPI` instance. Use this factory in tests (`TestClient(create_app())`). Middleware order is intentional: CORS → Security → Logging.
 
@@ -79,7 +79,7 @@ Copy `.env.example` to `.env` before running. Relevant variables:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | `sqlite:///./app.db` | Switch to `postgresql://...` for production |
+| `DATABASE_URL` | `postgresql://bridgeai:bridgeai@localhost:5432/bridgeai` | PostgreSQL connection string |
 | `PROJECT_ROOT` | `.` | Root path scanned by `CodeScanner` |
 | `LOG_LEVEL` | `INFO` | Standard Python logging level |
 | `DRY_RUN` | `false` | Prevents side-effects in future write operations |

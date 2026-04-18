@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import "./globals.css"
 import { Sidebar } from "@/components/features/Sidebar"
+import { Topbar } from "@/components/features/Topbar"
 
 export const metadata: Metadata = {
   title: "BridgeAI",
@@ -9,11 +10,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-slate-50 text-slate-900 antialiased">
-        <div className="flex min-h-screen">
+    <html lang="es">
+      <body>
+        <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", minHeight: "100vh" }}>
           <Sidebar />
-          <main className="flex-1 overflow-y-auto md:ml-60">{children}</main>
+          <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+            <Topbar />
+            <main style={{ flex: 1, background: "var(--bg)" }}>{children}</main>
+          </div>
         </div>
       </body>
     </html>

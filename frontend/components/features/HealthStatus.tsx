@@ -1,23 +1,10 @@
-import { cn } from "@/lib/utils"
-
 type ServiceStatus = "healthy" | "not_configured" | "unhealthy"
 
-interface HealthDotProps {
-  status: ServiceStatus | undefined
-}
-
-function HealthDot({ status }: HealthDotProps) {
-  return (
-    <span
-      className={cn(
-        "inline-block h-2.5 w-2.5 rounded-full",
-        status === "healthy" && "bg-green-500",
-        status === "not_configured" && "bg-yellow-400",
-        status === "unhealthy" && "bg-red-500",
-        status === undefined && "bg-slate-400"
-      )}
-    />
-  )
+function dotColor(status: ServiceStatus | undefined): string {
+  if (status === "healthy") return "var(--ok-fg)"
+  if (status === "not_configured") return "var(--warn-fg)"
+  if (status === "unhealthy") return "var(--err-fg)"
+  return "var(--muted)"
 }
 
 function statusLabel(status: ServiceStatus | undefined): string {
@@ -34,17 +21,21 @@ interface HealthStatusProps {
 
 export function HealthStatus({ jira, azureDevops }: HealthStatusProps) {
   return (
-    <div className="flex flex-col gap-2 text-sm">
-      <div className="flex items-center gap-2">
-        <HealthDot status={jira} />
-        <span className="font-medium">Jira</span>
-        <span className="text-slate-500 dark:text-slate-400">{statusLabel(jira)}</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <HealthDot status={azureDevops} />
-        <span className="font-medium">Azure DevOps</span>
-        <span className="text-slate-500 dark:text-slate-400">{statusLabel(azureDevops)}</span>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {[
+        { label: "Jira", status: jira },
+        { label: "Azure DevOps", status: azureDevops },
+      ].map(({ label, status }) => (
+        <div key={label} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12.5px" }}>
+          <span style={{
+            display: "inline-block", width: "8px", height: "8px",
+            borderRadius: "50%", flexShrink: 0,
+            background: dotColor(status),
+          }} />
+          <span style={{ fontWeight: 500, color: "var(--fg)" }}>{label}</span>
+          <span style={{ color: "var(--muted)" }}>{statusLabel(status)}</span>
+        </div>
+      ))}
     </div>
   )
 }

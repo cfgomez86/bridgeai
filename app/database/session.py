@@ -12,17 +12,14 @@ class Base(DeclarativeBase):
 
 def _build_engine():  # type: ignore[no-untyped-def]
     settings = get_settings()
-    connect_args: dict = {}
-    kwargs: dict = {"echo": False, "future": True}
-
-    if settings.DATABASE_URL.startswith("sqlite"):
-        connect_args["check_same_thread"] = False
-    else:
-        kwargs["pool_size"] = 5
-        kwargs["max_overflow"] = 10
-        kwargs["pool_pre_ping"] = True
-
-    return create_engine(settings.DATABASE_URL, connect_args=connect_args, **kwargs)
+    kwargs: dict = {
+        "echo": False,
+        "future": True,
+        "pool_size": 5,
+        "max_overflow": 10,
+        "pool_pre_ping": True,
+    }
+    return create_engine(settings.DATABASE_URL, **kwargs)
 
 
 engine = _build_engine()

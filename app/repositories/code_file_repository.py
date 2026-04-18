@@ -55,3 +55,7 @@ class CodeFileRepository:
 
     def get_all_paths(self) -> set[str]:
         return {row[0] for row in self._db.query(CodeFile.file_path).all()}
+
+    def get_all_map(self) -> dict[str, "CodeFile"]:
+        """Return {file_path: CodeFile} for all indexed files — single query."""
+        return {cf.file_path: cf for cf in self._db.query(CodeFile).all()}

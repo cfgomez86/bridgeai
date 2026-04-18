@@ -12,20 +12,37 @@ export default function WorkflowPage() {
   const { state } = workflow
 
   return (
-    <div className="p-8 max-w-3xl mx-auto space-y-8">
-      {/* Page header */}
+    <div style={{ padding: "28px 32px", maxWidth: "900px", display: "flex", flexDirection: "column", gap: "24px" }}>
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">New Story</h1>
-        <p className="mt-1 text-slate-500">
-          Follow the steps to turn a requirement into a ready-to-create ticket
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--muted)", fontSize: "12px" }}>
+            REQ-NEW
+          </span>
+          <span style={{
+            fontSize: "10.5px", fontWeight: 500, padding: "1px 7px", borderRadius: "4px",
+            background: "var(--accent-soft)", color: "var(--accent-strong)", fontFamily: "var(--font-mono)",
+          }}>
+            Paso {Math.min(state.currentStep, 4)} de 4
+          </span>
+        </div>
+        <h1 style={{
+          fontSize: "20px", fontWeight: 700, fontFamily: "var(--font-display)",
+          color: "var(--fg)", margin: 0, letterSpacing: "-0.01em",
+        }}>
+          {state.requirementText
+            ? state.requirementText.length > 72
+              ? state.requirementText.slice(0, 72) + "…"
+              : state.requirementText
+            : "Nuevo requerimiento"}
+        </h1>
+        <p style={{ fontSize: "13px", color: "var(--muted)", marginTop: "4px", marginBottom: 0 }}>
+          Convierte un requerimiento en un ticket listo para crear
         </p>
       </div>
 
-      {/* Stepper */}
       <WorkflowStepper currentStep={state.currentStep} />
 
-      {/* Step content */}
-      <div className="mt-6">
+      <div>
         {state.currentStep === 1 && (
           <Step1Understand
             state={state}
@@ -36,18 +53,12 @@ export default function WorkflowPage() {
           />
         )}
         {state.currentStep === 2 && (
-          <Step2Impact
-            state={state}
-            completeStep2={workflow.completeStep2}
-          />
+          <Step2Impact state={state} completeStep2={workflow.completeStep2} />
         )}
         {state.currentStep === 3 && (
-          <Step3Generate
-            state={state}
-            completeStep3={workflow.completeStep3}
-          />
+          <Step3Generate state={state} completeStep3={workflow.completeStep3} />
         )}
-        {state.currentStep === 4 && (
+        {state.currentStep >= 4 && (
           <Step4Ticket
             state={state}
             completeStep4={workflow.completeStep4}

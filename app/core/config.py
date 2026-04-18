@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     )
 
     # Database
-    DATABASE_URL: str = "sqlite:///./app.db"
+    DATABASE_URL: str = "postgresql://user:password@localhost:5432/bridgeai"
 
     # Project
     PROJECT_ROOT: str = "."

@@ -3,11 +3,7 @@
 import { useState } from "react"
 import { understandRequirement } from "@/lib/api-client"
 import type { WorkflowState } from "@/hooks/useWorkflow"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Search, Globe } from "lucide-react"
+import { Loader2, Globe } from "lucide-react"
 
 const LANGUAGES = [
   { code: "es", label: "Español" },
@@ -29,6 +25,37 @@ interface Step1Props {
     complexity: string
     keywords: string[]
   }) => void
+}
+
+const card: React.CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius-lg)",
+  boxShadow: "var(--shadow-sm)",
+  padding: "20px 22px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "18px",
+}
+
+const label: React.CSSProperties = {
+  fontSize: "12.5px",
+  fontWeight: 500,
+  color: "var(--fg-2)",
+  display: "block",
+  marginBottom: "6px",
+}
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "var(--surface-2)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius)",
+  padding: "7px 10px",
+  fontSize: "13px",
+  color: "var(--fg)",
+  fontFamily: "var(--font-sans)",
+  outline: "none",
 }
 
 export function Step1Understand({
@@ -64,100 +91,108 @@ export function Step1Understand({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Search className="h-5 w-5 text-indigo-500" />
-          Understand Requirement
-        </CardTitle>
-        <CardDescription>
-          Provide your requirement text and project ID. The AI will extract intent,
-          complexity, and domain keywords.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Project ID */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700" htmlFor="project-id">
-            Project ID
-          </label>
-          <Input
-            id="project-id"
-            value={state.projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            placeholder="my-project"
-          />
-        </div>
+    <div style={card}>
+      <div>
+        <h2 style={{ fontSize: "15px", fontWeight: 600, fontFamily: "var(--font-display)", margin: "0 0 4px", color: "var(--fg)" }}>
+          Requerimiento
+        </h2>
+        <p style={{ fontSize: "12.5px", color: "var(--muted)", margin: 0 }}>
+          Describí el requerimiento. La IA extraerá intención, complejidad y keywords de dominio.
+        </p>
+      </div>
 
-        {/* Language selector */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
-            <Globe className="h-3.5 w-3.5 text-slate-400" />
-            Story language
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {LANGUAGES.map((lang) => (
-              <button
-                key={lang.code}
-                type="button"
-                onClick={() => setLanguage(lang.code)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
-                  state.language === lang.code
-                    ? "bg-indigo-600 text-white border-indigo-600"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"
-                }`}
-              >
-                {lang.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Project ID */}
+      <div>
+        <label style={label} htmlFor="project-id">Project ID</label>
+        <input
+          id="project-id"
+          style={inputStyle}
+          value={state.projectId}
+          onChange={(e) => setProjectId(e.target.value)}
+          placeholder="mi-proyecto"
+        />
+      </div>
 
-        {/* Requirement text */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700" htmlFor="requirement-text">
-            Requirement
-          </label>
-          <Textarea
-            id="requirement-text"
-            value={state.requirementText}
-            onChange={(e) => setRequirementText(e.target.value)}
-            rows={6}
-            placeholder={
-              "Example: As a registered user, I want to reset my password via email so that I can regain access to my account if I forget my credentials."
-            }
-            className="resize-none"
-          />
-          {state.requirementText.length > 0 && state.requirementText.trim().length < 10 && (
-            <p className="text-xs text-red-500">
-              Requirement must be at least 10 characters.
-            </p>
-          )}
+      {/* Language */}
+      <div>
+        <label style={{ ...label, display: "flex", alignItems: "center", gap: "6px" }}>
+          <Globe size={13} style={{ color: "var(--muted)" }} />
+          Idioma de la historia
+        </label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+          {LANGUAGES.map((lang) => (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => setLanguage(lang.code)}
+              style={{
+                padding: "4px 12px",
+                borderRadius: "var(--radius)",
+                border: "1px solid",
+                fontSize: "12.5px",
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all .12s",
+                background: state.language === lang.code ? "var(--accent)" : "var(--surface)",
+                borderColor: state.language === lang.code ? "transparent" : "var(--border)",
+                color: state.language === lang.code ? "var(--accent-fg)" : "var(--fg-2)",
+              }}
+            >
+              {lang.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        {/* Error */}
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
+      {/* Requirement text */}
+      <div>
+        <label style={label} htmlFor="requirement-text">Requerimiento</label>
+        <textarea
+          id="requirement-text"
+          value={state.requirementText}
+          onChange={(e) => setRequirementText(e.target.value)}
+          rows={6}
+          placeholder="Como usuario registrado, quiero poder restablecer mi contraseña por correo electrónico para recuperar el acceso a mi cuenta si la olvido."
+          style={{ ...inputStyle, resize: "none", lineHeight: 1.6 }}
+        />
+        {state.requirementText.length > 0 && !isValid && (
+          <p style={{ fontSize: "11.5px", color: "var(--err-fg)", marginTop: "4px" }}>
+            Mínimo 10 caracteres.
+          </p>
         )}
+      </div>
 
-        {/* Submit */}
-        <Button
-          onClick={handleSubmit}
-          disabled={loading || !isValid}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Analyzing…
-            </>
-          ) : (
-            "Analyze Requirement"
-          )}
-        </Button>
-      </CardContent>
-    </Card>
+      {error && (
+        <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--err-bg)", color: "var(--err-fg)", fontSize: "12.5px" }}>
+          {error}
+        </div>
+      )}
+
+      <button
+        onClick={handleSubmit}
+        disabled={loading || !isValid}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+          padding: "9px 18px",
+          borderRadius: "var(--radius)",
+          border: "none",
+          background: loading || !isValid ? "var(--surface-3)" : "var(--accent)",
+          color: loading || !isValid ? "var(--muted)" : "var(--accent-fg)",
+          fontSize: "13px",
+          fontWeight: 600,
+          cursor: loading || !isValid ? "not-allowed" : "pointer",
+          fontFamily: "var(--font-display)",
+        }}
+      >
+        {loading ? (
+          <><Loader2 size={14} className="animate-spin" /> Analizando…</>
+        ) : (
+          "Analizar requerimiento →"
+        )}
+      </button>
+    </div>
   )
 }

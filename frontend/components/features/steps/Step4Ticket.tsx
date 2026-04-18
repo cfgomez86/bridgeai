@@ -10,11 +10,6 @@ import {
   type StoryDetailResponse,
 } from "@/lib/api-client"
 import type { WorkflowState } from "@/hooks/useWorkflow"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { HealthStatus } from "@/components/features/HealthStatus"
 import { RiskBadge } from "@/components/features/RiskBadge"
 import { StepSummaryCard } from "@/components/features/StepSummaryCard"
@@ -25,6 +20,35 @@ import {
 
 const truncate = (text: string, max: number) =>
   text.length > max ? text.slice(0, max) + "…" : text
+
+const chip = (): React.CSSProperties => ({
+  display: "inline-flex", alignItems: "center",
+  padding: "1px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 500,
+  fontFamily: "var(--font-mono)",
+  background: "var(--surface-3)", color: "var(--fg-2)",
+  border: "1px solid transparent",
+})
+
+const sectionLabel: React.CSSProperties = {
+  fontSize: "10.5px", fontWeight: 600, textTransform: "uppercase",
+  letterSpacing: "0.07em", color: "var(--muted)",
+}
+
+const divider: React.CSSProperties = {
+  height: "1px", background: "var(--border)", margin: "2px 0",
+}
+
+const inputStyle: React.CSSProperties = {
+  width: "100%", boxSizing: "border-box",
+  background: "var(--surface-2)", border: "1px solid var(--border)",
+  borderRadius: "var(--radius)", padding: "7px 10px",
+  fontSize: "13px", color: "var(--fg)", fontFamily: "var(--font-sans)", outline: "none",
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: "12px", fontWeight: 500, color: "var(--fg-2)",
+  display: "block", marginBottom: "5px",
+}
 
 const PROVIDERS: Record<string, string> = {
   jira: "Jira",
@@ -48,16 +72,12 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
   const [story, setStory] = useState<StoryDetailResponse | null>(null)
 
   useEffect(() => {
-    checkIntegrationHealth()
-      .then(setHealth)
-      .catch(() => {})
+    checkIntegrationHealth().then(setHealth).catch(() => {})
   }, [])
 
   useEffect(() => {
     if (state.storyId) {
-      getStoryDetail(state.storyId)
-        .then(setStory)
-        .catch(() => {})
+      getStoryDetail(state.storyId).then(setStory).catch(() => {})
     }
   }, [state.storyId])
 
@@ -77,170 +97,140 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Step 1 collapsible summary */}
-      <StepSummaryCard
-        title="Paso 1: Requirement Analysis"
-        icon={<Search className="h-3.5 w-3.5" />}
-      >
-        <p className="text-sm text-slate-600 italic">
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <StepSummaryCard title="Paso 1 — Requerimiento" icon={<Search size={13} />}>
+        <p style={{ fontSize: "12.5px", color: "var(--fg-2)", fontStyle: "italic", margin: 0 }}>
           &ldquo;{truncate(state.requirementText, 120)}&rdquo;
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          {state.featureType && <Badge variant="secondary">{state.featureType}</Badge>}
-          {state.complexity && <Badge variant="outline">Complexity: {state.complexity}</Badge>}
-          {state.language && (
-            <Badge variant="outline" className="capitalize">Lang: {state.language}</Badge>
-          )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+          {state.featureType && <span style={chip()}>{state.featureType}</span>}
+          {state.complexity && <span style={chip()}>Complejidad: {state.complexity}</span>}
+          {state.language && <span style={chip()}>Lang: {state.language}</span>}
         </div>
         {state.intent && (
-          <p className="text-xs text-slate-500">
-            Intent: <span className="font-medium text-slate-700">{state.intent}</span>
+          <p style={{ fontSize: "11.5px", color: "var(--muted)", margin: 0 }}>
+            Intent: <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{state.intent}</span>
           </p>
         )}
       </StepSummaryCard>
 
-      {/* Step 2 collapsible summary */}
-      <StepSummaryCard
-        title="Paso 2: Impact Analysis"
-        icon={<Zap className="h-3.5 w-3.5" />}
-      >
-        <div className="flex flex-wrap gap-3 items-center">
+      <StepSummaryCard title="Paso 2 — Impacto" icon={<Zap size={13} />}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "center" }}>
           {state.filesImpacted !== null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm text-slate-500">Files:</span>
-              <Badge variant="secondary">{state.filesImpacted}</Badge>
-            </div>
+            <span style={{ fontSize: "12.5px", color: "var(--muted)" }}>
+              Archivos: <span style={{ color: "var(--fg)", fontWeight: 600 }}>{state.filesImpacted}</span>
+            </span>
           )}
-          {state.riskLevel && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm text-slate-500">Risk:</span>
-              <RiskBadge risk={state.riskLevel} />
-            </div>
-          )}
+          {state.riskLevel && <RiskBadge risk={state.riskLevel} />}
         </div>
         {state.modulesImpacted.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {state.modulesImpacted.map((m) => (
-              <Badge key={m} variant="outline" className="text-xs">{m}</Badge>
-            ))}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+            {state.modulesImpacted.map((m) => <span key={m} style={chip()}>{m}</span>)}
           </div>
         )}
       </StepSummaryCard>
 
-      {/* Step 3 — full story preview, expanded by default */}
-      <StepSummaryCard
-        title="Paso 3: Generated Story"
-        icon={<GitPullRequest className="h-3.5 w-3.5" />}
-        defaultOpen={true}
-      >
+      <StepSummaryCard title="Paso 3 — Historia generada" icon={<GitPullRequest size={13} />} defaultOpen={true}>
         {!story ? (
-          <div className="flex items-center gap-2 py-2 text-sm text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading story…
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12.5px", color: "var(--muted)", padding: "8px 0" }}>
+            <Loader2 size={14} className="animate-spin" />
+            Cargando historia…
           </div>
         ) : (
-          <div className="space-y-4">
-            {/* Header */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div>
-              <p className="font-semibold text-slate-800">{story.title}</p>
-              <div className="flex items-center gap-2 mt-1.5">
-                <Badge variant="secondary">
-                  {story.story_points} {story.story_points === 1 ? "point" : "points"}
-                </Badge>
+              <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--fg)", margin: "0 0 6px", fontFamily: "var(--font-display)" }}>
+                {story.title}
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ ...chip(), background: "var(--accent-soft)", color: "var(--accent-strong)" }}>
+                  {story.story_points} {story.story_points === 1 ? "punto" : "puntos"}
+                </span>
                 <RiskBadge risk={story.risk_level} />
               </div>
             </div>
 
-            {/* Description */}
+            <div style={divider} />
+
             <div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <FileText className="h-3.5 w-3.5 text-slate-400" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Description
-                </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "5px" }}>
+                <FileText size={11} style={{ color: "var(--muted)" }} />
+                <span style={sectionLabel}>Descripción</span>
               </div>
-              <p className="text-sm leading-relaxed text-slate-700">{story.story_description}</p>
+              <p style={{ fontSize: "12px", lineHeight: 1.6, color: "var(--fg-2)", margin: 0 }}>
+                {story.story_description}
+              </p>
             </div>
 
-            <Separator />
+            <div style={divider} />
 
-            {/* Acceptance criteria */}
             <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <CheckCircle className="h-3.5 w-3.5 text-slate-400" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Acceptance Criteria
-                </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                <CheckCircle size={11} style={{ color: "var(--muted)" }} />
+                <span style={sectionLabel}>Criterios de aceptación</span>
               </div>
-              <ol className="space-y-1.5 list-none pl-0">
+              <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "5px" }}>
                 {story.acceptance_criteria.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <span className="flex-shrink-0 inline-flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 text-xs font-medium">
-                      {i + 1}
-                    </span>
-                    <span>{item}</span>
+                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
+                    <span style={{
+                      flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      width: "16px", height: "16px", borderRadius: "50%",
+                      background: "var(--surface-3)", color: "var(--fg-2)",
+                      fontSize: "9px", fontWeight: 600, fontFamily: "var(--font-mono)",
+                    }}>{i + 1}</span>
+                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{item}</span>
                   </li>
                 ))}
               </ol>
             </div>
 
-            <Separator />
+            <div style={divider} />
 
-            {/* Technical tasks */}
             <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Code className="h-3.5 w-3.5 text-slate-400" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Technical Tasks
-                </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                <Code size={11} style={{ color: "var(--muted)" }} />
+                <span style={sectionLabel}>Tareas técnicas</span>
               </div>
-              <ul className="space-y-1.5">
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "5px" }}>
                 {story.technical_tasks.map((task, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <span className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border border-slate-300" />
-                    <span>{task}</span>
+                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
+                    <span style={{ flexShrink: 0, marginTop: "3px", width: "12px", height: "12px", borderRadius: "3px", border: "1px solid var(--border)" }} />
+                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{task}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <Separator />
+            <div style={divider} />
 
-            {/* Definition of done */}
             <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <ListChecks className="h-3.5 w-3.5 text-slate-400" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Definition of Done
-                </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                <ListChecks size={11} style={{ color: "var(--muted)" }} />
+                <span style={sectionLabel}>Definition of Done</span>
               </div>
-              <ul className="space-y-1.5">
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "5px" }}>
                 {story.definition_of_done.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <span className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border border-slate-300" />
-                    <span>{item}</span>
+                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
+                    <span style={{ flexShrink: 0, marginTop: "3px", width: "12px", height: "12px", borderRadius: "3px", border: "1px solid var(--border)" }} />
+                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{item}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            {/* Risk notes (if any) */}
             {story.risk_notes && story.risk_notes.length > 0 && (
               <>
-                <Separator />
+                <div style={divider} />
                 <div>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Risk Notes
-                    </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                    <AlertTriangle size={11} style={{ color: "var(--warn-fg)" }} />
+                    <span style={sectionLabel}>Notas de riesgo</span>
                   </div>
-                  <ul className="space-y-1.5">
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "5px" }}>
                     {story.risk_notes.map((note, i) => (
-                      <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
-                        <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-400" />
-                        {note}
+                      <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
+                        <span style={{ flexShrink: 0, marginTop: "5px", width: "5px", height: "5px", borderRadius: "50%", background: "var(--warn-fg)" }} />
+                        <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{note}</span>
                       </li>
                     ))}
                   </ul>
@@ -253,131 +243,148 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
 
       {/* Integration health */}
       {health && (
-        <Card className="border-slate-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Integration Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <HealthStatus jira={health.jira} azureDevops={health.azure_devops} />
-          </CardContent>
-        </Card>
+        <div style={{
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: "var(--radius-lg)", padding: "14px 16px",
+        }}>
+          <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--fg-2)", margin: "0 0 10px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            Estado de integraciones
+          </p>
+          <HealthStatus jira={health.jira} azureDevops={health.azure_devops} />
+        </div>
       )}
 
       {/* Ticket creation */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Ticket className="h-5 w-5 text-indigo-500" />
-            Create Ticket
-          </CardTitle>
-          <CardDescription>
-            Push the generated story directly to your project management tool.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+      <div style={{
+        background: "var(--surface)", border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)",
+        padding: "20px 22px", display: "flex", flexDirection: "column", gap: "16px",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Ticket size={15} style={{ color: "var(--accent)" }} />
+          <h2 style={{ fontSize: "15px", fontWeight: 600, fontFamily: "var(--font-display)", margin: 0, color: "var(--fg)" }}>
+            Crear ticket
+          </h2>
+        </div>
+        <p style={{ fontSize: "12.5px", color: "var(--muted)", margin: 0 }}>
+          Envía la historia generada directamente a tu herramienta de gestión de proyectos.
+        </p>
 
-          {ticket ? (
-            <div className="space-y-4">
-              <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-4 space-y-2">
-                <p className="text-sm font-semibold text-green-800">Ticket created successfully!</p>
-                <p className="text-sm text-green-700">
-                  Ticket ID: <span className="font-mono font-medium">{ticket.ticket_id}</span>
-                </p>
-                <p className="text-sm text-green-700">
-                  Provider: <span className="font-medium capitalize">{ticket.provider}</span>
-                </p>
-                {ticket.url && (
-                  <a
-                    href={ticket.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 underline underline-offset-2 font-medium"
+        {error && (
+          <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--err-bg)", color: "var(--err-fg)", fontSize: "12.5px" }}>
+            {error}
+          </div>
+        )}
+
+        {ticket ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ padding: "12px 16px", borderRadius: "var(--radius)", background: "var(--ok-bg)", border: "1px solid color-mix(in oklch, var(--ok-fg) 20%, transparent)" }}>
+              <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--ok-fg)", margin: "0 0 6px" }}>
+                Ticket creado exitosamente
+              </p>
+              <p style={{ fontSize: "12.5px", color: "var(--ok-fg)", margin: "0 0 3px" }}>
+                ID: <span style={{ fontFamily: "var(--font-mono)", fontWeight: 500 }}>{ticket.ticket_id}</span>
+              </p>
+              <p style={{ fontSize: "12.5px", color: "var(--ok-fg)", margin: "0 0 8px" }}>
+                Proveedor: <span style={{ fontWeight: 500, textTransform: "capitalize" }}>{ticket.provider}</span>
+              </p>
+              {ticket.url && (
+                <a
+                  href={ticket.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "12.5px", color: "var(--accent)", fontWeight: 500, textDecoration: "underline", textUnderlineOffset: "2px" }}
+                >
+                  Abrir en {ticket.provider}
+                  <ExternalLink size={12} />
+                </a>
+              )}
+            </div>
+            <button
+              onClick={reset}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                padding: "9px 18px", borderRadius: "var(--radius)", border: "none",
+                background: "var(--accent)", color: "var(--accent-fg)",
+                fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                fontFamily: "var(--font-display)",
+              }}
+            >
+              <Plus size={14} />
+              Nueva historia
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Provider select */}
+            <div>
+              <label style={labelStyle}>Proveedor</label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {Object.entries(PROVIDERS).map(([val, label]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setProvider(val)}
+                    style={{
+                      flex: 1, padding: "7px 12px", borderRadius: "var(--radius)",
+                      border: "1px solid",
+                      fontSize: "12.5px", fontWeight: 500, cursor: "pointer",
+                      transition: "all .12s",
+                      background: provider === val ? "var(--accent)" : "var(--surface)",
+                      borderColor: provider === val ? "transparent" : "var(--border)",
+                      color: provider === val ? "var(--accent-fg)" : "var(--fg-2)",
+                      fontFamily: "var(--font-display)",
+                    }}
                   >
-                    Open in {ticket.provider}
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                )}
+                    {label}
+                  </button>
+                ))}
               </div>
-              <Button onClick={reset} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
-                <Plus className="h-4 w-4" />
-                Start New Story
-              </Button>
             </div>
-          ) : (
-            <>
-              {/* Provider select */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700">Provider</label>
-                <div className="flex gap-2">
-                  {Object.entries(PROVIDERS).map(([val, label]) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => setProvider(val)}
-                      className={`flex-1 px-3 py-2 text-sm font-medium rounded-md border transition-colors ${
-                        provider === val
-                          ? "bg-indigo-600 text-white border-indigo-600"
-                          : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
-              {/* Project key */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700" htmlFor="project-key">
-                  Project Key
-                </label>
-                <Input
-                  id="project-key"
-                  value={projectKey}
-                  onChange={(e) => setProjectKey(e.target.value)}
-                  placeholder="SCRUM"
-                />
-              </div>
+            <div>
+              <label style={labelStyle} htmlFor="project-key">Project Key</label>
+              <input
+                id="project-key"
+                style={inputStyle}
+                value={projectKey}
+                onChange={(e) => setProjectKey(e.target.value)}
+                placeholder="SCRUM"
+              />
+            </div>
 
-              {/* Issue type */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700" htmlFor="issue-type">
-                  Issue Type
-                </label>
-                <Input
-                  id="issue-type"
-                  value={issueType}
-                  onChange={(e) => setIssueType(e.target.value)}
-                  placeholder="Story"
-                />
-              </div>
+            <div>
+              <label style={labelStyle} htmlFor="issue-type">Issue Type</label>
+              <input
+                id="issue-type"
+                style={inputStyle}
+                value={issueType}
+                onChange={(e) => setIssueType(e.target.value)}
+                placeholder="Story"
+              />
+            </div>
 
-              <Button
-                onClick={handleCreate}
-                disabled={loading || !state.storyId || !projectKey.trim()}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Creating Ticket…
-                  </>
-                ) : (
-                  <>
-                    <Ticket className="h-4 w-4" />
-                    Create Ticket
-                  </>
-                )}
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            <button
+              onClick={handleCreate}
+              disabled={loading || !state.storyId || !projectKey.trim()}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                padding: "9px 18px", borderRadius: "var(--radius)", border: "none",
+                background: loading || !state.storyId || !projectKey.trim() ? "var(--surface-3)" : "var(--accent)",
+                color: loading || !state.storyId || !projectKey.trim() ? "var(--muted)" : "var(--accent-fg)",
+                fontSize: "13px", fontWeight: 600,
+                cursor: loading || !state.storyId || !projectKey.trim() ? "not-allowed" : "pointer",
+                fontFamily: "var(--font-display)",
+              }}
+            >
+              {loading
+                ? <><Loader2 size={14} className="animate-spin" /> Creando ticket…</>
+                : <><Ticket size={14} /> Crear ticket</>
+              }
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }

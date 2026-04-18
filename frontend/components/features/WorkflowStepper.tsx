@@ -1,63 +1,88 @@
-import { Check } from "lucide-react"
-import { cn } from "@/lib/utils"
-
 interface WorkflowStepperProps {
-  currentStep: 1 | 2 | 3 | 4
+  currentStep: 1 | 2 | 3 | 4 | 5
 }
 
-const steps = [
-  { id: 1, label: "Requirement" },
-  { id: 2, label: "Impact" },
-  { id: 3, label: "Story" },
-  { id: 4, label: "Ticket" },
+const STEPS = [
+  { id: 1 as const, label: "Requerimiento", hint: "Descripción y contexto" },
+  { id: 2 as const, label: "Impacto",       hint: "Archivos y riesgos" },
+  { id: 3 as const, label: "Historia",      hint: "User story + criterios" },
+  { id: 4 as const, label: "Ticket",        hint: "Crear en Jira / Azure" },
 ]
 
 export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
   return (
-    <div className="flex items-center w-full">
-      {steps.map((step, index) => {
-        const isDone = step.id < currentStep
-        const isActive = step.id === currentStep
-        const isPending = step.id > currentStep
-        const isLast = index === steps.length - 1
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(4, 1fr)",
+      background: "var(--surface)",
+      border: "1px solid var(--border)",
+      borderRadius: "var(--radius-lg)",
+      overflow: "hidden",
+      boxShadow: "var(--shadow-sm)",
+    }}>
+      {STEPS.map((step, i) => {
+        const done   = step.id < currentStep
+        const active = step.id === currentStep
 
         return (
-          <div key={step.id} className="flex items-center flex-1 last:flex-none">
-            {/* Step circle + label */}
-            <div className="flex flex-col items-center gap-1.5">
-              <div
-                className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors",
-                  isDone &&
-                    "border-indigo-600 bg-indigo-600 text-white",
-                  isActive &&
-                    "border-indigo-600 bg-white text-indigo-600 dark:bg-slate-900",
-                  isPending &&
-                    "border-slate-300 bg-white text-slate-400 dark:border-slate-600 dark:bg-slate-900"
-                )}
-              >
-                {isDone ? <Check className="h-4 w-4" /> : step.id}
-              </div>
-              <span
-                className={cn(
-                  "text-xs font-medium whitespace-nowrap",
-                  isActive && "text-indigo-600",
-                  isDone && "text-slate-700 dark:text-slate-300",
-                  isPending && "text-slate-400"
-                )}
-              >
+          <div
+            key={step.id}
+            style={{
+              padding: "14px 18px",
+              borderRight: i < 3 ? "1px solid var(--border)" : undefined,
+              background: active ? "var(--surface-2)" : "var(--surface)",
+              position: "relative",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "5px" }}>
+              <span style={{
+                width: "22px",
+                height: "22px",
+                borderRadius: "50%",
+                display: "grid",
+                placeItems: "center",
+                fontFamily: "var(--font-mono)",
+                fontSize: "11px",
+                fontWeight: 600,
+                flexShrink: 0,
+                background: active ? "var(--accent)" : done ? "var(--ok-fg)" : "var(--surface-3)",
+                color: done || active ? "#fff" : "var(--muted)",
+              }}>
+                {done ? "✓" : step.id}
+              </span>
+              <span style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 600,
+                fontSize: "13.5px",
+                color: "var(--fg)",
+              }}>
                 {step.label}
               </span>
+              {active && (
+                <span style={{
+                  marginLeft: "auto",
+                  fontSize: "10.5px",
+                  fontWeight: 500,
+                  padding: "1px 7px",
+                  borderRadius: "4px",
+                  background: "var(--accent-soft)",
+                  color: "var(--accent-strong)",
+                  fontFamily: "var(--font-mono)",
+                }}>
+                  actual
+                </span>
+              )}
             </div>
-
-            {/* Connector line */}
-            {!isLast && (
-              <div
-                className={cn(
-                  "flex-1 h-0.5 mx-2 mb-5 transition-colors",
-                  isDone ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-700"
-                )}
-              />
+            <div style={{ fontSize: "11.5px", color: "var(--muted)" }}>{step.hint}</div>
+            {active && (
+              <div style={{
+                position: "absolute",
+                left: 0,
+                bottom: 0,
+                right: 0,
+                height: "2px",
+                background: "var(--accent)",
+              }} />
             )}
           </div>
         )

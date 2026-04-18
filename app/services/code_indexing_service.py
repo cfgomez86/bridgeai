@@ -2,6 +2,7 @@ import hashlib
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -203,15 +204,12 @@ class CodeIndexingService:
         repo_full_name: str,
         branch: str,
         force: bool = False,
+        max_workers: int = 10,
     ) -> IndexingResult:
         logger.info("Starting remote indexing repo=%s branch=%s", repo_full_name, branch)
         start = time.monotonic()
 
-        files_scanned = 0
-        files_indexed = 0
-        files_updated = 0
-        files_skipped = 0
-
+        # 1. Get tree (single API call)
         entries = provider.list_tree(access_token, repo_full_name, branch)
         relevant = [
             e for e in entries
@@ -219,63 +217,87 @@ class CodeIndexingService:
             and not any(pat in e.path for pat in self._ignore_patterns)
         ]
         files_scanned = len(relevant)
+        scanned_paths = {e.path for e in relevant}
 
-        new_batch: list = []
-        update_batch: list = []
-        scanned_paths: set[str] = set()
+        # 2. Pre-load all existing records in one DB query instead of N queries
+        existing_map = self._repository.get_all_map()
 
+        # 3. Determine which files actually need fetching
+        to_fetch = []
+        files_skipped = 0
         for entry in relevant:
-            scanned_paths.add(entry.path)
-            existing = self._repository.find_by_path(entry.path)
+            existing = existing_map.get(entry.path)
             if existing is not None and not force and existing.hash == entry.sha:
                 files_skipped += 1
-                continue
-            try:
-                content = provider.get_file_content(access_token, repo_full_name, entry.path)
-            except Exception as exc:
-                logger.warning("Failed to fetch remote file %s: %s", entry.path, exc)
-                continue
-
-            ext = os.path.splitext(entry.path)[1].lower()
-            lines = sum(1 for line in content.splitlines() if line.strip())
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
-
-            if existing is None:
-                code_file = CodeFile(
-                    file_path=entry.path,
-                    file_name=os.path.basename(entry.path),
-                    extension=ext,
-                    language=self._language_map[ext],
-                    size=entry.size or len(content.encode()),
-                    last_modified=now,
-                    hash=entry.sha,
-                    lines_of_code=lines,
-                    indexed_at=now,
-                )
-                new_batch.append(code_file)
-                files_indexed += 1
             else:
-                existing.hash = entry.sha
-                existing.size = entry.size or len(content.encode())
-                existing.last_modified = now
-                existing.lines_of_code = lines
-                existing.indexed_at = now
-                update_batch.append(existing)
-                files_updated += 1
+                to_fetch.append((entry, existing))
 
-            if len(new_batch) >= self._batch_size:
-                self._repository.save_batch(new_batch)
-                new_batch = []
-            if len(update_batch) >= self._batch_size:
-                self._repository.update_batch(update_batch)
-                update_batch = []
+        logger.info(
+            "repo=%s: %d relevant, %d skipped (unchanged), %d to fetch",
+            repo_full_name, files_scanned, files_skipped, len(to_fetch),
+        )
+
+        # 4. Fetch file contents concurrently
+        files_indexed = 0
+        files_updated = 0
+        new_batch: list = []
+        update_batch: list = []
+
+        def _fetch(entry, existing):
+            content = provider.get_file_content(access_token, repo_full_name, entry.path, sha=entry.sha)
+            return entry, existing, content
+
+        workers = min(max_workers, len(to_fetch)) if to_fetch else 1
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(_fetch, e, ex): (e, ex) for e, ex in to_fetch}
+            for future in as_completed(futures):
+                entry, existing = futures[future]
+                try:
+                    _, _, content = future.result()
+                except Exception as exc:
+                    logger.warning("Failed to fetch %s: %s", entry.path, exc)
+                    continue
+
+                ext = os.path.splitext(entry.path)[1].lower()
+                lines = sum(1 for line in content.splitlines() if line.strip())
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+                if existing is None:
+                    new_batch.append(CodeFile(
+                        file_path=entry.path,
+                        file_name=os.path.basename(entry.path),
+                        extension=ext,
+                        language=self._language_map[ext],
+                        size=entry.size or len(content.encode()),
+                        last_modified=now,
+                        hash=entry.sha,
+                        lines_of_code=lines,
+                        indexed_at=now,
+                    ))
+                    files_indexed += 1
+                else:
+                    existing.hash = entry.sha
+                    existing.size = entry.size or len(content.encode())
+                    existing.last_modified = now
+                    existing.lines_of_code = lines
+                    existing.indexed_at = now
+                    update_batch.append(existing)
+                    files_updated += 1
+
+                if len(new_batch) >= self._batch_size:
+                    self._repository.save_batch(new_batch)
+                    new_batch = []
+                if len(update_batch) >= self._batch_size:
+                    self._repository.update_batch(update_batch)
+                    update_batch = []
 
         if new_batch:
             self._repository.save_batch(new_batch)
         if update_batch:
             self._repository.update_batch(update_batch)
 
-        stale_paths = self._repository.get_all_paths() - scanned_paths
+        # 5. Remove stale entries (already have the full map, no extra query needed)
+        stale_paths = set(existing_map.keys()) - scanned_paths
         if stale_paths:
             self._repository.delete_by_paths(stale_paths)
             logger.info("Removed %d stale entries from remote index", len(stale_paths))

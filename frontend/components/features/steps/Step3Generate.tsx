@@ -3,16 +3,29 @@
 import { useState } from "react"
 import { generateStory, getStoryDetail, type StoryDetailResponse } from "@/lib/api-client"
 import type { WorkflowState } from "@/hooks/useWorkflow"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { RiskBadge } from "@/components/features/RiskBadge"
 import { StepSummaryCard } from "@/components/features/StepSummaryCard"
-import { Loader2, GitPullRequest, CheckCircle, Code, ListChecks, FileText, Search, Zap } from "lucide-react"
+import { Loader2, GitPullRequest, CheckCircle, Code, ListChecks, FileText, Search, Zap, AlertTriangle } from "lucide-react"
 
 const truncate = (text: string, max: number) =>
   text.length > max ? text.slice(0, max) + "…" : text
+
+const chip = (text: string): React.CSSProperties => ({
+  display: "inline-flex", alignItems: "center",
+  padding: "1px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 500,
+  fontFamily: "var(--font-mono)",
+  background: "var(--surface-3)", color: "var(--fg-2)",
+  border: "1px solid transparent",
+})
+
+const sectionLabel: React.CSSProperties = {
+  fontSize: "10.5px", fontWeight: 600, textTransform: "uppercase",
+  letterSpacing: "0.07em", color: "var(--muted)",
+}
+
+const divider: React.CSSProperties = {
+  height: "1px", background: "var(--border)", margin: "2px 0",
+}
 
 interface Step3Props {
   state: WorkflowState
@@ -46,185 +59,217 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Step 1 collapsible summary */}
-      <StepSummaryCard
-        title="Paso 1: Requirement Analysis"
-        icon={<Search className="h-3.5 w-3.5" />}
-      >
-        <p className="text-sm text-slate-600 italic">
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <StepSummaryCard title="Paso 1 — Requerimiento" icon={<Search size={13} />}>
+        <p style={{ fontSize: "12.5px", color: "var(--fg-2)", fontStyle: "italic", margin: 0 }}>
           &ldquo;{truncate(state.requirementText, 120)}&rdquo;
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          {state.featureType && <Badge variant="secondary">{state.featureType}</Badge>}
-          {state.complexity && <Badge variant="outline">Complexity: {state.complexity}</Badge>}
-          {state.language && (
-            <Badge variant="outline" className="capitalize">Lang: {state.language}</Badge>
-          )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+          {state.featureType && <span style={chip(state.featureType)}>{state.featureType}</span>}
+          {state.complexity && <span style={chip(`Complejidad: ${state.complexity}`)}>Complejidad: {state.complexity}</span>}
+          {state.language && <span style={chip(state.language)}>Lang: {state.language}</span>}
         </div>
         {state.intent && (
-          <p className="text-xs text-slate-500">
-            Intent: <span className="font-medium text-slate-700">{state.intent}</span>
+          <p style={{ fontSize: "11.5px", color: "var(--muted)", margin: 0 }}>
+            Intent: <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{state.intent}</span>
           </p>
         )}
         {state.keywords.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {state.keywords.map((kw) => (
-              <Badge key={kw} variant="outline" className="text-xs">{kw}</Badge>
-            ))}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+            {state.keywords.map((kw) => <span key={kw} style={chip(kw)}>{kw}</span>)}
           </div>
         )}
       </StepSummaryCard>
 
-      {/* Step 2 collapsible summary */}
-      <StepSummaryCard
-        title="Paso 2: Impact Analysis"
-        icon={<Zap className="h-3.5 w-3.5" />}
-      >
-        <div className="flex flex-wrap gap-3 items-center">
+      <StepSummaryCard title="Paso 2 — Impacto" icon={<Zap size={13} />}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "center" }}>
           {state.filesImpacted !== null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm text-slate-500">Files:</span>
-              <Badge variant="secondary">{state.filesImpacted}</Badge>
-            </div>
+            <span style={{ fontSize: "12.5px", color: "var(--muted)" }}>
+              Archivos: <span style={{ color: "var(--fg)", fontWeight: 600 }}>{state.filesImpacted}</span>
+            </span>
           )}
-          {state.riskLevel && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm text-slate-500">Risk:</span>
-              <RiskBadge risk={state.riskLevel} />
-            </div>
-          )}
+          {state.riskLevel && <RiskBadge risk={state.riskLevel} />}
         </div>
         {state.modulesImpacted.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {state.modulesImpacted.map((m) => (
-              <Badge key={m} variant="outline" className="text-xs">{m}</Badge>
-            ))}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+            {state.modulesImpacted.map((m) => <span key={m} style={chip(m)}>{m}</span>)}
           </div>
         )}
       </StepSummaryCard>
 
-      {/* Generate card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <GitPullRequest className="h-5 w-5 text-indigo-500" />
-            Generate Story
-          </CardTitle>
-          <CardDescription>
-            Create a complete user story with acceptance criteria, technical tasks, and
-            definition of done.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+      {/* Main card */}
+      <div style={{
+        background: "var(--surface)", border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)",
+        padding: "20px 22px", display: "flex", flexDirection: "column", gap: "16px",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <GitPullRequest size={15} style={{ color: "var(--accent)" }} />
+          <h2 style={{ fontSize: "15px", fontWeight: 600, fontFamily: "var(--font-display)", margin: 0, color: "var(--fg)" }}>
+            Generar historia
+          </h2>
+        </div>
+        <p style={{ fontSize: "12.5px", color: "var(--muted)", margin: 0 }}>
+          Crea una user story completa con criterios de aceptación, tareas técnicas y definición de done.
+        </p>
 
-          {/* Story detail */}
-          {story && (
-            <div className="space-y-5">
-              <div>
-                <h3 className="font-semibold text-lg">{story.title}</h3>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <Badge variant="secondary">
-                    {story.story_points} {story.story_points === 1 ? "point" : "points"}
-                  </Badge>
-                  <RiskBadge risk={story.risk_level} />
-                </div>
-              </div>
+        {error && (
+          <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--err-bg)", color: "var(--err-fg)", fontSize: "12.5px" }}>
+            {error}
+          </div>
+        )}
 
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <FileText className="h-4 w-4 text-slate-400" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Description
-                  </span>
-                </div>
-                <p className="text-sm leading-relaxed text-slate-700">{story.story_description}</p>
-              </div>
-
-              <Separator />
-
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle className="h-4 w-4 text-slate-400" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Acceptance Criteria
-                  </span>
-                </div>
-                <ol className="space-y-1.5 list-none pl-0">
-                  {story.acceptance_criteria.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className="flex-shrink-0 inline-flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 text-xs font-medium">
-                        {i + 1}
-                      </span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-
-              <Separator />
-
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Code className="h-4 w-4 text-slate-400" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Technical Tasks
-                  </span>
-                </div>
-                <ul className="space-y-1.5">
-                  {story.technical_tasks.map((task, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border border-slate-300" />
-                      <span>{task}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <Separator />
-
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <ListChecks className="h-4 w-4 text-slate-400" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Definition of Done
-                  </span>
-                </div>
-                <ul className="space-y-1.5">
-                  {story.definition_of_done.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border border-slate-300" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
+        {story && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div>
+              <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--fg)", margin: "0 0 6px", fontFamily: "var(--font-display)" }}>
+                {story.title}
+              </h3>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ ...chip("pts"), background: "var(--accent-soft)", color: "var(--accent-strong)" }}>
+                  {story.story_points} {story.story_points === 1 ? "punto" : "puntos"}
+                </span>
+                <RiskBadge risk={story.risk_level} />
               </div>
             </div>
-          )}
 
-          {!story && (
-            <Button
-              onClick={handleGenerate}
-              disabled={loading || !state.requirementId || !state.analysisId}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Generating Story…
-                </>
-              ) : (
-                "Generate Story"
-              )}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+            <div style={divider} />
+
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                <FileText size={12} style={{ color: "var(--muted)" }} />
+                <span style={sectionLabel}>Descripción</span>
+              </div>
+              <p style={{ fontSize: "12.5px", lineHeight: 1.65, color: "var(--fg-2)", margin: 0 }}>
+                {story.story_description}
+              </p>
+            </div>
+
+            <div style={divider} />
+
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                <CheckCircle size={12} style={{ color: "var(--muted)" }} />
+                <span style={sectionLabel}>Criterios de aceptación</span>
+              </div>
+              <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
+                {story.acceptance_criteria.map((item, i) => (
+                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "12.5px" }}>
+                    <span style={{
+                      flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      width: "18px", height: "18px", borderRadius: "50%",
+                      background: "var(--surface-3)", color: "var(--fg-2)",
+                      fontSize: "10px", fontWeight: 600, fontFamily: "var(--font-mono)",
+                    }}>
+                      {i + 1}
+                    </span>
+                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{item}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <div style={divider} />
+
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                <Code size={12} style={{ color: "var(--muted)" }} />
+                <span style={sectionLabel}>Tareas técnicas</span>
+              </div>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
+                {story.technical_tasks.map((task, i) => (
+                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "12.5px" }}>
+                    <span style={{
+                      flexShrink: 0, marginTop: "3px", width: "14px", height: "14px",
+                      borderRadius: "3px", border: "1px solid var(--border)",
+                    }} />
+                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{task}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div style={divider} />
+
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                <ListChecks size={12} style={{ color: "var(--muted)" }} />
+                <span style={sectionLabel}>Definition of Done</span>
+              </div>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
+                {story.definition_of_done.map((item, i) => (
+                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "12.5px" }}>
+                    <span style={{
+                      flexShrink: 0, marginTop: "3px", width: "14px", height: "14px",
+                      borderRadius: "3px", border: "1px solid var(--border)",
+                    }} />
+                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {story.risk_notes && story.risk_notes.length > 0 && (
+              <>
+                <div style={divider} />
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                    <AlertTriangle size={12} style={{ color: "var(--warn-fg)" }} />
+                    <span style={sectionLabel}>Notas de riesgo</span>
+                  </div>
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {story.risk_notes.map((note, i) => (
+                      <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "12.5px" }}>
+                        <span style={{
+                          flexShrink: 0, marginTop: "6px", width: "6px", height: "6px",
+                          borderRadius: "50%", background: "var(--warn-fg)",
+                        }} />
+                        <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{note}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {!story && (
+          <button
+            onClick={handleGenerate}
+            disabled={loading || !state.requirementId || !state.analysisId}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+              padding: "9px 18px", borderRadius: "var(--radius)", border: "none",
+              background: loading || !state.requirementId || !state.analysisId ? "var(--surface-3)" : "var(--accent)",
+              color: loading || !state.requirementId || !state.analysisId ? "var(--muted)" : "var(--accent-fg)",
+              fontSize: "13px", fontWeight: 600, cursor: loading ? "not-allowed" : "pointer",
+              fontFamily: "var(--font-display)",
+            }}
+          >
+            {loading
+              ? <><Loader2 size={14} className="animate-spin" /> Generando historia…</>
+              : "Generar historia →"
+            }
+          </button>
+        )}
+
+        {story && (
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+              padding: "7px 14px", borderRadius: "var(--radius)", border: "1px solid var(--border)",
+              background: "var(--surface-2)", color: "var(--fg-2)",
+              fontSize: "12px", fontWeight: 500, cursor: loading ? "not-allowed" : "pointer",
+              fontFamily: "var(--font-display)", alignSelf: "flex-start",
+            }}
+          >
+            {loading ? <><Loader2 size={13} className="animate-spin" /> Regenerando…</> : "Re-generar"}
+          </button>
+        )}
+      </div>
     </div>
   )
 }

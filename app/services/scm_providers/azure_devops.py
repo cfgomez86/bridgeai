@@ -121,7 +121,7 @@ class AzureDevOpsProvider(ScmProvider):
                 ))
         return entries
 
-    def get_file_content(self, access_token: str, repo_full_name: str, path: str) -> str:
+    def get_file_content(self, access_token: str, repo_full_name: str, path: str, sha: str = "") -> str:
         parts = repo_full_name.split("/", 2)
         org, project, repo = parts[0], parts[1], parts[2] if len(parts) > 2 else parts[-1]
         url = (

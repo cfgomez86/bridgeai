@@ -2,9 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { listRepos, activateRepo, type RepoResponse } from "@/lib/api-client"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Loader2, Search, Lock, GitBranch, X } from "lucide-react"
 
 interface RepoSelectorProps {
@@ -23,7 +20,7 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
   useEffect(() => {
     listRepos(connectionId)
       .then(setRepos)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load repos"))
+      .catch((err) => setError(err instanceof Error ? err.message : "Error al cargar repositorios"))
       .finally(() => setLoading(false))
   }, [connectionId])
 
@@ -33,7 +30,7 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
       await activateRepo(connectionId, repo.full_name, repo.default_branch)
       onActivated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to activate repo")
+      setError(err instanceof Error ? err.message : "Error al activar repositorio")
       setActivating(null)
     }
   }
@@ -43,46 +40,80 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
   )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[80vh]">
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 50,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      background: "rgba(0,0,0,0.45)",
+    }}>
+      <div style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+        width: "100%",
+        maxWidth: "480px",
+        margin: "0 16px",
+        display: "flex",
+        flexDirection: "column",
+        maxHeight: "75vh",
+      }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-          <h2 className="font-semibold text-slate-900">Select Repository</h2>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "14px 18px", borderBottom: "1px solid var(--border)",
+        }}>
+          <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--fg)", margin: 0, fontFamily: "var(--font-display)" }}>
+            Seleccionar repositorio
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 transition-colors"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: "28px", height: "28px", borderRadius: "var(--radius)",
+              border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer",
+            }}
           >
-            <X className="h-5 w-5" />
+            <X size={16} />
           </button>
         </div>
 
         {/* Search */}
-        <div className="px-5 py-3 border-b border-slate-100">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter repositories…"
-              className="pl-9"
-            />
-          </div>
+        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", position: "relative" }}>
+          <Search size={13} style={{
+            position: "absolute", left: "26px", top: "50%", transform: "translateY(-50%)",
+            color: "var(--muted)", pointerEvents: "none",
+          }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filtrar repositorios…"
+            autoFocus
+            style={{
+              width: "100%", boxSizing: "border-box",
+              padding: "6px 10px 6px 32px",
+              borderRadius: "var(--radius)", border: "1px solid var(--border)",
+              background: "var(--surface-2)", color: "var(--fg)",
+              fontSize: "13px", outline: "none",
+            }}
+          />
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto px-2 py-2">
+        <div style={{ flex: 1, overflowY: "auto", padding: "6px" }}>
           {loading && (
-            <div className="flex items-center justify-center py-12 gap-2 text-slate-500 text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading repositories…
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "32px 0", color: "var(--muted)", fontSize: "13px" }}>
+              <Loader2 size={15} className="animate-spin" />
+              Cargando repositorios…
             </div>
           )}
           {error && (
-            <p className="text-sm text-red-600 px-3 py-4">{error}</p>
+            <p style={{ fontSize: "12.5px", color: "var(--err-fg)", padding: "16px 10px", margin: 0 }}>{error}</p>
           )}
-          {!loading && filtered.length === 0 && !error && (
-            <p className="text-sm text-slate-500 px-3 py-4 text-center">No repositories found.</p>
+          {!loading && !error && filtered.length === 0 && (
+            <p style={{ fontSize: "12.5px", color: "var(--muted)", padding: "24px 10px", margin: 0, textAlign: "center" }}>
+              No se encontraron repositorios.
+            </p>
           )}
           {filtered.map((repo) => (
             <button
@@ -90,26 +121,44 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
               type="button"
               onClick={() => handleSelect(repo)}
               disabled={activating !== null}
-              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors text-left"
+              style={{
+                width: "100%", display: "flex", alignItems: "center",
+                justifyContent: "space-between", gap: "10px",
+                padding: "8px 10px", borderRadius: "var(--radius)",
+                border: "none", background: "transparent",
+                cursor: activating !== null ? "not-allowed" : "pointer",
+                textAlign: "left", transition: "background 0.1s",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-2)" }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent" }}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                {repo.private && <Lock className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />}
-                <span className="text-sm font-medium text-slate-800 truncate">{repo.full_name}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "7px", minWidth: 0 }}>
+                {repo.private && <Lock size={12} style={{ flexShrink: 0, color: "var(--muted)" }} />}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {repo.full_name}
+                </span>
               </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <GitBranch className="h-3.5 w-3.5 text-slate-400" />
-                <span className="text-xs text-slate-500">{repo.default_branch}</span>
-                {activating === repo.full_name && (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500" />
-                )}
+              <div style={{ display: "flex", alignItems: "center", gap: "5px", flexShrink: 0 }}>
+                <GitBranch size={12} style={{ color: "var(--muted)" }} />
+                <span style={{ fontSize: "11.5px", color: "var(--muted)", fontFamily: "var(--font-mono)" }}>{repo.default_branch}</span>
+                {activating === repo.full_name && <Loader2 size={12} className="animate-spin" style={{ color: "var(--accent)" }} />}
               </div>
             </button>
           ))}
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-100 flex justify-end">
-          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+        <div style={{ padding: "10px 14px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "5px 14px", borderRadius: "var(--radius)",
+              border: "1px solid var(--border)", background: "var(--surface-2)",
+              color: "var(--fg-2)", fontSize: "12.5px", cursor: "pointer",
+            }}
+          >
+            Cerrar
+          </button>
         </div>
       </div>
     </div>

@@ -14,23 +14,49 @@ export function StepSummaryCard({ title, icon, children, defaultOpen = false }: 
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 overflow-hidden">
+    <div style={{
+      borderRadius: "var(--radius-lg)",
+      border: "1px solid var(--border)",
+      background: "var(--surface-2)",
+      overflow: "hidden",
+    }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-slate-100 transition-colors"
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "10px 14px",
+          textAlign: "left",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          color: "var(--fg)",
+        }}
       >
-        <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-indigo-500" />
-        {icon && <span className="flex-shrink-0 text-slate-400">{icon}</span>}
-        <span className="flex-1 text-sm font-medium text-slate-700">{title}</span>
+        <CheckCircle2 size={14} style={{ flexShrink: 0, color: "var(--ok-fg)" }} />
+        {icon && <span style={{ flexShrink: 0, color: "var(--muted)" }}>{icon}</span>}
+        <span style={{ flex: 1, fontSize: "12.5px", fontWeight: 500, color: "var(--fg-2)" }}>{title}</span>
         <ChevronDown
-          className={`h-4 w-4 flex-shrink-0 text-slate-400 transition-transform duration-200 ${
-            open ? "rotate-180" : ""
-          }`}
+          size={14}
+          style={{
+            flexShrink: 0,
+            color: "var(--muted)",
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.15s",
+          }}
         />
       </button>
       {open && (
-        <div className="px-4 pb-4 pt-1 border-t border-slate-200 space-y-3">
+        <div style={{
+          padding: "4px 14px 14px",
+          borderTop: "1px solid var(--border)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}>
           {children}
         </div>
       )}

@@ -18,7 +18,7 @@ export type WorkflowState = {
   storyId: string | null
   storyTitle: string | null
   storyPoints: number | null
-  currentStep: 1 | 2 | 3 | 4
+  currentStep: 1 | 2 | 3 | 4 | 5
 }
 
 const initialState: WorkflowState = {
@@ -94,7 +94,7 @@ export function useWorkflow() {
   }
 
   function completeStep4() {
-    // Stay on step 4 showing success; reset handled by reset()
+    setState((prev) => ({ ...prev, currentStep: 5 }))
   }
 
   function reset() {

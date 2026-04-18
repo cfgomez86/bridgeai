@@ -103,7 +103,7 @@ class GitLabProvider(ScmProvider):
             page += 1
         return entries
 
-    def get_file_content(self, access_token: str, repo_full_name: str, path: str) -> str:
+    def get_file_content(self, access_token: str, repo_full_name: str, path: str, sha: str = "") -> str:
         encoded_project = urllib.parse.quote(repo_full_name, safe="")
         encoded_path = urllib.parse.quote(path, safe="")
         url = f"{self._API_BASE}/projects/{encoded_project}/repository/files/{encoded_path}/raw"

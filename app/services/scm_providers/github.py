@@ -93,7 +93,21 @@ class GitHubProvider(ScmProvider):
             if item["type"] == "blob"
         ]
 
-    def get_file_content(self, access_token: str, repo_full_name: str, path: str) -> str:
+    def get_file_content(self, access_token: str, repo_full_name: str, path: str, sha: str = "") -> str:
+        if sha:
+            # Blobs API returns raw bytes directly — no JSON parsing or base64 decoding.
+            # GitHub CDN caches blobs by SHA, so this is significantly faster.
+            url = f"{self._API_BASE}/repos/{repo_full_name}/git/blobs/{sha}"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/vnd.github.raw",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return resp.read().decode("utf-8", errors="replace")
+
         url = f"{self._API_BASE}/repos/{repo_full_name}/contents/{urllib.parse.quote(path)}"
         req = urllib.request.Request(
             url,

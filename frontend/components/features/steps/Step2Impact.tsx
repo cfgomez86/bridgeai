@@ -3,15 +3,20 @@
 import { useState } from "react"
 import { analyzeImpact } from "@/lib/api-client"
 import type { WorkflowState } from "@/hooks/useWorkflow"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { RiskBadge } from "@/components/features/RiskBadge"
 import { StepSummaryCard } from "@/components/features/StepSummaryCard"
+import { RiskBadge } from "@/components/features/RiskBadge"
 import { Loader2, Zap, Search } from "lucide-react"
 
-const truncate = (text: string, max: number) =>
-  text.length > max ? text.slice(0, max) + "…" : text
+const truncate = (t: string, n: number) => t.length > n ? t.slice(0, n) + "…" : t
+
+const chip = (text: string, accent?: boolean): React.CSSProperties => ({
+  display: "inline-flex", alignItems: "center",
+  padding: "1px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 500,
+  fontFamily: "var(--font-mono)",
+  background: accent ? "var(--accent-soft)" : "var(--surface-3)",
+  color: accent ? "var(--accent-strong)" : "var(--fg-2)",
+  border: "1px solid transparent",
+})
 
 interface Step2Props {
   state: WorkflowState
@@ -46,105 +51,97 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Step 1 collapsible summary */}
-      <StepSummaryCard
-        title="Paso 1: Requirement Analysis"
-        icon={<Search className="h-3.5 w-3.5" />}
-      >
-        <p className="text-sm text-slate-600 italic">
-          &ldquo;{truncate(state.requirementText, 120)}&rdquo;
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <StepSummaryCard title="Paso 1 — Requerimiento" icon={<Search size={13} />}>
+        <p style={{ fontSize: "12.5px", color: "var(--fg-2)", fontStyle: "italic", margin: 0 }}>
+          &ldquo;{truncate(state.requirementText, 140)}&rdquo;
         </p>
-        <div className="flex flex-wrap gap-2 items-center">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
           {state.intent && (
-            <span className="text-xs text-slate-500">
-              Intent: <span className="font-medium text-slate-700">{state.intent}</span>
+            <span style={{ fontSize: "11.5px", color: "var(--muted)" }}>
+              Intent: <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{state.intent}</span>
             </span>
           )}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {state.featureType && <Badge variant="secondary">{state.featureType}</Badge>}
-          {state.complexity && <Badge variant="outline">Complexity: {state.complexity}</Badge>}
-          {state.language && (
-            <Badge variant="outline" className="capitalize">
-              Lang: {state.language}
-            </Badge>
-          )}
+          {state.featureType && <span style={chip(state.featureType, true)}>{state.featureType}</span>}
+          {state.complexity && <span style={chip(`Complejidad: ${state.complexity}`)}>{`Complejidad: ${state.complexity}`}</span>}
         </div>
         {state.keywords.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {state.keywords.map((kw) => (
-              <Badge key={kw} variant="outline" className="text-xs">
-                {kw}
-              </Badge>
-            ))}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+            {state.keywords.map((kw) => <span key={kw} style={chip(kw)}>{kw}</span>)}
           </div>
         )}
       </StepSummaryCard>
 
-      {/* Impact analysis card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-indigo-500" />
-            Impact Analysis
-          </CardTitle>
-          <CardDescription>
-            Analyze which files and modules in your codebase are affected by this requirement.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+      {/* Main card */}
+      <div style={{
+        background: "var(--surface)", border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)",
+        padding: "20px 22px", display: "flex", flexDirection: "column", gap: "16px",
+      }}>
+        <div>
+          <h2 style={{ fontSize: "15px", fontWeight: 600, fontFamily: "var(--font-display)", margin: "0 0 4px", color: "var(--fg)" }}>
+            Análisis de impacto
+          </h2>
+          <p style={{ fontSize: "12.5px", color: "var(--muted)", margin: 0 }}>
+            Determina qué archivos y módulos del codebase se ven afectados.
+          </p>
+        </div>
 
-          {state.filesImpacted !== null && (
-            <div className="space-y-3 mb-4">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-slate-600">Files impacted:</span>
-                <Badge variant="secondary">{state.filesImpacted}</Badge>
-              </div>
-              {state.modulesImpacted.length > 0 && (
-                <div>
-                  <span className="text-sm font-medium text-slate-600 block mb-1.5">
-                    Modules impacted:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {state.modulesImpacted.map((m) => (
-                      <Badge key={m} variant="outline" className="text-xs">
-                        {m}
-                      </Badge>
-                    ))}
-                  </div>
+        {error && (
+          <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--err-bg)", color: "var(--err-fg)", fontSize: "12.5px" }}>
+            {error}
+          </div>
+        )}
+
+        {state.filesImpacted !== null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ display: "flex", gap: "24px" }}>
+              <div>
+                <div style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: "3px" }}>
+                  Archivos
                 </div>
-              )}
+                <div style={{ fontSize: "22px", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--fg)" }}>
+                  {state.filesImpacted}
+                </div>
+              </div>
               {state.riskLevel && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-slate-600">Risk level:</span>
+                <div>
+                  <div style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: "6px" }}>
+                    Riesgo
+                  </div>
                   <RiskBadge risk={state.riskLevel} />
                 </div>
               )}
             </div>
-          )}
-
-          <Button
-            onClick={handleAnalyze}
-            disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Analyzing Impact…
-              </>
-            ) : (
-              "Analyze Impact"
+            {state.modulesImpacted.length > 0 && (
+              <div>
+                <div style={{ fontSize: "11.5px", color: "var(--muted)", marginBottom: "6px" }}>Módulos afectados</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                  {state.modulesImpacted.map((m) => <span key={m} style={chip(m)}>{m}</span>)}
+                </div>
+              </div>
             )}
-          </Button>
-        </CardContent>
-      </Card>
+          </div>
+        )}
+
+        <button
+          onClick={handleAnalyze}
+          disabled={loading}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+            padding: "9px 18px", borderRadius: "var(--radius)", border: "none",
+            background: loading ? "var(--surface-3)" : "var(--accent)",
+            color: loading ? "var(--muted)" : "var(--accent-fg)",
+            fontSize: "13px", fontWeight: 600, cursor: loading ? "not-allowed" : "pointer",
+            fontFamily: "var(--font-display)",
+          }}
+        >
+          {loading
+            ? <><Loader2 size={14} className="animate-spin" /> Analizando impacto…</>
+            : <><Zap size={14} /> {state.filesImpacted !== null ? "Re-analizar" : "Analizar impacto"} →</>
+          }
+        </button>
+      </div>
     </div>
   )
 }

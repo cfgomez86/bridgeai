@@ -49,6 +49,9 @@ class ScmProvider(ABC):
         ...
 
     @abstractmethod
-    def get_file_content(self, access_token: str, repo_full_name: str, path: str) -> str:
-        """Return decoded text content of a single file."""
+    def get_file_content(self, access_token: str, repo_full_name: str, path: str, sha: str = "") -> str:
+        """Return decoded text content of a single file.
+
+        sha: git blob SHA — providers may use it for faster cached fetching.
+        """
         ...
