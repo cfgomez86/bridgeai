@@ -1,3 +1,5 @@
+import json
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -22,6 +24,33 @@ class TicketIntegrationRepository:
             )
             .first()
         )
+
+    def create_integration(
+        self,
+        story_id: str,
+        provider: str,
+        project_key: str,
+        issue_type: str,
+    ) -> str:
+        now = datetime.now(timezone.utc)
+        integration_id = str(uuid.uuid4())
+        model = TicketIntegration(
+            id=integration_id,
+            story_id=story_id,
+            provider=provider,
+            project_key=project_key,
+            issue_type=issue_type,
+            external_ticket_id=None,
+            status="PENDING",
+            retry_count=0,
+            error_message=None,
+            created_at=now,
+            updated_at=now,
+        )
+        self._db.add(model)
+        self._db.commit()
+        self._db.refresh(model)
+        return integration_id
 
     def save(self, integration: TicketIntegration) -> TicketIntegration:
         self._db.add(integration)
@@ -70,6 +99,39 @@ class TicketIntegrationRepository:
             .all()
         )
 
-    def add_audit_log(self, log: IntegrationAuditLog) -> None:
+    def add_audit_log(
+        self,
+        story_id: str,
+        provider: str,
+        action: str,
+        payload: str | None,
+        response: str | None,
+        status: str,
+        timestamp: datetime,
+    ) -> None:
+        log = IntegrationAuditLog(
+            id=str(uuid.uuid4()),
+            story_id=story_id,
+            provider=provider,
+            action=action,
+            payload=payload,
+            response=response,
+            status=status,
+            timestamp=timestamp,
+        )
         self._db.add(log)
         self._db.commit()
+
+    def get_latest_subtask_audit(self, story_id: str, provider: str) -> IntegrationAuditLog | None:
+        """Return the most recent audit log entry containing subtask data for a story+provider."""
+        return (
+            self._db.query(IntegrationAuditLog)
+            .filter(
+                IntegrationAuditLog.story_id == story_id,
+                IntegrationAuditLog.provider == provider,
+                IntegrationAuditLog.status == "CREATED",
+                IntegrationAuditLog.action.in_(["create_ticket", "create_subtasks"]),
+            )
+            .order_by(IntegrationAuditLog.timestamp.desc())
+            .first()
+        )

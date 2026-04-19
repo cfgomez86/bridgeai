@@ -15,6 +15,12 @@ from app.services.ticket_providers.base import TicketProvider
 
 logger = get_logger(__name__)
 
+_CATEGORY_PREFIX: dict[str, str] = {
+    "frontend": "Frontend",
+    "backend": "Backend",
+    "configuration": "Config",
+}
+
 _ISSUE_TYPE_ALIASES: dict[str, list[str]] = {
     "Story":  ["story", "historia", "user story", "user_story"],
     "Task":   ["task", "tarea"],
@@ -100,13 +106,6 @@ class JiraTicketProvider(TicketProvider):
             }
         ]
         content.extend(section("Acceptance Criteria", story.acceptance_criteria))
-        subtasks = story.subtasks or {}
-        if subtasks.get("frontend"):
-            content.extend(section("Subtareas Frontend", subtasks["frontend"]))
-        if subtasks.get("backend"):
-            content.extend(section("Subtareas Backend", subtasks["backend"]))
-        if subtasks.get("configuration"):
-            content.extend(section("Subtareas Configuración", subtasks["configuration"]))
         content.extend(section("Definition of Done", story.definition_of_done))
         if story.risk_notes:
             content.extend(section("Risk Notes", story.risk_notes))
@@ -146,6 +145,64 @@ class JiraTicketProvider(TicketProvider):
                 pass
         cap = base_delay * (2 ** attempt)
         return random.uniform(0, cap)
+
+    def _build_subtask_payload(self, parent_key: str, project_key: str, summary: str, category: str, description: str = "") -> dict:
+        fields: dict = {
+            "project": {"key": project_key},
+            "parent": {"key": parent_key},
+            "issuetype": {"name": self._resolve_issue_type("Subtask")},
+            "summary": f"[{_CATEGORY_PREFIX.get(category, category.capitalize())}] {summary}",
+            "labels": [category],
+        }
+        if description:
+            fields["description"] = {
+                "type": "doc",
+                "version": 1,
+                "content": [{"type": "paragraph", "content": [{"type": "text", "text": description}]}],
+            }
+        return {"fields": fields}
+
+    async def _create_one_subtask(
+        self, url: str, parent_key: str, project_key: str, summary: str, category: str, description: str = ""
+    ) -> tuple[str | None, str | None, str | None]:
+        payload = self._build_subtask_payload(parent_key, project_key, summary, category, description)
+        try:
+            response = await self._request("POST", url, payload)
+            key = response["key"]
+            ticket_url = urljoin(self._settings.JIRA_BASE_URL, f"/browse/{key}")
+            return key, ticket_url, None
+        except Exception:
+            logger.warning(
+                "jira_subtask_creation_failed",
+                extra={"parent_key": parent_key, "category": category, "summary": summary},
+            )
+            return None, None, summary
+
+    async def create_subtasks(
+        self, parent_key: str, project_key: str, subtasks: dict, description: str = ""
+    ) -> tuple[list[str], list[str], list[str]]:
+        """Create Jira subtasks in parallel. Returns (ids, urls, failed_summaries)."""
+        url = self._api_url("issue")
+        coros = [
+            self._create_one_subtask(url, parent_key, project_key, summary, category, description)
+            for category, tasks in [
+                ("frontend", subtasks.get("frontend") or []),
+                ("backend", subtasks.get("backend") or []),
+                ("configuration", subtasks.get("configuration") or []),
+            ]
+            for summary in tasks
+        ]
+        results = await asyncio.gather(*coros)
+        ids = [r[0] for r in results if r[0] is not None]
+        urls = [r[1] for r in results if r[1] is not None]
+        failed = [r[2] for r in results if r[2] is not None]
+        return ids, urls, failed
+
+    async def create_subtasks_for(
+        self, story: UserStory, parent_id: str, project_key: str
+    ) -> tuple[list[str], list[str], list[str]]:
+        description = f"Parent story: {story.title} | Risk: {story.risk_level} | {story.story_points} pts"
+        return await self.create_subtasks(parent_id, project_key, story.subtasks or {}, description)
 
     async def create_ticket(self, story: UserStory, project_key: str, issue_type: str) -> TicketResult:
         payload = self.build_payload(story, project_key, issue_type)

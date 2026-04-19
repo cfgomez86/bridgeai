@@ -16,6 +16,12 @@ logger = get_logger(__name__)
 
 _API_VERSION = "7.1"
 
+_CATEGORY_PREFIX: dict[str, str] = {
+    "frontend": "Frontend",
+    "backend": "Backend",
+    "configuration": "Config",
+}
+
 _WORK_ITEM_TYPE_MAP = {
     "story": "User Story",
     "task": "Task",
@@ -61,6 +67,11 @@ class AzureDevOpsTicketProvider(TicketProvider):
         org = self._settings.AZURE_ORG_URL.rstrip("/")
         return f"{org}/_apis/projects?api-version={_API_VERSION}"
 
+    def _work_item_relation_url(self, work_item_id: int) -> str:
+        org = self._settings.AZURE_ORG_URL.rstrip("/")
+        project = quote(self._settings.AZURE_PROJECT)
+        return f"{org}/{project}/_apis/wit/workitems/{work_item_id}"
+
     def _browse_url(self, work_item_id: int) -> str:
         org = self._settings.AZURE_ORG_URL.rstrip("/")
         project = quote(self._settings.AZURE_PROJECT)
@@ -75,16 +86,6 @@ class AzureDevOpsTicketProvider(TicketProvider):
         if story.acceptance_criteria:
             parts.append("<h3>Acceptance Criteria</h3>")
             parts.append(ul(story.acceptance_criteria))
-        subtasks = story.subtasks or {}
-        if subtasks.get("frontend"):
-            parts.append("<h3>Subtareas Frontend</h3>")
-            parts.append(ul(subtasks["frontend"]))
-        if subtasks.get("backend"):
-            parts.append("<h3>Subtareas Backend</h3>")
-            parts.append(ul(subtasks["backend"]))
-        if subtasks.get("configuration"):
-            parts.append("<h3>Subtareas Configuración</h3>")
-            parts.append(ul(subtasks["configuration"]))
         if story.definition_of_done:
             parts.append("<h3>Definition of Done</h3>")
             parts.append(ul(story.definition_of_done))
@@ -127,6 +128,61 @@ class AzureDevOpsTicketProvider(TicketProvider):
                 pass
         cap = base_delay * (2 ** attempt)
         return random.uniform(0, cap)
+
+    def _build_child_task_payload(self, parent_id: int, summary: str, category: str, description: str = "") -> list:
+        ops = [
+            {"op": "add", "path": "/fields/System.Title", "value": f"[{_CATEGORY_PREFIX.get(category, category.capitalize())}] {summary}"},
+            {"op": "add", "path": "/fields/System.Tags", "value": f"BridgeAI; {category}"},
+            {"op": "add", "path": "/relations/-", "value": {
+                "rel": "System.LinkTypes.Hierarchy-Reverse",
+                "url": self._work_item_relation_url(parent_id),
+                "attributes": {"comment": "BridgeAI generated task"},
+            }},
+        ]
+        if description:
+            ops.insert(1, {"op": "add", "path": "/fields/System.Description", "value": f"<p>{description}</p>"})
+        return ops
+
+    async def _create_one_child_task(
+        self, url: str, parent_id: int, summary: str, category: str, description: str = ""
+    ) -> tuple[str | None, str | None, str | None]:
+        payload = self._build_child_task_payload(parent_id, summary, category, description)
+        try:
+            response = await self._request("POST", url, body=payload, patch=True)
+            work_item_id = response["id"]
+            return str(work_item_id), self._browse_url(work_item_id), None
+        except Exception:
+            logger.warning(
+                "azure_child_task_creation_failed",
+                extra={"parent_id": parent_id, "category": category, "summary": summary},
+            )
+            return None, None, summary
+
+    async def create_child_tasks(
+        self, parent_id: int, subtasks: dict, description: str = ""
+    ) -> tuple[list[str], list[str], list[str]]:
+        """Create Azure DevOps Tasks in parallel. Returns (ids, urls, failed_summaries)."""
+        url = self._work_items_url("Task")
+        coros = [
+            self._create_one_child_task(url, parent_id, summary, category, description)
+            for category, tasks in [
+                ("frontend", subtasks.get("frontend") or []),
+                ("backend", subtasks.get("backend") or []),
+                ("configuration", subtasks.get("configuration") or []),
+            ]
+            for summary in tasks
+        ]
+        results = await asyncio.gather(*coros)
+        ids = [r[0] for r in results if r[0] is not None]
+        urls = [r[1] for r in results if r[1] is not None]
+        failed = [r[2] for r in results if r[2] is not None]
+        return ids, urls, failed
+
+    async def create_subtasks_for(
+        self, story: UserStory, parent_id: str, project_key: str
+    ) -> tuple[list[str], list[str], list[str]]:
+        description = f"Parent story: {story.title} | Risk: {story.risk_level} | {story.story_points} pts"
+        return await self.create_child_tasks(int(parent_id), story.subtasks or {}, description)
 
     async def create_ticket(self, story: UserStory, project_key: str, issue_type: str) -> TicketResult:
         payload_dict = self.build_payload(story, project_key, issue_type)

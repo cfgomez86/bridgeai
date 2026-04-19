@@ -145,6 +145,7 @@ class TestAuditPayloadCapture:
         ) as mock_factory:
             mock_provider = MagicMock()
             mock_provider.create_ticket = AsyncMock(return_value=mock_result)
+            mock_provider.create_subtasks_for = AsyncMock(return_value=([], [], []))
             mock_provider.build_payload.return_value = {
                 "fields": {"summary": "Hardening Story", "project": {"key": "PROJ"}}
             }

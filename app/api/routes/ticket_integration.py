@@ -50,6 +50,7 @@ class CreateTicketRequest(BaseModel):
     integration_type: str
     project_key: str
     issue_type: str = "Story"
+    create_subtasks: bool = True
 
 
 class CreateTicketResponse(BaseModel):
@@ -58,6 +59,8 @@ class CreateTicketResponse(BaseModel):
     provider: str
     status: str
     message: str | None = None
+    subtask_urls: list[str] = []
+    failed_subtasks: list[str] = []
 
 
 def get_integration_service(
@@ -87,6 +90,7 @@ async def create_ticket(
             project_key=body.project_key,
             issue_type=body.issue_type,
             request_id=request_id,
+            create_subtasks=body.create_subtasks,
         )
     except StoryNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
@@ -125,6 +129,8 @@ async def create_ticket(
         provider=result.provider,
         status=result.status,
         message="Ticket already exists" if is_duplicate else None,
+        subtask_urls=result.subtask_urls,
+        failed_subtasks=result.failed_subtasks,
     )
 
 

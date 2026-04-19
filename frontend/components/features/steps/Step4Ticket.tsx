@@ -66,6 +66,7 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
   const [provider, setProvider] = useState<string>("jira")
   const [projectKey, setProjectKey] = useState("SCRUM")
   const [issueType, setIssueType] = useState("Story")
+  const [createSubtasks, setCreateSubtasks] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ticket, setTicket] = useState<CreateTicketResponse | null>(null)
@@ -89,7 +90,7 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
     setLoading(true)
     setError(null)
     try {
-      const result = await createTicket(state.storyId, provider, projectKey, issueType)
+      const result = await createTicket(state.storyId, provider, projectKey, issueType, createSubtasks)
       setTicket(result)
       completeStep4()
     } catch (err) {
@@ -310,6 +311,39 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
                 </a>
               )}
             </div>
+            {ticket.subtask_urls && ticket.subtask_urls.length > 0 && (
+              <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--surface-2, var(--surface))", border: "1px solid var(--border)" }}>
+                <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--fg-2)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  {s.subtasks_created} ({ticket.subtask_urls.length})
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                  {ticket.subtask_urls.map((url, i) => (
+                    <a
+                      key={i}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "2px" }}
+                    >
+                      <ExternalLink size={11} />
+                      {url.split("/").pop()}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            {ticket.failed_subtasks && ticket.failed_subtasks.length > 0 && (
+              <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--warn-bg, var(--err-bg))", border: "1px solid color-mix(in oklch, var(--warn-fg, var(--err-fg)) 20%, transparent)" }}>
+                <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--warn-fg, var(--err-fg))", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  {s.subtasks_failed} ({ticket.failed_subtasks.length})
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                  {ticket.failed_subtasks.map((task, i) => (
+                    <p key={i} style={{ fontSize: "12px", color: "var(--warn-fg, var(--err-fg))", margin: 0, fontFamily: "var(--font-mono)" }}>{task}</p>
+                  ))}
+                </div>
+              </div>
+            )}
             <button
               onClick={reset}
               style={{
@@ -373,6 +407,16 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
                 placeholder="Story"
               />
             </div>
+
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
+              <input
+                type="checkbox"
+                checked={createSubtasks}
+                onChange={(e) => setCreateSubtasks(e.target.checked)}
+                style={{ width: "14px", height: "14px", accentColor: "var(--accent)", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: "12.5px", color: "var(--fg-2)" }}>{s.create_subtasks_label}</span>
+            </label>
 
             <button
               onClick={handleCreate}

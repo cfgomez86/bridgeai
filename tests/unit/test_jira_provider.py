@@ -106,13 +106,14 @@ class TestJiraPayloadMapping:
         assert "Email is validated" in description_json
         assert "Password is hashed" in description_json
 
-    def test_description_contains_subtasks(self):
+    def test_description_does_not_contain_subtasks(self):
         settings = make_settings()
         provider = JiraTicketProvider(settings)
         story = make_story()
         payload = provider.build_payload(story, "PROJ", "Story")
         description_json = json.dumps(payload["fields"]["description"])
-        assert "Add endpoint" in description_json
+        assert "Add endpoint" not in description_json
+        assert "Subtareas" not in description_json
 
     def test_payload_only_contains_required_fields(self):
         settings = make_settings()
@@ -120,6 +121,58 @@ class TestJiraPayloadMapping:
         payload = provider.build_payload(make_story(), "PROJ", "Story")
         fields = set(payload["fields"].keys())
         assert fields == {"project", "summary", "description", "issuetype"}
+
+
+class TestJiraCreateSubtasks:
+    async def test_create_subtasks_returns_created_keys(self):
+        settings = make_settings()
+        provider = JiraTicketProvider(settings)
+        subtasks = {"frontend": ["Build form"], "backend": ["Add endpoint", "Add repo"], "configuration": []}
+
+        responses = [{"key": "PROJ-2"}, {"key": "PROJ-3"}, {"key": "PROJ-4"}]
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=responses)):
+            ids, urls, failed = await provider.create_subtasks("PROJ-1", "PROJ", subtasks)
+
+        assert ids == ["PROJ-2", "PROJ-3", "PROJ-4"]
+        assert all("PROJ-2" in u or "PROJ-3" in u or "PROJ-4" in u for u in urls)
+        assert failed == []
+
+    async def test_create_subtasks_payload_has_parent_and_label(self):
+        settings = make_settings()
+        provider = JiraTicketProvider(settings)
+        payload = provider._build_subtask_payload("PROJ-1", "PROJ", "Add endpoint", "backend")
+
+        fields = payload["fields"]
+        assert fields["parent"]["key"] == "PROJ-1"
+        assert fields["issuetype"]["name"] == "Subtask"
+        assert fields["labels"] == ["backend"]
+        assert fields["summary"] == "[Backend] Add endpoint"
+
+    async def test_create_subtasks_payload_uses_config_prefix_for_configuration(self):
+        settings = make_settings()
+        provider = JiraTicketProvider(settings)
+        payload = provider._build_subtask_payload("PROJ-1", "PROJ", "Add env vars", "configuration")
+        assert payload["fields"]["summary"] == "[Config] Add env vars"
+
+    async def test_create_subtasks_payload_uses_frontend_prefix(self):
+        settings = make_settings()
+        provider = JiraTicketProvider(settings)
+        payload = provider._build_subtask_payload("PROJ-1", "PROJ", "Build form", "frontend")
+        assert payload["fields"]["summary"] == "[Frontend] Build form"
+
+    async def test_create_subtasks_skips_failed_items(self):
+        from urllib.error import HTTPError
+
+        settings = make_settings()
+        provider = JiraTicketProvider(settings)
+        subtasks = {"frontend": [], "backend": ["Task A", "Task B"], "configuration": []}
+
+        error = HTTPError(url="", code=400, msg="Bad Request", hdrs=None, fp=None)
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=[error, {"key": "PROJ-2"}])):
+            ids, urls, failed = await provider.create_subtasks("PROJ-1", "PROJ", subtasks)
+
+        assert ids == ["PROJ-2"]
+        assert failed == ["Task A"]
 
 
 class TestJiraCreateTicket:
@@ -135,6 +188,7 @@ class TestJiraCreateTicket:
         assert "PROJ-42" in result.url
         assert result.provider == "jira"
         assert result.status == "CREATED"
+        assert result.subtask_ids == []
 
     async def test_create_ticket_retries_on_5xx(self):
         from urllib.error import HTTPError
@@ -145,11 +199,12 @@ class TestJiraCreateTicket:
 
         error_500 = HTTPError(url="", code=500, msg="Server Error", hdrs=None, fp=None)
 
-        with patch.object(
-            provider, "_request",
-            new=AsyncMock(side_effect=[error_500, {"key": "PROJ-1"}]),
-        ):
-            result = await provider.create_ticket(story, "PROJ", "Story")
+        with patch.object(provider, "create_subtasks", new=AsyncMock(return_value=([], [], []))):
+            with patch.object(
+                provider, "_request",
+                new=AsyncMock(side_effect=[error_500, {"key": "PROJ-1"}]),
+            ):
+                result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert result.status == "CREATED"
 

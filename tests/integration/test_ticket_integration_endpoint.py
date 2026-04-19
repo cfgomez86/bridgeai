@@ -90,6 +90,7 @@ class TestCreateTicketEndpoint:
         ) as mock_factory:
             mock_provider = MagicMock()
             mock_provider.create_ticket = AsyncMock(return_value=mock_result)
+            mock_provider.create_subtasks_for = AsyncMock(return_value=([], [], []))
             mock_provider.build_payload.return_value = {"fields": {"summary": "Test Story"}}
             mock_factory.return_value = mock_provider
 
@@ -140,6 +141,7 @@ class TestCreateTicketEndpoint:
         ) as mock_factory:
             mock_provider = MagicMock()
             mock_provider.create_ticket = AsyncMock(return_value=mock_result)
+            mock_provider.create_subtasks_for = AsyncMock(return_value=([], [], []))
             mock_provider.build_payload.return_value = {"fields": {"summary": "Dup Story"}}
             mock_factory.return_value = mock_provider
 
@@ -178,6 +180,7 @@ class TestCreateTicketEndpoint:
         ) as mock_factory:
             mock_provider = MagicMock()
             mock_provider.create_ticket = AsyncMock(return_value=mock_result)
+            mock_provider.create_subtasks_for = AsyncMock(return_value=([], [], []))
             mock_provider.build_payload.return_value = {
                 "work_item_type": "User Story",
                 "fields": [{"op": "add", "path": "/fields/System.Title", "value": "Test"}],

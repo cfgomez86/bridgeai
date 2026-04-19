@@ -119,7 +119,7 @@ class TestAzurePayloadMapping:
         html = desc_op["value"]
         assert "As a user I want to register" in html
         assert "Acceptance Criteria" in html
-        assert "Subtareas Backend" in html
+        assert "Subtareas Backend" not in html
         assert "Definition of Done" in html
         assert "Risk Notes" in html
 
@@ -154,6 +154,64 @@ class TestAzurePayloadMapping:
         assert "BridgeAI" in tags_op["value"]
 
 
+class TestAzureCreateChildTasks:
+    async def test_create_child_tasks_returns_ids(self):
+        settings = make_settings()
+        provider = AzureDevOpsTicketProvider(settings)
+        subtasks = {"frontend": ["Build form"], "backend": ["Add endpoint", "Add repo"], "configuration": []}
+
+        responses = [{"id": 101}, {"id": 102}, {"id": 103}]
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=responses)):
+            ids, urls, failed = await provider.create_child_tasks(42, subtasks)
+
+        assert ids == ["101", "102", "103"]
+        assert all("101" in u or "102" in u or "103" in u for u in urls)
+        assert failed == []
+
+    def test_child_task_payload_has_parent_relation(self):
+        settings = make_settings()
+        provider = AzureDevOpsTicketProvider(settings)
+        payload = provider._build_child_task_payload(42, "Add endpoint", "backend")
+
+        relation_op = next(op for op in payload if op["path"] == "/relations/-")
+        assert relation_op["value"]["rel"] == "System.LinkTypes.Hierarchy-Reverse"
+        assert "42" in relation_op["value"]["url"]
+
+        title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
+        assert title_op["value"] == "[Backend] Add endpoint"
+
+        tags_op = next(op for op in payload if op["path"] == "/fields/System.Tags")
+        assert "backend" in tags_op["value"]
+
+    def test_child_task_payload_uses_config_prefix_for_configuration(self):
+        settings = make_settings()
+        provider = AzureDevOpsTicketProvider(settings)
+        payload = provider._build_child_task_payload(42, "Add env vars", "configuration")
+        title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
+        assert title_op["value"] == "[Config] Add env vars"
+
+    def test_child_task_payload_uses_frontend_prefix(self):
+        settings = make_settings()
+        provider = AzureDevOpsTicketProvider(settings)
+        payload = provider._build_child_task_payload(42, "Build form", "frontend")
+        title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
+        assert title_op["value"] == "[Frontend] Build form"
+
+    async def test_create_child_tasks_skips_failed_items(self):
+        from urllib.error import HTTPError
+
+        settings = make_settings()
+        provider = AzureDevOpsTicketProvider(settings)
+        subtasks = {"frontend": [], "backend": ["Task A", "Task B"], "configuration": []}
+
+        error = HTTPError(url="", code=400, msg="Bad Request", hdrs=None, fp=None)
+        with patch.object(provider, "_request", new=AsyncMock(side_effect=[error, {"id": 55}])):
+            ids, urls, failed = await provider.create_child_tasks(10, subtasks)
+
+        assert ids == ["55"]
+        assert failed == ["Task A"]
+
+
 class TestAzureCreateTicket:
     async def test_create_ticket_success(self):
         settings = make_settings()
@@ -167,14 +225,16 @@ class TestAzureCreateTicket:
         assert "42" in result.url
         assert result.provider == "azure_devops"
         assert result.status == "CREATED"
+        assert result.subtask_ids == []
 
     async def test_create_ticket_url_contains_org_and_project(self):
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
         story = make_story()
 
-        with patch.object(provider, "_request", new=AsyncMock(return_value={"id": 7})):
-            result = await provider.create_ticket(story, "PROJ", "Story")
+        with patch.object(provider, "create_child_tasks", new=AsyncMock(return_value=([], [], []))):
+            with patch.object(provider, "_request", new=AsyncMock(return_value={"id": 7})):
+                result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert "test-org" in result.url
         assert "MyProject" in result.url
@@ -187,8 +247,9 @@ class TestAzureCreateTicket:
         story = make_story()
 
         error_503 = HTTPError(url="", code=503, msg="Unavailable", hdrs=None, fp=None)
-        with patch.object(provider, "_request", new=AsyncMock(side_effect=[error_503, {"id": 5}])):
-            result = await provider.create_ticket(story, "PROJ", "Story")
+        with patch.object(provider, "create_child_tasks", new=AsyncMock(return_value=([], [], []))):
+            with patch.object(provider, "_request", new=AsyncMock(side_effect=[error_503, {"id": 5}])):
+                result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert result.status == "CREATED"
 
@@ -226,8 +287,9 @@ class TestAzureCreateTicket:
         story = make_story()
 
         error_429 = HTTPError(url="", code=429, msg="Too Many Requests", hdrs=None, fp=None)
-        with patch.object(provider, "_request", new=AsyncMock(side_effect=[error_429, {"id": 99}])):
-            result = await provider.create_ticket(story, "PROJ", "Story")
+        with patch.object(provider, "create_child_tasks", new=AsyncMock(return_value=([], [], []))):
+            with patch.object(provider, "_request", new=AsyncMock(side_effect=[error_429, {"id": 99}])):
+                result = await provider.create_ticket(story, "PROJ", "Story")
 
         assert result.status == "CREATED"
 

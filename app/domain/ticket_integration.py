@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 
@@ -8,6 +8,9 @@ class TicketResult:
     url: str
     provider: str
     status: str  # CREATED | FAILED | DUPLICATE
+    subtask_ids: list[str] = field(default_factory=list)
+    subtask_urls: list[str] = field(default_factory=list)
+    failed_subtasks: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

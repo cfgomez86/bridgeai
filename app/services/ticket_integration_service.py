@@ -1,26 +1,17 @@
 import json
 import time
-import uuid
 import asyncio
 from datetime import datetime, timezone
 from urllib.error import HTTPError
 
-from sqlalchemy.orm import Session
-
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
-from app.domain.ticket_integration import TicketIntegration, TicketResult
-from app.models.ticket_integration import (
-    IntegrationAuditLog,
-    TicketIntegration as TicketIntegrationModel,
-)
-from app.models.user_story import UserStory as UserStoryModel
+from app.domain.ticket_integration import TicketResult
 from app.repositories.ticket_integration_repository import TicketIntegrationRepository
 from app.repositories.user_story_repository import UserStoryRepository
 from app.services.ticket_providers.azure_devops import AzureDevOpsTicketProvider
 from app.services.ticket_providers.base import TicketProvider
 from app.services.ticket_providers.jira import JiraTicketProvider  # noqa: F401 (used in health_check)
-from app.utils.json_utils import parse_json_field
 
 logger = get_logger(__name__)
 
@@ -41,10 +32,9 @@ class UnsupportedProviderError(Exception):
 class TicketIntegrationService:
     def __init__(
         self,
-        db: Session,
+        db,
         settings: Settings | None = None,
     ) -> None:
-        self._db = db
         self._settings = settings or get_settings()
         self._story_repo = UserStoryRepository(db)
         self._integration_repo = TicketIntegrationRepository(db)
@@ -58,26 +48,6 @@ class TicketIntegrationService:
             )
         return cls(self._settings)
 
-    def _story_model_to_domain(self, model: UserStoryModel):
-        from app.domain.user_story import UserStory
-
-        return UserStory(
-            story_id=model.id,
-            requirement_id=model.requirement_id,
-            impact_analysis_id=model.impact_analysis_id,
-            project_id=model.project_id,
-            title=model.title,
-            story_description=model.story_description,
-            acceptance_criteria=parse_json_field(model.acceptance_criteria),
-            subtasks=json.loads(model.subtasks) if model.subtasks else {"frontend": [], "backend": [], "configuration": []},
-            definition_of_done=parse_json_field(model.definition_of_done),
-            risk_notes=parse_json_field(model.risk_notes),
-            story_points=model.story_points,
-            risk_level=model.risk_level,
-            created_at=model.created_at,
-            generation_time_seconds=model.generation_time_seconds,
-        )
-
     def _audit(
         self,
         story_id: str,
@@ -87,8 +57,7 @@ class TicketIntegrationService:
         response: dict | None,
         status: str,
     ) -> None:
-        log = IntegrationAuditLog(
-            id=str(uuid.uuid4()),
+        self._integration_repo.add_audit_log(
             story_id=story_id,
             provider=provider,
             action=action,
@@ -97,7 +66,22 @@ class TicketIntegrationService:
             status=status,
             timestamp=datetime.now(timezone.utc),
         )
-        self._integration_repo.add_audit_log(log)
+
+    def _existing_subtasks(self, story_id: str, provider: str) -> tuple[list[str], list[str]]:
+        log = self._integration_repo.get_latest_subtask_audit(story_id, provider)
+        if log and log.response:
+            data = json.loads(log.response)
+            return data.get("subtask_ids", []), data.get("subtask_urls", [])
+        return [], []
+
+    def _duplicate_url(self, provider_name: str, external_ticket_id: str | None) -> str:
+        tid = external_ticket_id or ""
+        if provider_name == "jira":
+            return f"{self._settings.JIRA_BASE_URL.rstrip('/')}/browse/{tid}"
+        if provider_name == "azure_devops" and tid:
+            org = self._settings.AZURE_ORG_URL.rstrip("/")
+            return f"{org}/{self._settings.AZURE_PROJECT}/_workitems/edit/{tid}"
+        return ""
 
     async def create_ticket(
         self,
@@ -106,10 +90,11 @@ class TicketIntegrationService:
         project_key: str,
         issue_type: str,
         request_id: str | None = None,
+        create_subtasks: bool = True,
     ) -> tuple[TicketResult, bool]:
         """Returns (TicketResult, is_duplicate)."""
-        story_model = self._story_repo.find_by_id(story_id)
-        if not story_model:
+        story = self._story_repo.find_domain_by_id(story_id)
+        if not story:
             raise StoryNotFoundError(f"UserStory '{story_id}' not found")
 
         existing = self._integration_repo.find_by_story_and_provider(
@@ -125,38 +110,40 @@ class TicketIntegrationService:
                     "external_ticket_id": existing.external_ticket_id,
                 },
             )
-            ticket_url = (
-                f"{self._settings.JIRA_BASE_URL.rstrip('/')}/browse/{existing.external_ticket_id}"
-                if provider_name == "jira"
-                else ""
-            )
+            subtask_ids, subtask_urls = self._existing_subtasks(story_id, provider_name)
+            if create_subtasks and not subtask_ids and story.subtasks:
+                provider = self._get_provider(provider_name)
+                subtask_ids, subtask_urls, failed = await provider.create_subtasks_for(
+                    story, existing.external_ticket_id or "", project_key
+                )
+                if subtask_ids:
+                    self._audit(
+                        story_id=story_id,
+                        provider=provider_name,
+                        action="create_subtasks",
+                        payload=None,
+                        response={"subtask_ids": subtask_ids, "subtask_urls": subtask_urls, "failed": failed},
+                        status="CREATED",
+                    )
             return (
                 TicketResult(
                     external_id=existing.external_ticket_id or "",
-                    url=ticket_url,
+                    url=self._duplicate_url(provider_name, existing.external_ticket_id),
                     provider=provider_name,
                     status="DUPLICATE",
+                    subtask_ids=subtask_ids,
+                    subtask_urls=subtask_urls,
                 ),
                 True,
             )
 
-        now = datetime.now(timezone.utc)
-        integration_model = TicketIntegrationModel(
-            id=str(uuid.uuid4()),
+        integration_id = self._integration_repo.create_integration(
             story_id=story_id,
             provider=provider_name,
             project_key=project_key,
             issue_type=issue_type,
-            external_ticket_id=None,
-            status="PENDING",
-            retry_count=0,
-            error_message=None,
-            created_at=now,
-            updated_at=now,
         )
-        self._integration_repo.save(integration_model)
 
-        story = self._story_model_to_domain(story_model)
         provider = self._get_provider(provider_name)
         request_payload = provider.build_payload(story, project_key, issue_type) or {
             "project_key": project_key,
@@ -166,10 +153,17 @@ class TicketIntegrationService:
         start = time.monotonic()
         try:
             result = await provider.create_ticket(story, project_key, issue_type)
+
+            subtask_ids, subtask_urls, failed_subtasks = [], [], []
+            if create_subtasks and story.subtasks:
+                subtask_ids, subtask_urls, failed_subtasks = await provider.create_subtasks_for(
+                    story, result.external_id, project_key
+                )
+
             duration_ms = int((time.monotonic() - start) * 1000)
 
             self._integration_repo.update_status(
-                integration_model.id,
+                integration_id,
                 status="CREATED",
                 external_ticket_id=result.external_id,
             )
@@ -178,7 +172,7 @@ class TicketIntegrationService:
                 provider=provider_name,
                 action="create_ticket",
                 payload=request_payload,
-                response={"external_id": result.external_id, "url": result.url},
+                response={"external_id": result.external_id, "url": result.url, "subtask_ids": subtask_ids, "subtask_urls": subtask_urls},
                 status="CREATED",
             )
             logger.info(
@@ -192,7 +186,15 @@ class TicketIntegrationService:
                     "retry_count": 0,
                 },
             )
-            return result, False
+            return TicketResult(
+                external_id=result.external_id,
+                url=result.url,
+                provider=result.provider,
+                status=result.status,
+                subtask_ids=subtask_ids,
+                subtask_urls=subtask_urls,
+                failed_subtasks=failed_subtasks,
+            ), False
 
         except HTTPError as exc:
             duration_ms = int((time.monotonic() - start) * 1000)
@@ -201,7 +203,7 @@ class TicketIntegrationService:
             if jira_body:
                 error_msg = f"{error_msg} — {jira_body}"
             self._integration_repo.update_status(
-                integration_model.id,
+                integration_id,
                 status="FAILED",
                 error_message=error_msg[:1000],
             )
@@ -229,7 +231,7 @@ class TicketIntegrationService:
             duration_ms = int((time.monotonic() - start) * 1000)
             error_msg = str(exc)
             self._integration_repo.update_status(
-                integration_model.id,
+                integration_id,
                 status="FAILED",
                 error_message=error_msg,
             )

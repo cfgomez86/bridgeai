@@ -28,3 +28,10 @@ class TicketProvider(ABC):
         """Return the request payload that will be sent to the provider, for audit purposes.
         Override in concrete providers. Returns None by default."""
         return None
+
+    async def create_subtasks_for(
+        self, story: UserStory, parent_id: str, project_key: str
+    ) -> tuple[list[str], list[str], list[str]]:
+        """Create subtasks linked to parent_id. Returns (ids, urls, failed_summaries).
+        Override in providers that support subtask creation."""
+        return [], [], []

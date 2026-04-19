@@ -97,6 +97,7 @@ class TestCreateTicket:
         ) as mock_provider_factory:
             mock_provider = MagicMock()
             mock_provider.create_ticket = AsyncMock(return_value=mock_result)
+            mock_provider.create_subtasks_for = AsyncMock(return_value=([], [], []))
             mock_provider.build_payload.return_value = {"fields": {"summary": "Test Story"}}
             mock_provider_factory.return_value = mock_provider
 
@@ -123,6 +124,7 @@ class TestCreateTicket:
         ) as mock_provider_factory:
             mock_provider = MagicMock()
             mock_provider.create_ticket = AsyncMock(return_value=mock_result)
+            mock_provider.create_subtasks_for = AsyncMock(return_value=([], [], []))
             mock_provider.build_payload.return_value = {"fields": {"summary": "Test Story"}}
             mock_provider_factory.return_value = mock_provider
 
