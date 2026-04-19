@@ -1,4 +1,4 @@
-# Test Organization Guide
+# Test Suite Guide
 
 ## 📁 Structure
 
@@ -7,97 +7,350 @@ La suite de tests está organizada en tres categorías siguiendo el estándar de
 ```
 tests/
 ├── conftest.py                  # Fixtures globales compartidas
-├── unit/                        # Unit tests
-│   ├── conftest.py             # Fixtures específicas para unit tests
-│   └── test_*.py               # Tests unitarios (sin dependencias externas)
-├── integration/                 # Integration tests
-│   ├── conftest.py             # Fixtures específicas para integration tests
-│   └── test_*.py               # Tests de endpoints y servicios con TestClient
-├── e2e/                        # End-to-end tests
-│   ├── conftest.py             # Fixtures específicas para e2e tests
-│   ├── test_*.py               # Tests de flujos completos
-│   └── screenshots/            # Capturas de pantalla de pruebas
+├── unit/                        # Unit tests (113)
+│   ├── conftest.py             # Fixtures específicas
+│   └── test_*.py               # Tests unitarios
+├── integration/                 # Integration tests (8)
+│   ├── conftest.py             # Fixtures específicas
+│   └── test_*.py               # Tests de endpoints
+├── e2e/                        # End-to-end tests (1)
+│   ├── conftest.py             # Fixtures específicas
+│   ├── test_workflow.py        # Test flujo completo
+│   └── screenshots/            # Capturas automáticas
 └── __init__.py
 ```
 
+---
+
 ## 🧪 Categorías de Tests
 
-### Unit Tests (tests/unit/)
+### Unit Tests (tests/unit/) - 113 tests
 Tests de funciones, clases y métodos individuales sin dependencias externas.
-- ✅ Rápidos
+
+**Características:**
+- ✅ Rápidos (~7 segundos)
 - ✅ Determinísticos
-- ✅ Aislados
+- ✅ Aislados (sin dependencias externas)
 - 🚫 No usan TestClient
-- 🚫 No interactúan con la base de datos real
+- 🚫 No interactúan con BD real
 
 **Ejemplos:**
 - `test_ai_requirement_parser.py`
 - `test_code_indexing_service.py`
-- `test_impact_analysis_service.py`
+- `test_story_generation_service.py`
 
-### Integration Tests (tests/integration/)
-Tests de endpoints, servicios y componentes que trabajan juntos.
+### Integration Tests (tests/integration/) - 8 tests
+Tests de endpoints, servicios y componentes que trabajan juntos con TestClient e in-memory SQLite.
+
+**Características:**
 - ✅ Usan TestClient (FastAPI)
-- ✅ Usan base de datos en memoria (SQLite)
+- ✅ Usan BD en memoria (SQLite)
 - ✅ Validan flujos completos de API
-- ⚠️ Más lentos que unit tests
+- ⚠️ Más lentos que unit tests (~15 segundos)
+- 🚫 No requieren servicios externos
 
 **Ejemplos:**
 - `test_health.py`
 - `test_impact_analysis_endpoint.py`
 - `test_ticket_integration_endpoint.py`
 
-### E2E Tests (tests/e2e/)
-Tests end-to-end con navegación completa y aplicación en ejecución.
-- ✅ Validan la aplicación completa
-- ⚠️ Muy lentos
-- ⚠️ Pueden ser frágiles
+### E2E Tests (tests/e2e/) - 1 test
+Tests end-to-end con navegación completa en navegador real (Playwright) y aplicación ejecutándose.
 
-**Ejemplos:**
-- `test_workflow.py`
+**Características:**
+- ✅ Validan aplicación completa (UI + API + BD)
+- ✅ Interacción real con el navegador
+- ⚠️ Muy lentos (2-10 minutos según LLM)
+- ⚠️ Pueden ser frágiles
+- 📋 Requieren 3 servicios ejecutándose
+
+**Qué hace `test_full_workflow()`:**
+1. Verifica disponibilidad del frontend
+2. Navega a indexación y ejecuta análisis de código
+3. Entra a workflow → Ingresa requisito y ejecuta análisis
+4. Ejecuta análisis de impacto
+5. Genera historia de usuario con LLM (~30-100s)
+6. Prepara creación de ticket (Jira/Azure DevOps)
+
+---
 
 ## 🚀 Ejecutar Tests
 
-### Todos los tests
+### Opción 1: Comando Directo (RECOMENDADO)
+
 ```bash
-pytest
+# Solo unit (113 tests) - 7s
+python -m pytest tests/unit/ -v
+
+# Solo integration (8 tests) - 15s
+python -m pytest tests/integration/ -v
+
+# Unit + Integration (121 tests) - 22s
+python -m pytest tests/unit/ tests/integration/ -v
+
+# Solo E2E (requiere servicios)
+python -m pytest tests/e2e/ -v -s
+
+# TODOS los tests
+python -m pytest tests/ -v -s
 ```
 
-### Solo unit tests
-```bash
-pytest tests/unit/
+### Opción 2: Script PowerShell
+
+```powershell
+.\run_tests.ps1 unit
+.\run_tests.ps1 integration
+.\run_tests.ps1 all            # unit + integration
+.\run_tests.ps1 e2e            # requiere servicios
+.\run_tests.ps1 help           # muestra opciones
 ```
 
-### Solo integration tests
+### Opción 3: VS Code UI
+
+- Ctrl+Shift+D → Test Explorer
+- Click en play al lado de cualquier test o categoría
+
+### Variantes Útiles
+
 ```bash
-pytest tests/integration/
+# Con salida detallada
+pytest tests/unit/ -v --tb=short
+
+# Con output de print()
+pytest tests/unit/ -v -s
+
+# Test específico
+pytest tests/unit/test_ai_requirement_parser.py::test_parse_requirement -v
+
+# Con cobertura
+pytest tests/unit/ --cov=app --cov-report=term-missing
+
+# Tests que fallen ante primer error (-x)
+pytest tests/unit/ -v -x
+
+# Solo tests con cierto marcador
+pytest -m e2e -v -s
 ```
 
-### Solo e2e tests
+---
+
+## 📋 Requisitos para E2E Tests
+
+Los tests E2E requieren que **3 servicios estén ejecutándose simultáneamente en 3 terminales**:
+
+### Terminal 1: API Backend (puerto 8000)
 ```bash
-pytest tests/e2e/
+cd c:\proyectos\bridgeai
+python -m uvicorn app.main:app --reload
+# Espera: "Uvicorn running on http://127.0.0.1:8000"
 ```
 
-### Con salida detallada
+### Terminal 2: Frontend Next.js (puerto 3000)
 ```bash
-pytest -v
-
-# Con salida de print
-pytest -s
-
-# Con salida detallada + print
-pytest -v -s
+cd c:\proyectos\bridgeai\frontend
+npm run dev
+# Espera: "Local: http://localhost:3000"
 ```
 
-### Un test específico
+### Terminal 3: PostgreSQL (puerto 5432)
 ```bash
-pytest tests/unit/test_ai_requirement_parser.py
-pytest tests/unit/test_ai_requirement_parser.py::test_parse_requirement
-pytest tests/integration/test_health.py::test_health_status_code
+cd c:\proyectos\bridgeai
+docker compose up -d
+# O: docker compose up (sin -d para ver logs)
 ```
 
-### Con cobertura
+### Terminal 4: Ejecutar Tests E2E
 ```bash
+cd c:\proyectos\bridgeai
+python -m pytest tests/e2e/ -v -s
+```
+
+---
+
+## 📸 E2E Test Output
+
+El test genera screenshots automáticamente en `tests/e2e/screenshots/`:
+
+```
+02_indexing.png                - Página de indexación
+03_indexing_done.png           - Después de ejecutar indexación
+04_step1_empty.png             - Formulario vacío
+05_step1_filled.png            - Formulario completado
+06_step2_loaded.png            - Análisis de impacto cargado
+07_step2_done.png              - Análisis completado
+08_step3_done.png              - Historia generada
+ERROR_button_not_found.png     - Si hay error (debugging)
+```
+
+---
+
+## ⏱️ Performance
+
+| Tipo | Tests | Tiempo | Dependencias |
+|------|-------|--------|------------|
+| Unit | 113 | ~7s | Python |
+| Integration | 8 | ~15s | Python + SQLite |
+| Unit + Integration | 121 | ~22s | Python + SQLite |
+| E2E | 1 | 2-10min | Python + API + Frontend + LLM |
+
+*E2E time varía según LLM: ~2min con stub, ~5-10min con API real (Anthropic/OpenAI)*
+
+---
+
+## 🔍 Troubleshooting
+
+### ❌ "pytest: El término 'pytest' no se reconoce"
+```powershell
+# Usa python -m
+python -m pytest tests/unit/ -v
+```
+
+### ❌ "E2E test SKIPPED - Services not available"
+**Significa:** API o Frontend no están corriendo
+
+**Solución:** Inicia los 3 servicios en terminales separadas (ver arriba)
+
+### ❌ "Locator.wait_for: Timeout exceeded"
+**Significa:** Botón no apareció en el tiempo esperado
+
+**Soluciones:**
+- Verifica que frontend está en http://localhost:3000
+- Revisa logs del API para errores
+- Screenshot `ERROR_button_not_found.png` muestra dónde falló
+- Aumenta timeout en `test_workflow.py` si es muy lento
+
+### ❌ "Database connection error"
+**Solución:** Asegurar PostgreSQL está corriendo
+```bash
+docker compose up -d
+```
+
+### ❌ "timeout waiting for LLM response"
+**Si usa LLM real:**
+- Verifica `API_KEY` en `.env`
+- Verifica conectividad a internet
+- Espera más (hasta 3 minutos)
+
+**Si usa stub:**
+- Verifica en `.env`: `AI_PROVIDER=stub`
+
+---
+
+## 📊 Estado Actual
+
+```
+✅ Unit Tests:       113 PASS (7s)
+✅ Integration Tests: 8 PASS (15s)
+✅ TOTAL LOCAL:      121 PASS (22s)
+⏳ E2E Tests:        1 PASS/SKIP (requiere servicios)
+```
+
+---
+
+## 🏗️ Arquitectura
+
+```
+Test Layer
+├── Unit (tests/unit/)
+│   └── Función individual (no imports externos)
+├── Integration (tests/integration/)
+│   ├── TestClient (FastAPI)
+│   ├── In-Memory SQLite DB
+│   └── API Endpoints
+└── E2E (tests/e2e/)
+    ├── Playwright Browser
+    ├── Frontend: http://localhost:3000
+    ├── API: http://localhost:8000
+    └── DB: PostgreSQL
+```
+
+---
+
+## 📝 Configuración
+
+### pytest.ini
+```ini
+[pytest]
+asyncio_mode = auto              # Soporte para tests async
+testpaths = tests
+python_files = test_*.py
+markers = 
+    unit: Unit tests
+    integration: Integration tests
+    e2e: End-to-end tests
+    slow: Slow tests
+```
+
+### conftest.py (Global)
+```python
+@pytest.fixture
+def project_root() -> Path:
+    return Path(__file__).parent.parent
+```
+
+### conftest.py (Unit)
+Sin cambios especiales - usa fixtures por defecto
+
+### conftest.py (Integration)
+```python
+@pytest.fixture
+def client():
+    # TestClient con BD en memoria
+```
+
+### conftest.py (E2E)
+```python
+@pytest.fixture(scope="function", autouse=True)
+def verify_e2e_services_available():
+    # Verifica API + Frontend disponibles
+    # Salta test si no están listos
+```
+
+---
+
+## ✅ Checklist Pre-Commit
+
+```bash
+# 1. Unit + Integration tests
+python -m pytest tests/unit/ tests/integration/ -v
+
+# 2. Si todo pasa - hacer commit
+git add .
+git commit -m "Feature description"
+
+# 3. (Opcional) E2E test si servicios disponibles
+python -m pytest tests/e2e/ -v -s
+```
+
+---
+
+## 🎯 Comandos Rápidos
+
+```bash
+# Todos los tests
+python -m pytest tests/ -v
+
+# Solo local (sin E2E)
+python -m pytest tests/unit/ tests/integration/ -v
+
+# Con cobertura
+python -m pytest tests/ --cov=app
+
+# Test específico
+python -m pytest tests/unit/test_file.py::test_function -v
+
+# Verbose + output
+python -m pytest tests/ -vvs
+```
+
+---
+
+## 📚 Referencias
+
+- [pytest docs](https://docs.pytest.org/)
+- [Playwright docs](https://playwright.dev/python/)
+- [FastAPI testing](https://fastapi.tiangolo.com/advanced/testing-dependencies/)
+- [pytest-asyncio](https://github.com/pytest-dev/pytest-asyncio)
 pytest --cov=app tests/
 pytest --cov=app --cov-report=html tests/  # Genera reporte HTML
 ```
