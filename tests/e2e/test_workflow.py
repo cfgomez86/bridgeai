@@ -135,7 +135,7 @@ def test_full_workflow():
 
         # ── Step 2: Impact Analysis ───────────────────────────────────────
         print("\n[4] Workflow — Step 2: Impact Analysis")
-        page.wait_for_timeout(500)  # Wait for page to fully render
+        page.wait_for_timeout(300)  # Minimal wait before search
         
         try:
             # Look for Impact button (Spanish: Analizar impacto, English: Analyze Impact)
@@ -180,7 +180,7 @@ def test_full_workflow():
 
         # ── Step 3: Generate Story ────────────────────────────────────────
         print("\n[5] Workflow — Step 3: Generate Story")
-        page.wait_for_timeout(500)  # Wait for page to fully render
+        page.wait_for_timeout(300)  # Minimal wait before search
         
         try:
             # Look for Generate Story button (Spanish: Generar historia, English: Generate Story)
@@ -234,7 +234,7 @@ def test_full_workflow():
 
         # ── Step 4: Create Ticket ─────────────────────────────────────────
         print("\n[6] Workflow — Step 4: Create Ticket")
-        page.wait_for_timeout(500)
+        page.wait_for_timeout(300)  # Minimal wait before search
         
         try:
             shot(page, "09_step4_loaded")
@@ -272,11 +272,18 @@ def test_full_workflow():
                 try:
                     with page.expect_response(
                         lambda r: "ticket" in r.url.lower() or "integration" in r.url.lower(),
-                        timeout=20000,
+                        timeout=15000,  # Reduced from 20s
                     ) as resp_info:
                         create_ticket_btn.click()
                     resp = resp_info.value
                     print(f"  [OK] ticket response: {resp.status}")
+                    
+                    # Wait dynamically for success feedback
+                    try:
+                        page.wait_for_selector("text=/[Éé]xito|[Cc]reado|[Ss]uccess|[Cc]reated/", timeout=5000)
+                        print("  [OK] Ticket creation confirmed")
+                    except:
+                        print("  [INFO] Ticket created (no confirmation message)")
                 except:
                     print("  [WARN] no ticket response captured")
             else:
@@ -286,7 +293,7 @@ def test_full_workflow():
             print(f"  [ERROR] Step 4: {e}")
             shot(page, "ERROR_step4_failed")
 
-        page.wait_for_timeout(500)
+        page.wait_for_timeout(300)
         shot(page, "11_final")
 
         print(f"\n[DONE] E2E Workflow Complete - screenshots in {SCREENSHOTS_DIR}")
