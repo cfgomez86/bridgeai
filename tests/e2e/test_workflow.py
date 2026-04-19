@@ -122,16 +122,14 @@ def test_full_workflow():
             shot(page, "ERROR_button_analyzing")
             raise
         
-        print("  waiting for response from API...")
-        # Wait for page to update with next step content
-        page.wait_for_timeout(500)
-        
-        # Wait for Impact Analysis step to appear (API usually responds in 3-8s)
+        print("  waiting for API response (dynamic wait)...")
+        # Wait dynamically for Impact Analysis button to appear
         try:
-            page.wait_for_selector("text=/[Ii]mpact|[Aa]nalysis|Impacto/", timeout=15000)
-            print("  [OK] Impact Analysis step loaded")
+            page.wait_for_selector("button:has-text(/[Ii]mpacto|[Ii]mpact/)", timeout=12000)
+            print("  [OK] Impact Analysis button loaded")
         except:
-            print("  [WARN] Impact Analysis text not found yet")
+            print("  [WARN] Impact Analysis button not detected, using fallback...")
+            page.wait_for_timeout(2000)
         
         shot(page, "06_step1_done")
 
@@ -160,8 +158,17 @@ def test_full_workflow():
                 impact_btn.scroll_into_view_if_needed()
                 page.wait_for_timeout(200)
                 impact_btn.click()
-                print("  [OK] waiting for API response (~8-15s)...")
-                page.wait_for_timeout(12000)  # Wait for Impact Analysis API
+                print("  [OK] waiting for API response (dynamic wait)...")
+                
+                # Instead of fixed wait, wait for the "Generate Story" button to appear
+                try:
+                    page.wait_for_selector("button:has-text(/[Gg]enerar|[Gg]enerate/)", timeout=15000)
+                    print("  [OK] Generate button appeared, Impact Analysis complete")
+                except:
+                    # Fallback to shorter fixed wait if selector fails
+                    print("  [WARN] Generate button not detected, using fallback wait...")
+                    page.wait_for_timeout(5000)
+                
                 shot(page, "07_step2_done")
             else:
                 print("  [WARN] Impact Analysis button not found")
@@ -207,7 +214,14 @@ def test_full_workflow():
                     print(f"  [OK] generate-story response: {resp.status}")
                 except:
                     print("  [WARN] no response captured, waiting...")
-                    page.wait_for_timeout(8000)
+                    page.wait_for_timeout(5000)
+                
+                # Wait dynamically for Create Ticket button to appear
+                try:
+                    page.wait_for_selector("button:has-text(/[Cc]rear|[Cc]reate/)", timeout=10000)
+                    print("  [OK] Create Ticket button loaded")
+                except:
+                    print("  [WARN] Create Ticket button not detected yet")
                 
                 shot(page, "08_step3_done")
             else:
