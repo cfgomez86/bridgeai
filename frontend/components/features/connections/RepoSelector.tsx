@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { listRepos, activateRepo, type RepoResponse } from "@/lib/api-client"
+import { useLanguage } from "@/lib/i18n"
 import { Loader2, Search, Lock, GitBranch, X } from "lucide-react"
 
 interface RepoSelectorProps {
@@ -16,13 +17,15 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [activating, setActivating] = useState<string | null>(null)
+  const { t } = useLanguage()
+  const s = t.connections.repo_selector
 
   useEffect(() => {
     listRepos(connectionId)
       .then(setRepos)
-      .catch((err) => setError(err instanceof Error ? err.message : "Error al cargar repositorios"))
+      .catch((err) => setError(err instanceof Error ? err.message : s.error_load))
       .finally(() => setLoading(false))
-  }, [connectionId])
+  }, [connectionId, s.error_load])
 
   async function handleSelect(repo: RepoResponse) {
     setActivating(repo.full_name)
@@ -30,7 +33,7 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
       await activateRepo(connectionId, repo.full_name, repo.default_branch)
       onActivated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al activar repositorio")
+      setError(err instanceof Error ? err.message : s.error_activate)
       setActivating(null)
     }
   }
@@ -63,7 +66,7 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
           padding: "14px 18px", borderBottom: "1px solid var(--border)",
         }}>
           <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--fg)", margin: 0, fontFamily: "var(--font-display)" }}>
-            Seleccionar repositorio
+            {s.title}
           </h2>
           <button
             type="button"
@@ -87,7 +90,7 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filtrar repositorios…"
+            placeholder={s.filter_placeholder}
             autoFocus
             style={{
               width: "100%", boxSizing: "border-box",
@@ -104,7 +107,7 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
           {loading && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "32px 0", color: "var(--muted)", fontSize: "13px" }}>
               <Loader2 size={15} className="animate-spin" />
-              Cargando repositorios…
+              {s.loading}
             </div>
           )}
           {error && (
@@ -112,7 +115,7 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
           )}
           {!loading && !error && filtered.length === 0 && (
             <p style={{ fontSize: "12.5px", color: "var(--muted)", padding: "24px 10px", margin: 0, textAlign: "center" }}>
-              No se encontraron repositorios.
+              {s.not_found}
             </p>
           )}
           {filtered.map((repo) => (
@@ -157,7 +160,7 @@ export function RepoSelector({ connectionId, onActivated, onClose }: RepoSelecto
               color: "var(--fg-2)", fontSize: "12.5px", cursor: "pointer",
             }}
           >
-            Cerrar
+            {s.close}
           </button>
         </div>
       </div>

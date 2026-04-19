@@ -7,6 +7,7 @@ import {
   getOAuthAuthorizeUrl, savePlatformConfig, deletePlatformConfig, deleteConnection,
   type PlatformResponse, type ConnectionResponse,
 } from "@/lib/api-client"
+import { useLanguage } from "@/lib/i18n"
 import { BadgeStatus } from "@/components/ui/badge-status"
 import { ConnectionCard } from "@/components/features/connections/ConnectionCard"
 
@@ -22,13 +23,6 @@ const PLATFORM_ICONS: Record<string, string> = {
   gitlab: "GL",
   azure_devops: "AZ",
   bitbucket: "BB",
-}
-
-const PLATFORM_DESC: Record<string, string> = {
-  github: "Conecta tus repositorios de GitHub mediante OAuth App.",
-  gitlab: "Accede a proyectos privados y públicos de GitLab.",
-  azure_devops: "Integra con Azure Repos y Azure Boards.",
-  bitbucket: "Sincroniza repositorios de Atlassian Bitbucket.",
 }
 
 type PlatformTone = "ok" | "warn" | "neutral"
@@ -49,12 +43,14 @@ function PlatformCardDesign({
   const [clientSecret, setClientSecret] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { t } = useLanguage()
+  const s = t.connections
 
   const isReady = platform.configured || platform.server_configured
   const conn = connections.find((c) => c.platform === platform.platform)
 
   const tone: PlatformTone = conn ? "ok" : isReady ? "warn" : "neutral"
-  const statusLabel = conn ? "Conectado" : isReady ? "Configurado" : "Desconectado"
+  const statusLabel = conn ? s.status.connected : isReady ? s.status.configured : s.status.disconnected
 
   async function handleConnect() {
     setConnecting(true)
@@ -63,7 +59,7 @@ function PlatformCardDesign({
       const { url } = await getOAuthAuthorizeUrl(platform.platform)
       window.location.href = url
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al iniciar OAuth")
+      setError(err instanceof Error ? err.message : s.errors.oauth)
       setConnecting(false)
     }
   }
@@ -78,7 +74,7 @@ function PlatformCardDesign({
       setClientSecret("")
       onUpdated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar")
+      setError(err instanceof Error ? err.message : s.errors.save)
     } finally {
       setSaving(false)
     }
@@ -94,7 +90,7 @@ function PlatformCardDesign({
       setClientSecret("")
       onUpdated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al eliminar")
+      setError(err instanceof Error ? err.message : s.errors.delete)
     } finally {
       setSaving(false)
     }
@@ -108,11 +104,13 @@ function PlatformCardDesign({
       await deleteConnection(conn.id)
       onUpdated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al desconectar")
+      setError(err instanceof Error ? err.message : s.errors.disconnect)
     } finally {
       setDisconnecting(false)
     }
   }
+
+  const platformDesc = s.platform_desc[platform.platform as keyof typeof s.platform_desc] ?? s.default_platform_desc
 
   return (
     <div style={{
@@ -152,7 +150,7 @@ function PlatformCardDesign({
             <BadgeStatus tone={tone} label={statusLabel} />
           </div>
           <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0, lineHeight: 1.4 }}>
-            {PLATFORM_DESC[platform.platform] ?? "Proveedor de código fuente."}
+            {platformDesc}
           </p>
         </div>
       </div>
@@ -163,7 +161,7 @@ function PlatformCardDesign({
         </div>
       )}
 
-      {/* ── Modo BridgeAI OAuth ── */}
+      {/* BridgeAI OAuth mode */}
       {platform.server_configured && (
         <div style={{
           border: "1px solid var(--border)", borderRadius: "var(--radius)",
@@ -175,25 +173,25 @@ function PlatformCardDesign({
           }}>
             <div>
               <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: "6px" }}>
-                BridgeAI OAuth
+                {s.oauth.bridge_title}
                 <span style={{
                   fontSize: "10px", padding: "1px 6px", borderRadius: "3px",
                   background: !platform.configured ? "var(--accent-soft)" : "var(--surface-3)",
                   color: !platform.configured ? "var(--accent-strong)" : "var(--muted)",
                   fontFamily: "var(--font-mono)",
                 }}>
-                  {!platform.configured ? "activo" : "fallback"}
+                  {!platform.configured ? s.oauth.active_tag : s.oauth.fallback_tag}
                 </span>
               </div>
               <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
-                Credenciales administradas por BridgeAI
+                {s.oauth.bridge_desc}
               </div>
             </div>
             {!conn && (
               <button
                 onClick={handleConnect}
                 disabled={connecting || !!platform.configured}
-                title={platform.configured ? "Tu OAuth App tiene prioridad" : ""}
+                title={platform.configured ? t.connections.actions.connect : ""}
                 style={{
                   padding: "4px 10px", borderRadius: "var(--radius)", border: "none",
                   background: platform.configured ? "var(--surface-3)" : "var(--accent)",
@@ -202,14 +200,14 @@ function PlatformCardDesign({
                   cursor: platform.configured ? "not-allowed" : connecting ? "not-allowed" : "pointer",
                 }}
               >
-                {connecting && !platform.configured ? "Redirigiendo…" : "Conectar"}
+                {connecting && !platform.configured ? s.actions.connecting : s.actions.connect}
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* ── Tu OAuth App (BYOA) ── */}
+      {/* Own OAuth App (BYOA) */}
       <div style={{
         border: "1px solid var(--border)", borderRadius: "var(--radius)",
         overflow: "hidden",
@@ -220,19 +218,19 @@ function PlatformCardDesign({
         }}>
           <div>
             <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: "6px" }}>
-              Tu OAuth App
+              {s.oauth.own_app_title}
               {platform.configured && (
                 <span style={{
                   fontSize: "10px", padding: "1px 6px", borderRadius: "3px",
                   background: "var(--accent-soft)", color: "var(--accent-strong)",
                   fontFamily: "var(--font-mono)",
-                }}>activo</span>
+                }}>{s.oauth.active_tag}</span>
               )}
             </div>
             <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
               {platform.configured
                 ? `Client ID: ${platform.client_id?.slice(0, 8)}…`
-                : "Sin configurar"}
+                : s.oauth.not_configured}
             </div>
           </div>
           <div style={{ display: "flex", gap: "5px", flexShrink: 0 }}>
@@ -247,7 +245,7 @@ function PlatformCardDesign({
                   cursor: connecting ? "not-allowed" : "pointer",
                 }}
               >
-                {connecting ? "Redirigiendo…" : "Conectar"}
+                {connecting ? s.actions.connecting : s.actions.connect}
               </button>
             )}
             <button
@@ -258,7 +256,7 @@ function PlatformCardDesign({
                 color: "var(--fg-2)", fontSize: "12px", cursor: "pointer",
               }}
             >
-              {editing ? "Cancelar" : platform.configured ? "Editar" : "Configurar"}
+              {editing ? s.actions.cancel : platform.configured ? s.actions.edit : s.actions.configure}
             </button>
           </div>
         </div>
@@ -297,7 +295,7 @@ function PlatformCardDesign({
                   fontSize: "12.5px", fontWeight: 500, cursor: "pointer",
                 }}
               >
-                {saving ? "Guardando…" : "Guardar"}
+                {saving ? s.actions.saving : s.actions.save}
               </button>
               <button
                 onClick={() => { setEditing(false); setError(null) }}
@@ -307,7 +305,7 @@ function PlatformCardDesign({
                   color: "var(--fg-2)", fontSize: "12.5px", cursor: "pointer",
                 }}
               >
-                Cancelar
+                {s.actions.cancel}
               </button>
               {platform.configured && (
                 <button
@@ -319,7 +317,7 @@ function PlatformCardDesign({
                     color: "var(--err-fg)", fontSize: "12.5px", cursor: "pointer", marginLeft: "auto",
                   }}
                 >
-                  Eliminar
+                  {s.actions.delete}
                 </button>
               )}
             </div>
@@ -327,7 +325,7 @@ function PlatformCardDesign({
         )}
       </div>
 
-      {/* Desconectar (si hay conexión activa) */}
+      {/* Disconnect (if active connection) */}
       {conn && (
         <button
           onClick={handleDisconnect}
@@ -339,11 +337,11 @@ function PlatformCardDesign({
             cursor: disconnecting ? "not-allowed" : "pointer", alignSelf: "flex-start",
           }}
         >
-          {disconnecting ? "Desconectando…" : "Desconectar"}
+          {disconnecting ? s.actions.disconnecting : s.actions.disconnect}
         </button>
       )}
 
-      {/* Conectar (sin conexión, sin modo propio configurado, sin server) */}
+      {/* Connect (no connection, not ready) */}
       {!conn && !isReady && (
         <button
           disabled
@@ -353,7 +351,7 @@ function PlatformCardDesign({
             fontSize: "12.5px", fontWeight: 500, cursor: "not-allowed",
           }}
         >
-          Conectar → (configurar primero)
+          {s.actions.connect_first}
         </button>
       )}
     </div>
@@ -366,6 +364,8 @@ function ConnectionsContent() {
   const [connections, setConnections] = useState<ConnectionResponse[]>([])
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "err" } | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { t } = useLanguage()
+  const s = t.connections
 
   const refresh = useCallback(async () => {
     const [p, c] = await Promise.all([listPlatforms(), listConnections()])
@@ -379,19 +379,19 @@ function ConnectionsContent() {
     const connected = searchParams.get("connected")
     const error = searchParams.get("error")
     if (connected) {
-      setToast({ msg: `Conectado a ${PLATFORM_LABELS[connected] ?? connected}`, tone: "ok" })
+      setToast({ msg: `${s.toast_connected} ${PLATFORM_LABELS[connected] ?? connected}`, tone: "ok" })
       refresh()
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
       toastTimerRef.current = setTimeout(() => setToast(null), 5000)
     } else if (error) {
-      setToast({ msg: `Error al conectar a ${PLATFORM_LABELS[error] ?? error}`, tone: "err" })
+      setToast({ msg: `${s.toast_error} ${PLATFORM_LABELS[error] ?? error}`, tone: "err" })
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
       toastTimerRef.current = setTimeout(() => setToast(null), 6000)
     }
     return () => {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
-  }, [searchParams, refresh])
+  }, [searchParams, refresh, s.toast_connected, s.toast_error])
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: "1100px", display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -425,9 +425,9 @@ function ConnectionsContent() {
           color: "var(--fg)",
           margin: 0,
           letterSpacing: "-0.01em",
-        }}>Conexiones</h1>
+        }}>{s.title}</h1>
         <p style={{ fontSize: "13px", color: "var(--muted)", marginTop: "4px", marginBottom: 0 }}>
-          Autoriza los orígenes de código para indexado e impacto
+          {s.description}
         </p>
       </div>
 
@@ -435,7 +435,7 @@ function ConnectionsContent() {
       {connections.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <h2 style={{ fontSize: "13px", fontWeight: 600, color: "var(--fg-2)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            Cuentas conectadas
+            {s.connected_accounts}
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {connections.map((c) => (
@@ -451,47 +451,50 @@ function ConnectionsContent() {
           <PlatformCardDesign key={p.platform} platform={p} connections={connections} onUpdated={refresh} />
         ))}
         {/* Placeholder for future platforms */}
-        {["bitbucket"].filter(id => !platforms.find(p => p.platform === id)).map((id) => (
-          <div key={id} style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-lg)",
-            padding: "16px",
-            opacity: 0.6,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{
-                width: "40px", height: "40px", borderRadius: "8px",
-                background: "var(--surface-2)", border: "1px solid var(--border)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "11px", fontWeight: 700, color: "var(--muted)", fontFamily: "var(--font-mono)",
-              }}>
-                {PLATFORM_ICONS[id] ?? "??"}
+        {["bitbucket"].filter(id => !platforms.find(p => p.platform === id)).map((id) => {
+          const desc = s.platform_desc[id as keyof typeof s.platform_desc] ?? s.default_platform_desc
+          return (
+            <div key={id} style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-lg)",
+              padding: "16px",
+              opacity: 0.6,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{
+                  width: "40px", height: "40px", borderRadius: "8px",
+                  background: "var(--surface-2)", border: "1px solid var(--border)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "11px", fontWeight: 700, color: "var(--muted)", fontFamily: "var(--font-mono)",
+                }}>
+                  {PLATFORM_ICONS[id] ?? "??"}
+                </div>
+                <div>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--fg-2)", fontFamily: "var(--font-display)" }}>
+                    {PLATFORM_LABELS[id]}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                    {desc}
+                  </div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--fg-2)", fontFamily: "var(--font-display)" }}>
-                  {PLATFORM_LABELS[id]}
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                  {PLATFORM_DESC[id]}
-                </div>
+              <div style={{ marginTop: "12px" }}>
+                <button disabled style={{
+                  padding: "5px 12px",
+                  borderRadius: "var(--radius)",
+                  border: "1px solid var(--border)",
+                  background: "var(--surface-3)",
+                  color: "var(--muted)",
+                  fontSize: "12.5px",
+                  cursor: "not-allowed",
+                }}>
+                  {s.coming_soon}
+                </button>
               </div>
             </div>
-            <div style={{ marginTop: "12px" }}>
-              <button disabled style={{
-                padding: "5px 12px",
-                borderRadius: "var(--radius)",
-                border: "1px solid var(--border)",
-                background: "var(--surface-3)",
-                color: "var(--muted)",
-                fontSize: "12.5px",
-                cursor: "not-allowed",
-              }}>
-                Próximamente
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

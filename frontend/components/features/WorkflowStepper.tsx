@@ -1,15 +1,22 @@
+"use client"
+
+import { useLanguage } from "@/lib/i18n"
+
 interface WorkflowStepperProps {
   currentStep: 1 | 2 | 3 | 4 | 5
 }
 
-const STEPS = [
-  { id: 1 as const, label: "Requerimiento", hint: "Descripción y contexto" },
-  { id: 2 as const, label: "Impacto",       hint: "Archivos y riesgos" },
-  { id: 3 as const, label: "Historia",      hint: "User story + criterios" },
-  { id: 4 as const, label: "Ticket",        hint: "Crear en Jira / Azure" },
-]
-
 export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
+  const { t } = useLanguage()
+  const s = t.workflow.stepper
+
+  const STEPS = [
+    { id: 1 as const, ...s.steps.requirement },
+    { id: 2 as const, ...s.steps.impact },
+    { id: 3 as const, ...s.steps.story },
+    { id: 4 as const, ...s.steps.ticket },
+  ]
+
   return (
     <div style={{
       display: "grid",
@@ -69,7 +76,7 @@ export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
                   color: "var(--accent-strong)",
                   fontFamily: "var(--font-mono)",
                 }}>
-                  actual
+                  {s.current}
                 </span>
               )}
             </div>

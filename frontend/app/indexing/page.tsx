@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { indexCode, getActiveConnection, type IndexResponse, type ConnectionResponse } from "@/lib/api-client"
+import { useLanguage } from "@/lib/i18n"
 import { Loader2, Database, Zap, RefreshCw, GitBranch } from "lucide-react"
 
 interface StatItem {
@@ -37,6 +38,8 @@ export default function IndexingPage() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<IndexResponse | null>(null)
   const [activeConn, setActiveConn] = useState<ConnectionResponse | null | undefined>(undefined)
+  const { t } = useLanguage()
+  const s = t.indexing
 
   useEffect(() => {
     getActiveConnection().then(setActiveConn).catch(() => setActiveConn(null))
@@ -49,7 +52,7 @@ export default function IndexingPage() {
       const data = await indexCode(force)
       setResult(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error inesperado al indexar")
+      setError(err instanceof Error ? err.message : s.error_unexpected)
     } finally {
       setLoading(false)
     }
@@ -68,11 +71,11 @@ export default function IndexingPage() {
             fontSize: "20px", fontWeight: 700, fontFamily: "var(--font-display)",
             color: "var(--fg)", margin: 0, letterSpacing: "-0.01em",
           }}>
-            Indexado de código
+            {s.title}
           </h1>
         </div>
         <p style={{ fontSize: "13px", color: "var(--muted)", margin: 0 }}>
-          Escanea el codebase y construye el índice de archivos para el análisis de impacto
+          {s.description}
         </p>
       </div>
 
@@ -90,9 +93,9 @@ export default function IndexingPage() {
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <GitBranch size={14} style={{ color: "var(--muted)", flexShrink: 0 }} />
           <div>
-            <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "2px" }}>Repositorio activo</div>
+            <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "2px" }}>{s.active_repo}</div>
             {activeConn === undefined ? (
-              <div style={{ fontSize: "13px", color: "var(--muted)" }}>Cargando…</div>
+              <div style={{ fontSize: "13px", color: "var(--muted)" }}>{s.loading}</div>
             ) : hasActiveRepo ? (
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 500, color: "var(--fg)" }}>
                 {activeConn.repo_full_name}
@@ -102,7 +105,7 @@ export default function IndexingPage() {
               </div>
             ) : (
               <div style={{ fontSize: "13px", color: "var(--warn-fg)", fontStyle: "italic" }}>
-                Sin repo activo
+                {s.no_repo}
               </div>
             )}
           </div>
@@ -118,7 +121,7 @@ export default function IndexingPage() {
           textDecoration: "none",
           flexShrink: 0,
         }}>
-          Cambiar repo
+          {s.change_repo}
         </Link>
       </div>
 
@@ -140,9 +143,9 @@ export default function IndexingPage() {
           }}
         >
           {loading ? (
-            <><Loader2 size={14} className="animate-spin" /> Indexando…</>
+            <><Loader2 size={14} className="animate-spin" /> {s.indexing_progress}</>
           ) : (
-            <><Database size={14} /> Index Codebase</>
+            <><Database size={14} /> {s.index_btn}</>
           )}
         </button>
         <button
@@ -161,7 +164,7 @@ export default function IndexingPage() {
             justifyContent: "center",
           }}
         >
-          <RefreshCw size={14} /> Force Re-index
+          <RefreshCw size={14} /> {s.force_reindex}
         </button>
       </div>
 
@@ -179,7 +182,6 @@ export default function IndexingPage() {
       {/* Result stats */}
       {result && (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {/* Meta info */}
           <div style={{
             display: "flex", alignItems: "center", gap: "12px",
             padding: "10px 16px", borderRadius: "var(--radius)",
@@ -188,9 +190,9 @@ export default function IndexingPage() {
           }}>
             <Zap size={13} />
             <span>
-              Completado en <strong>{result.duration_seconds.toFixed(2)}s</strong>
+              {s.completed_in} <strong>{result.duration_seconds.toFixed(2)}s</strong>
               {result.source && (
-                <> · fuente: <span style={{ fontFamily: "var(--font-mono)" }}>{result.source}</span></>
+                <> · {s.source} <span style={{ fontFamily: "var(--font-mono)" }}>{result.source}</span></>
               )}
               {result.repo_full_name && (
                 <> · <span style={{ fontFamily: "var(--font-mono)" }}>{result.repo_full_name}</span></>
@@ -198,7 +200,6 @@ export default function IndexingPage() {
             </span>
           </div>
 
-          {/* 4 stat blocks */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
             <StatBlock label="Scanned" value={result.files_scanned} />
             <StatBlock label="Indexed" value={result.files_indexed} accent />
@@ -225,23 +226,23 @@ export default function IndexingPage() {
           {!hasActiveRepo ? (
             <>
               <p style={{ fontSize: "13.5px", fontWeight: 500, color: "var(--fg-2)", margin: 0 }}>
-                No hay repositorio activo
+                {s.no_repo_title}
               </p>
               <p style={{ fontSize: "12.5px", color: "var(--muted)", margin: 0 }}>
-                Conecta una cuenta y seleccioná un repositorio en{" "}
+                {s.no_repo_desc_pre}{" "}
                 <a href="/connections" style={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "2px" }}>
-                  Conexiones
+                  {t.nav.connections}
                 </a>{" "}
-                para poder indexar
+                {s.no_repo_desc_post}
               </p>
             </>
           ) : (
             <>
               <p style={{ fontSize: "13.5px", fontWeight: 500, color: "var(--fg-2)", margin: 0 }}>
-                Sin datos de indexado todavía
+                {s.no_data_title}
               </p>
               <p style={{ fontSize: "12.5px", color: "var(--muted)", margin: 0 }}>
-                Presioná <strong>Index Codebase</strong> para escanear el repositorio activo
+                {s.no_data_desc}
               </p>
             </>
           )}

@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { analyzeImpact } from "@/lib/api-client"
+import { useLanguage } from "@/lib/i18n"
 import type { WorkflowState } from "@/hooks/useWorkflow"
 import { StepSummaryCard } from "@/components/features/StepSummaryCard"
 import { RiskBadge } from "@/components/features/RiskBadge"
@@ -31,6 +32,8 @@ interface Step2Props {
 export function Step2Impact({ state, completeStep2 }: Step2Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { t } = useLanguage()
+  const s = t.workflow.step2
 
   async function handleAnalyze() {
     setLoading(true)
@@ -52,7 +55,7 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      <StepSummaryCard title="Paso 1 — Requerimiento" icon={<Search size={13} />}>
+      <StepSummaryCard title={s.step1_summary} icon={<Search size={13} />}>
         <p style={{ fontSize: "12.5px", color: "var(--fg-2)", fontStyle: "italic", margin: 0 }}>
           &ldquo;{truncate(state.requirementText, 140)}&rdquo;
         </p>
@@ -63,7 +66,11 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
             </span>
           )}
           {state.featureType && <span style={chip(state.featureType, true)}>{state.featureType}</span>}
-          {state.complexity && <span style={chip(`Complejidad: ${state.complexity}`)}>{`Complejidad: ${state.complexity}`}</span>}
+          {state.complexity && (
+            <span style={chip(`${s.complexity} ${state.complexity}`)}>
+              {s.complexity} {state.complexity}
+            </span>
+          )}
         </div>
         {state.keywords.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
@@ -80,10 +87,10 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
       }}>
         <div>
           <h2 style={{ fontSize: "15px", fontWeight: 600, fontFamily: "var(--font-display)", margin: "0 0 4px", color: "var(--fg)" }}>
-            Análisis de impacto
+            {s.title}
           </h2>
           <p style={{ fontSize: "12.5px", color: "var(--muted)", margin: 0 }}>
-            Determina qué archivos y módulos del codebase se ven afectados.
+            {s.description}
           </p>
         </div>
 
@@ -98,7 +105,7 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
             <div style={{ display: "flex", gap: "24px" }}>
               <div>
                 <div style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: "3px" }}>
-                  Archivos
+                  {s.files}
                 </div>
                 <div style={{ fontSize: "22px", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--fg)" }}>
                   {state.filesImpacted}
@@ -107,7 +114,7 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
               {state.riskLevel && (
                 <div>
                   <div style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: "6px" }}>
-                    Riesgo
+                    {s.risk}
                   </div>
                   <RiskBadge risk={state.riskLevel} />
                 </div>
@@ -115,7 +122,7 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
             </div>
             {state.modulesImpacted.length > 0 && (
               <div>
-                <div style={{ fontSize: "11.5px", color: "var(--muted)", marginBottom: "6px" }}>Módulos afectados</div>
+                <div style={{ fontSize: "11.5px", color: "var(--muted)", marginBottom: "6px" }}>{s.affected_modules}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
                   {state.modulesImpacted.map((m) => <span key={m} style={chip(m)}>{m}</span>)}
                 </div>
@@ -137,8 +144,8 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
           }}
         >
           {loading
-            ? <><Loader2 size={14} className="animate-spin" /> Analizando impacto…</>
-            : <><Zap size={14} /> {state.filesImpacted !== null ? "Re-analizar" : "Analizar impacto"} →</>
+            ? <><Loader2 size={14} className="animate-spin" /> {s.analyzing}</>
+            : <><Zap size={14} /> {state.filesImpacted !== null ? s.re_analyze : s.analyze_btn} →</>
           }
         </button>
       </div>

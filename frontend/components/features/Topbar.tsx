@@ -1,18 +1,20 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-
-const ROUTE_LABELS: Record<string, string> = {
-  "": "Inicio",
-  "workflow": "Workflow",
-  "indexing": "Indexado",
-  "connections": "Conexiones",
-  "settings": "Ajustes",
-}
+import { useLanguage } from "@/lib/i18n"
 
 export function Topbar() {
   const pathname = usePathname()
+  const { t } = useLanguage()
   const segments = pathname.split("/").filter(Boolean)
+
+  const ROUTE_LABELS: Record<string, string> = {
+    "": t.nav.home,
+    "workflow": t.nav.workflow,
+    "indexing": t.nav.indexing,
+    "connections": t.nav.connections,
+    "settings": t.nav.settings,
+  }
 
   const crumbs: { label: string; href: string }[] = [{ label: "BridgeAI", href: "/" }]
   let cumulative = ""

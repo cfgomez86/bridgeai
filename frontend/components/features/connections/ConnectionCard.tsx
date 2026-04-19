@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { deleteConnection, type ConnectionResponse } from "@/lib/api-client"
+import { useLanguage } from "@/lib/i18n"
 import { RepoSelector } from "./RepoSelector"
 import { GitBranch, FolderGit2, Trash2, Loader2 } from "lucide-react"
 
@@ -26,6 +27,8 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
   const [deleting, setDeleting] = useState(false)
   const [showRepos, setShowRepos] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { t } = useLanguage()
+  const s = t.connections
 
   async function handleDelete() {
     setDeleting(true)
@@ -34,7 +37,7 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
       await deleteConnection(connection.id)
       onUpdated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al desconectar")
+      setError(err instanceof Error ? err.message : s.errors.disconnect)
       setDeleting(false)
     }
   }
@@ -70,7 +73,7 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
                   <span style={{
                     fontSize: "10px", fontWeight: 500, padding: "1px 6px", borderRadius: "3px",
                     background: "var(--accent-soft)", color: "var(--accent-strong)", fontFamily: "var(--font-mono)",
-                  }}>activo</span>
+                  }}>{s.card.active_badge}</span>
                 )}
               </div>
               <div style={{ fontSize: "11.5px", color: "var(--muted)" }}>
@@ -91,12 +94,12 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
               }}
             >
               <FolderGit2 size={13} />
-              Seleccionar repo
+              {s.card.select_repo}
             </button>
             <button
               onClick={handleDelete}
               disabled={deleting}
-              title="Desconectar"
+              title={s.card.disconnect_title}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: "30px", height: "30px", borderRadius: "var(--radius)",

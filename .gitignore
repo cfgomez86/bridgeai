@@ -78,6 +78,10 @@ frontend/.next/
 frontend/out/
 frontend/.env*.local
 
+# E2E test artifacts
+tests/e2e/screenshots/*.png
+tests/e2e/screenshots/*.jpg
+
 # OS
 ehthumbs.db
 Desktop.ini

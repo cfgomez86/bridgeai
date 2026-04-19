@@ -1,20 +1,13 @@
 "use client"
 
 import { useState } from "react"
+import { Sun, Moon } from "lucide-react"
 import { Toggle } from "@/components/ui/toggle"
 import { BadgeStatus } from "@/components/ui/badge-status"
-
-type NavItem = {
-  id: string
-  label: string
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { id: "integraciones", label: "Integraciones" },
-  { id: "generacion", label: "Generación de historias" },
-]
-
-const NAV_LABEL: Record<string, string> = Object.fromEntries(NAV_ITEMS.map((n) => [n.id, n.label]))
+import { useLanguage } from "@/lib/i18n"
+import type { Locale } from "@/lib/i18n"
+import { useTheme } from "@/lib/theme/ThemeContext"
+import type { Theme } from "@/lib/theme/ThemeContext"
 
 interface FieldRowProps {
   label: string
@@ -84,9 +77,10 @@ interface IntegrationCardProps {
   subtitle?: string
   badge?: React.ReactNode
   icon: string
+  saveLabel: string
 }
 
-function IntegrationCard({ children, title, subtitle, badge, icon }: IntegrationCardProps) {
+function IntegrationCard({ children, title, subtitle, badge, icon, saveLabel }: IntegrationCardProps) {
   return (
     <div style={{
       background: "var(--surface)",
@@ -136,7 +130,7 @@ function IntegrationCard({ children, title, subtitle, badge, icon }: Integration
           fontWeight: 500,
           cursor: "pointer",
         }}>
-          Guardar
+          {saveLabel}
         </button>
       </div>
       <div style={{ padding: "0 18px" }}>
@@ -146,16 +140,127 @@ function IntegrationCard({ children, title, subtitle, badge, icon }: Integration
   )
 }
 
-const GENERATION_RULES = [
-  { label: "Máx. historias por requerimiento", description: "Limita el número de historias generadas por análisis", key: "max-stories" },
-  { label: "Criterios de aceptación en Gherkin", description: "Usar formato Given/When/Then", key: "gherkin", default: true },
-  { label: "Estimar story points", description: "Calcular puntos de historia automáticamente", key: "story-points", default: true },
-  { label: "Vincular archivos afectados", description: "Adjuntar lista de archivos del análisis de impacto", key: "link-files", default: true },
-  { label: "Asignación automática", description: "Asignar al desarrollador más activo en los archivos", key: "auto-assign", default: false },
-]
+const THEME_ICONS: Record<Theme, React.ReactNode> = {
+  light: <Sun size={20} />,
+  dark:  <Moon size={20} />,
+}
+
+const LOCALE_META: Record<Locale, { flag: string; name: string }> = {
+  es: { flag: "🇪🇸", name: "Español" },
+  en: { flag: "🇬🇧", name: "English" },
+}
+
+function ThemeSection() {
+  const { theme, setTheme } = useTheme()
+  const { t } = useLanguage()
+  const s = t.settings.theme
+
+  return (
+    <div>
+      <h2 style={{ fontSize: "15px", fontWeight: 600, color: "var(--fg)", margin: "0 0 6px 0", fontFamily: "var(--font-display)" }}>
+        {s.title}
+      </h2>
+      <p style={{ fontSize: "13px", color: "var(--muted)", margin: "0 0 18px 0" }}>
+        {s.description}
+      </p>
+      <div style={{ display: "flex", gap: "12px" }}>
+        {(Object.keys(THEME_ICONS) as Theme[]).map((th) => {
+          const isActive = theme === th
+          return (
+            <button
+              key={th}
+              onClick={() => setTheme(th)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "12px 20px",
+                borderRadius: "var(--radius-lg)",
+                border: isActive ? "2px solid var(--accent)" : "2px solid var(--border)",
+                background: isActive ? "var(--accent-soft)" : "var(--surface)",
+                color: isActive ? "var(--accent-strong)" : "var(--fg)",
+                cursor: "pointer",
+                fontSize: "13.5px",
+                fontWeight: isActive ? 600 : 400,
+                transition: "border-color 0.15s, background 0.15s",
+                boxShadow: isActive ? "0 0 0 3px var(--accent-soft)" : "none",
+              }}
+            >
+              {THEME_ICONS[th]}
+              <span>{s.options[th]}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function LanguageSection() {
+  const { locale, setLocale, t } = useLanguage()
+  const s = t.settings.language
+
+  return (
+    <div>
+      <h2 style={{ fontSize: "15px", fontWeight: 600, color: "var(--fg)", margin: "0 0 6px 0", fontFamily: "var(--font-display)" }}>
+        {s.title}
+      </h2>
+      <p style={{ fontSize: "13px", color: "var(--muted)", margin: "0 0 18px 0" }}>
+        {s.description}
+      </p>
+      <div style={{ display: "flex", gap: "12px" }}>
+        {(Object.keys(LOCALE_META) as Locale[]).map((loc) => {
+          const { flag, name } = LOCALE_META[loc]
+          const isActive = locale === loc
+          return (
+            <button
+              key={loc}
+              onClick={() => setLocale(loc)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "12px 20px",
+                borderRadius: "var(--radius-lg)",
+                border: isActive ? "2px solid var(--accent)" : "2px solid var(--border)",
+                background: isActive ? "var(--accent-soft)" : "var(--surface)",
+                color: isActive ? "var(--accent-strong)" : "var(--fg)",
+                cursor: "pointer",
+                fontSize: "13.5px",
+                fontWeight: isActive ? 600 : 400,
+                transition: "border-color 0.15s, background 0.15s",
+                boxShadow: isActive ? "0 0 0 3px var(--accent-soft)" : "none",
+              }}
+            >
+              <span style={{ fontSize: "22px", lineHeight: 1 }}>{flag}</span>
+              <span>{name}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 export default function SettingsPage() {
+  const { t } = useLanguage()
+  const s = t.settings
   const [activeSection, setActiveSection] = useState("integraciones")
+
+  const NAV_ITEMS = [
+    { id: "integraciones", label: s.sections.integrations },
+    { id: "generacion", label: s.sections.generation },
+    { id: "idioma", label: s.sections.language },
+    { id: "apariencia", label: s.sections.theme },
+  ]
+
+  const generationRules: { key: string; label: string; description: string; default?: boolean }[] = [
+    { key: "max-stories", ...s.generation.rules.max_stories },
+    { key: "gherkin", ...s.generation.rules.gherkin, default: true },
+    { key: "story-points", ...s.generation.rules.story_points, default: true },
+    { key: "link-files", ...s.generation.rules.link_files, default: true },
+    { key: "auto-assign", ...s.generation.rules.auto_assign, default: false },
+  ]
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", minHeight: "calc(100vh - 48px)" }}>
@@ -207,57 +312,58 @@ export default function SettingsPage() {
             color: "var(--fg)",
             margin: 0,
             letterSpacing: "-0.01em",
-            textTransform: "capitalize",
           }}>
-            {NAV_LABEL[activeSection]}
+            {NAV_ITEMS.find((n) => n.id === activeSection)?.label}
           </h1>
         </div>
 
         {activeSection === "integraciones" && (
           <div>
             <h2 style={{ fontSize: "15px", fontWeight: 600, color: "var(--fg)", margin: "0 0 12px 0", fontFamily: "var(--font-display)" }}>
-              Integraciones
+              {s.integrations.title}
             </h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                {/* Jira Cloud */}
-                <IntegrationCard
-                  icon="JI"
-                  title="Jira Cloud"
-                  subtitle="Crea issues directamente en tu proyecto de Jira"
-                  badge={<BadgeStatus tone="ok" label="Activo" />}
-                >
-                  <FieldRow label="URL del workspace" defaultValue="https://acme.atlassian.net" />
-                  <FieldRow label="Proyecto (clave)" defaultValue="PLAT" placeholder="PLAT" />
-                  <FieldRow label="Tipo de issue" defaultValue="Story" />
-                  <FieldRow label="Etiquetas por defecto" defaultValue="bridgeai,auto-generated" />
-                  <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 0",
-                  }}>
-                    <div>
-                      <div style={{ fontSize: "13px", color: "var(--fg)", fontWeight: 500 }}>Crear como draft</div>
-                      <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                        Las historias se crean en estado borrador para revisión previa
-                      </div>
+              <IntegrationCard
+                icon="JI"
+                title="Jira Cloud"
+                subtitle={s.integrations.jira.subtitle}
+                badge={<BadgeStatus tone="ok" label={s.integrations.badge_active} />}
+                saveLabel={s.integrations.save}
+              >
+                <FieldRow label={s.integrations.jira.workspace_url} defaultValue="https://acme.atlassian.net" />
+                <FieldRow label={s.integrations.jira.project_key} defaultValue="PLAT" placeholder="PLAT" />
+                <FieldRow label={s.integrations.jira.issue_type} defaultValue="Story" />
+                <FieldRow label={s.integrations.jira.default_labels} defaultValue="bridgeai,auto-generated" />
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 0",
+                }}>
+                  <div>
+                    <div style={{ fontSize: "13px", color: "var(--fg)", fontWeight: 500 }}>
+                      {s.integrations.jira.draft_label}
                     </div>
-                    <Toggle checked={true} onChange={() => {}} />
+                    <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                      {s.integrations.jira.draft_desc}
+                    </div>
                   </div>
-                </IntegrationCard>
+                  <Toggle checked={true} onChange={() => {}} />
+                </div>
+              </IntegrationCard>
 
-                {/* Azure DevOps */}
-                <IntegrationCard
-                  icon="AZ"
-                  title="Azure DevOps"
-                  subtitle="Integración con Azure Boards"
-                  badge={<BadgeStatus tone="warn" label="Token expira en 5d" />}
-                >
-                  <FieldRow label="Organización URL" defaultValue="https://dev.azure.com/acme" />
-                  <FieldRow label="Proyecto" defaultValue="Platform" />
-                  <FieldRow label="Area Path" defaultValue="Platform\\Backend" />
-                  <FieldRow label="Iteration Path" defaultValue="Platform\\Sprint 12" />
-                </IntegrationCard>
+              <IntegrationCard
+                icon="AZ"
+                title="Azure DevOps"
+                subtitle={s.integrations.azure.subtitle}
+                badge={<BadgeStatus tone="warn" label={s.integrations.badge_token_expiry} />}
+                saveLabel={s.integrations.save}
+              >
+                <FieldRow label={s.integrations.azure.org_url} defaultValue="https://dev.azure.com/acme" />
+                <FieldRow label={s.integrations.azure.project} defaultValue="Platform" />
+                <FieldRow label={s.integrations.azure.area_path} defaultValue="Platform\\Backend" />
+                <FieldRow label={s.integrations.azure.iteration_path} defaultValue="Platform\\Sprint 12" />
+              </IntegrationCard>
             </div>
           </div>
         )}
@@ -265,7 +371,7 @@ export default function SettingsPage() {
         {activeSection === "generacion" && (
           <div>
             <h2 style={{ fontSize: "15px", fontWeight: 600, color: "var(--fg)", margin: "0 0 12px 0", fontFamily: "var(--font-display)" }}>
-              Reglas de generación
+              {s.generation.title}
             </h2>
             <div style={{
               background: "var(--surface)",
@@ -274,7 +380,7 @@ export default function SettingsPage() {
               padding: "0 18px",
               boxShadow: "var(--shadow-sm)",
             }}>
-              {GENERATION_RULES.map((rule) =>
+              {generationRules.map((rule) =>
                 rule.key === "max-stories" ? (
                   <div key={rule.key} style={{ padding: "10px 0", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "12px" }}>
                     <div style={{ flex: 1 }}>
@@ -313,6 +419,8 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {activeSection === "idioma" && <LanguageSection />}
+        {activeSection === "apariencia" && <ThemeSection />}
       </div>
     </div>
   )

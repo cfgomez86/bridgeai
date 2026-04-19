@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useLanguage } from "@/lib/i18n"
 
 interface NavItem {
   href: string
@@ -58,17 +59,16 @@ function IconSettings() {
 
 
 
-const NAV_ITEMS: NavItem[] = [
-  { href: "/workflow", label: "Workflow", shortcut: "G W", icon: <IconWand /> },
-  { href: "/indexing", label: "Indexado", shortcut: "G X", icon: <IconDatabase /> },
-  { href: "/connections", label: "Conexiones", shortcut: "G C", icon: <IconPlug /> },
-  { href: "/settings", label: "Ajustes", shortcut: "G S", icon: <IconSettings /> },
-]
-
-
-
 export function Sidebar() {
   const pathname = usePathname()
+  const { t } = useLanguage()
+
+  const NAV_ITEMS: NavItem[] = [
+    { href: "/workflow", label: t.nav.workflow, shortcut: "G W", icon: <IconWand /> },
+    { href: "/indexing", label: t.nav.indexing, shortcut: "G X", icon: <IconDatabase /> },
+    { href: "/connections", label: t.nav.connections, shortcut: "G C", icon: <IconPlug /> },
+    { href: "/settings", label: t.nav.settings, shortcut: "G S", icon: <IconSettings /> },
+  ]
 
   function navItemStyle(isActive: boolean): React.CSSProperties {
     return {
