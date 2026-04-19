@@ -37,6 +37,12 @@ class StoryGenerationResponse(BaseModel):
     request_id: str
 
 
+class SubtasksResponse(BaseModel):
+    frontend: list[str] = []
+    backend: list[str] = []
+    configuration: list[str] = []
+
+
 class StoryDetailResponse(BaseModel):
     story_id: str
     requirement_id: str
@@ -45,7 +51,7 @@ class StoryDetailResponse(BaseModel):
     title: str
     story_description: str
     acceptance_criteria: list[str]
-    technical_tasks: list[str]
+    subtasks: SubtasksResponse
     definition_of_done: list[str]
     risk_notes: list[str]
     story_points: int
@@ -121,6 +127,7 @@ async def get_story(
             detail=f"Story {story_id!r} not found",
         )
     logger.info("GET /stories/%s completed request_id=%s", story_id, request_id)
+    raw_subtasks = parse_json_field(story.subtasks) if story.subtasks else {}
     return StoryDetailResponse(
         story_id=story.id,
         requirement_id=story.requirement_id,
@@ -129,7 +136,11 @@ async def get_story(
         title=story.title,
         story_description=story.story_description,
         acceptance_criteria=parse_json_field(story.acceptance_criteria),
-        technical_tasks=parse_json_field(story.technical_tasks),
+        subtasks=SubtasksResponse(
+            frontend=raw_subtasks.get("frontend", []),
+            backend=raw_subtasks.get("backend", []),
+            configuration=raw_subtasks.get("configuration", []),
+        ),
         definition_of_done=parse_json_field(story.definition_of_done),
         risk_notes=parse_json_field(story.risk_notes),
         story_points=story.story_points,

@@ -4,8 +4,9 @@ from app.services.story_ai_provider import StoryAIProvider
 
 _REQUIRED_FIELDS = {
     "title", "story_description", "acceptance_criteria",
-    "technical_tasks", "definition_of_done", "risk_notes",
+    "subtasks", "definition_of_done", "risk_notes",
 }
+_SUBTASK_CATEGORIES = {"frontend", "backend", "configuration"}
 
 
 class AIStoryGenerator:
@@ -43,9 +44,19 @@ class AIStoryGenerator:
             raise ValueError("title cannot be empty")
         if not str(raw["story_description"]).strip():
             raise ValueError("story_description cannot be empty")
-        for field in ("acceptance_criteria", "technical_tasks", "definition_of_done"):
+        for field in ("acceptance_criteria", "definition_of_done"):
             if not isinstance(raw[field], list) or len(raw[field]) == 0:
                 raise ValueError(f"{field} must be a non-empty list")
         if not isinstance(raw["risk_notes"], list):
             raise ValueError("risk_notes must be a list")
+        subtasks = raw.get("subtasks")
+        if not isinstance(subtasks, dict):
+            raise ValueError("subtasks must be an object")
+        for cat in _SUBTASK_CATEGORIES:
+            if cat not in subtasks:
+                subtasks[cat] = []
+            if not isinstance(subtasks[cat], list):
+                raise ValueError(f"subtasks.{cat} must be a list")
+        if not any(subtasks[c] for c in _SUBTASK_CATEGORIES):
+            raise ValueError("subtasks must have at least one task in any category")
         return raw

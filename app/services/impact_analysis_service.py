@@ -117,7 +117,12 @@ class ImpactAnalysisService:
 
         logger.info("Risk calculated: %s", risk_level)
 
-        modules = {Path(p).parts[0] for p in impacted_reasons if len(Path(p).parts) > 1}
+        _EXCLUDED_MODULES = {"tests", "test", ".next", "node_modules", "__pycache__"}
+        modules = {
+            Path(p).parts[0]
+            for p in impacted_reasons
+            if len(Path(p).parts) > 1 and Path(p).parts[0] not in _EXCLUDED_MODULES
+        }
 
         analysis_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).replace(tzinfo=None)

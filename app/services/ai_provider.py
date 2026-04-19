@@ -62,6 +62,13 @@ Reglas de complejidad:
 - MEDIUM: lógica nueva, validaciones, múltiples funciones
 - HIGH: cambio arquitectónico, múltiples módulos, nuevo subsistema
 
+Ejemplos de clasificación correcta (few-shot):
+- "quiero elegir el idioma de la interfaz" → business_domain: configuration, technical_scope: frontend, estimated_complexity: MEDIUM
+- "quiero activar notificaciones push al completar un pedido" → business_domain: notifications, technical_scope: fullstack, estimated_complexity: MEDIUM
+- "quiero ver un dashboard con métricas de ventas mensuales" → business_domain: reporting, technical_scope: frontend, estimated_complexity: HIGH
+- "quiero poder restablecer mi contraseña por correo" → business_domain: authentication, technical_scope: fullstack, estimated_complexity: MEDIUM
+- "quiero configurar las reglas de generación de historias" → business_domain: configuration, technical_scope: fullstack, estimated_complexity: LOW
+
 Requerimiento a analizar:
 "{requirement_text}"
 

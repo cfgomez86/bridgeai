@@ -18,7 +18,7 @@ class UserStory(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     story_description: Mapped[str] = mapped_column(Text, nullable=False)
     acceptance_criteria: Mapped[str] = mapped_column(Text, nullable=False)  # JSON list
-    technical_tasks: Mapped[str] = mapped_column(Text, nullable=False)      # JSON list
+    subtasks: Mapped[str] = mapped_column(Text, nullable=True)              # JSON {"frontend":[...],"backend":[...],"configuration":[...]}
     definition_of_done: Mapped[str] = mapped_column(Text, nullable=False)   # JSON list
     risk_notes: Mapped[str] = mapped_column(Text, nullable=False)           # JSON list
     story_points: Mapped[int] = mapped_column(Integer, nullable=False)

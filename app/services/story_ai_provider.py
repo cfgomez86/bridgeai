@@ -26,12 +26,21 @@ _STUB_STORY_RESPONSE = {
         "Password must meet minimum security requirements",
         "System sends a confirmation email after registration",
     ],
-    "technical_tasks": [
-        "Create registration endpoint",
-        "Implement email validation logic",
-        "Add email confirmation service",
-        "Write unit tests for registration flow",
-    ],
+    "subtasks": {
+        "frontend": [
+            "Create registration form component with email/password fields",
+            "Add client-side validation for password strength indicator",
+        ],
+        "backend": [
+            "Create POST /auth/register endpoint in app/api/routes/auth.py",
+            "Implement email validation logic in app/services/auth_service.py",
+            "Add email confirmation service in app/services/email_service.py",
+            "Write unit tests for registration flow in tests/test_auth.py",
+        ],
+        "configuration": [
+            "Add SMTP_HOST, SMTP_PORT, SMTP_USER env variables to .env.example",
+        ],
+    },
     "definition_of_done": [
         "Code implemented and reviewed",
         "Unit tests passing with >80% coverage",
@@ -65,9 +74,18 @@ Genera ÚNICAMENTE un JSON válido con estos campos exactos:
 - title: string corto y descriptivo (máximo 80 caracteres)
 - story_description: string en formato de historia de usuario estándar: "Como [tipo de usuario], quiero [acción] para que [beneficio]". Usa el mismo idioma que el texto del requerimiento.
 - acceptance_criteria: array de strings (mínimo 3 criterios verificables)
-- technical_tasks: array de strings (mínimo 3 tareas técnicas concretas). Cada tarea DEBE referenciar el archivo específico del codebase donde se realizará el cambio, usando los archivos listados arriba.
+- subtasks: objeto con tres claves obligatorias, cada una con un array de strings:
+    * "frontend": tareas para la capa de presentación/UI. Cada tarea debe referenciar el archivo o componente específico del codebase. Si no aplica, devuelve array vacío [].
+    * "backend": tareas para la lógica de negocio, servicios, rutas y base de datos. Cada tarea DEBE referenciar el archivo específico del codebase (ej: "Agregar endpoint en app/api/routes/X.py"). Mínimo 2 tareas.
+    * "configuration": tareas de infraestructura, variables de entorno, dependencias, scripts de migración o CI/CD. Si no aplica, devuelve array vacío [].
+    Usa los archivos impactados listados arriba para determinar la categoría correcta de cada tarea.
 - definition_of_done: array de strings (mínimo 3 criterios de completitud)
-- risk_notes: array de strings (riesgos identificados, puede ser vacío)
+- risk_notes: array de strings con riesgos técnicos específicos. Considera siempre:
+    * Invalidación de caché si el requerimiento afecta parámetros de generación (ej: idioma, configuración)
+    * Consistencia de idioma en outputs del LLM (riesgo de mezcla de idiomas en respuestas estructuradas)
+    * Regresiones en features existentes conectadas a los archivos impactados
+    * Cobertura de tests para los módulos modificados
+    Si no aplica ninguno, devuelve array vacío.
 
 IMPORTANTE: Genera TODOS los valores del JSON en este idioma: {language}.
 Sin texto adicional. Sin explicaciones. Solo el JSON válido.\
