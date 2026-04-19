@@ -14,7 +14,11 @@ def valid_story() -> dict:
         "title": "User Registration",
         "story_description": "As a user, I want to register so that I can log in.",
         "acceptance_criteria": ["Email is validated", "Password is hashed"],
-        "technical_tasks": ["Create endpoint", "Add validation"],
+        "subtasks": {
+            "frontend": ["Create registration form component"],
+            "backend": ["Create POST /auth/register endpoint", "Add email validation logic"],
+            "configuration": ["Add SMTP env variables to .env.example"],
+        },
         "definition_of_done": ["Tests pass", "Code reviewed"],
         "risk_notes": ["Email service dependency"],
     }

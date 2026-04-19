@@ -1,4 +1,5 @@
 import asyncio
+import json
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -127,7 +128,7 @@ async def get_story(
             detail=f"Story {story_id!r} not found",
         )
     logger.info("GET /stories/%s completed request_id=%s", story_id, request_id)
-    raw_subtasks = parse_json_field(story.subtasks) if story.subtasks else {}
+    raw_subtasks = json.loads(story.subtasks) if story.subtasks else {}
     return StoryDetailResponse(
         story_id=story.id,
         requirement_id=story.requirement_id,

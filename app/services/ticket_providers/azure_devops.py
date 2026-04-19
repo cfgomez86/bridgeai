@@ -75,9 +75,16 @@ class AzureDevOpsTicketProvider(TicketProvider):
         if story.acceptance_criteria:
             parts.append("<h3>Acceptance Criteria</h3>")
             parts.append(ul(story.acceptance_criteria))
-        if story.technical_tasks:
-            parts.append("<h3>Technical Tasks</h3>")
-            parts.append(ul(story.technical_tasks))
+        subtasks = story.subtasks or {}
+        if subtasks.get("frontend"):
+            parts.append("<h3>Subtareas Frontend</h3>")
+            parts.append(ul(subtasks["frontend"]))
+        if subtasks.get("backend"):
+            parts.append("<h3>Subtareas Backend</h3>")
+            parts.append(ul(subtasks["backend"]))
+        if subtasks.get("configuration"):
+            parts.append("<h3>Subtareas Configuración</h3>")
+            parts.append(ul(subtasks["configuration"]))
         if story.definition_of_done:
             parts.append("<h3>Definition of Done</h3>")
             parts.append(ul(story.definition_of_done))

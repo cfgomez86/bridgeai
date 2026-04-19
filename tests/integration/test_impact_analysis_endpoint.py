@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from app.main import create_app
-from app.database.session import Base
+from app.database.session import Base, get_db
 from app.api.routes.impact_analysis import get_impact_service
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
@@ -47,9 +47,15 @@ def make_client_with_indexing(project_root: str) -> TestClient:
     )
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine)
+    db = Session()  # Shared session across all overrides
+
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
 
     def override_impact() -> ImpactAnalysisService:
-        db = Session()
         return ImpactAnalysisService(
             CodeFileRepository(db),
             ImpactAnalysisRepository(db),
@@ -58,10 +64,10 @@ def make_client_with_indexing(project_root: str) -> TestClient:
         )
 
     def override_index() -> CodeIndexingService:
-        db = Session()
         return CodeIndexingService(CodeFileRepository(db), project_root)
 
     app = create_app()
+    app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_impact_service] = override_impact
     app.dependency_overrides[get_indexing_service] = override_index
     return TestClient(app)

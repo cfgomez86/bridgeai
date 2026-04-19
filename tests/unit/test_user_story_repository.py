@@ -34,7 +34,7 @@ def make_story(
         title="Test Story",
         story_description="As a user, I want to test so that coverage is met.",
         acceptance_criteria='["Criterion 1"]',
-        technical_tasks='["Task 1"]',
+        subtasks='{"frontend": [], "backend": ["Task 1"], "configuration": []}',
         definition_of_done='["Done 1"]',
         risk_notes='[]',
         story_points=3,

@@ -189,20 +189,27 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
 
             <div style={divider} />
 
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                <Code size={11} style={{ color: "var(--muted)" }} />
-                <span style={sectionLabel}>{s.technical_tasks}</span>
-              </div>
-              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "5px" }}>
-                {story.technical_tasks.map((task, i) => (
-                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
-                    <span style={{ flexShrink: 0, marginTop: "3px", width: "12px", height: "12px", borderRadius: "3px", border: "1px solid var(--border)" }} />
-                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{task}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {(["frontend", "backend", "configuration"] as const).map((cat) => {
+              const tasks = story.subtasks?.[cat] ?? []
+              if (tasks.length === 0) return null
+              const labels = { frontend: s.subtasks_frontend, backend: s.subtasks_backend, configuration: s.subtasks_configuration }
+              return (
+                <div key={cat}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                    <Code size={11} style={{ color: "var(--muted)" }} />
+                    <span style={sectionLabel}>{labels[cat]}</span>
+                  </div>
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "5px" }}>
+                    {tasks.map((task, i) => (
+                      <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
+                        <span style={{ flexShrink: 0, marginTop: "3px", width: "12px", height: "12px", borderRadius: "3px", border: "1px solid var(--border)" }} />
+                        <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{task}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
 
             <div style={divider} />
 

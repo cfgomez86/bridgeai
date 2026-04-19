@@ -101,7 +101,8 @@ def test_generate_populates_all_fields():
     assert result.title
     assert result.story_description
     assert len(result.acceptance_criteria) >= 1
-    assert len(result.technical_tasks) >= 1
+    assert isinstance(result.subtasks, dict)
+    assert any(result.subtasks.get(c) for c in ("frontend", "backend", "configuration"))
     assert result.story_points >= 1
     assert result.risk_level == "LOW"
 

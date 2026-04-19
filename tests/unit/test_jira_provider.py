@@ -35,7 +35,7 @@ def make_story(**kwargs) -> UserStory:
         title="User Registration",
         story_description="As a user I want to register",
         acceptance_criteria=["Email is validated", "Password is hashed"],
-        technical_tasks=["Add endpoint", "Add repository"],
+        subtasks={"frontend": [], "backend": ["Add endpoint", "Add repository"], "configuration": []},
         definition_of_done=["Tests pass", "Code reviewed"],
         risk_notes=["No PII stored in logs"],
         story_points=5,
@@ -106,7 +106,7 @@ class TestJiraPayloadMapping:
         assert "Email is validated" in description_json
         assert "Password is hashed" in description_json
 
-    def test_description_contains_technical_tasks(self):
+    def test_description_contains_subtasks(self):
         settings = make_settings()
         provider = JiraTicketProvider(settings)
         story = make_story()

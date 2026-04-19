@@ -11,14 +11,18 @@ _VALID_STORY_JSON = """{
     "title": "User Registration",
     "story_description": "As a user, I want to register so that I can access the platform.",
     "acceptance_criteria": ["Criterion 1", "Criterion 2", "Criterion 3"],
-    "technical_tasks": ["Task 1", "Task 2", "Task 3"],
+    "subtasks": {
+        "frontend": ["Create form component"],
+        "backend": ["Task 1", "Task 2", "Task 3"],
+        "configuration": []
+    },
     "definition_of_done": ["Done 1", "Done 2", "Done 3"],
     "risk_notes": []
 }"""
 
 _REQUIRED_FIELDS = {
     "title", "story_description", "acceptance_criteria",
-    "technical_tasks", "definition_of_done", "risk_notes",
+    "subtasks", "definition_of_done", "risk_notes",
 }
 
 _CONTEXT = {
@@ -161,7 +165,7 @@ class _FailThenSucceedStoryProvider(StoryAIProvider):
             "title": "Test Story",
             "story_description": "As a user, I want X so that Y.",
             "acceptance_criteria": ["AC1", "AC2", "AC3"],
-            "technical_tasks": ["T1", "T2", "T3"],
+            "subtasks": {"frontend": [], "backend": ["T1", "T2", "T3"], "configuration": []},
             "definition_of_done": ["D1", "D2", "D3"],
             "risk_notes": [],
         }

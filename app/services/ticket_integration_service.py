@@ -69,7 +69,7 @@ class TicketIntegrationService:
             title=model.title,
             story_description=model.story_description,
             acceptance_criteria=parse_json_field(model.acceptance_criteria),
-            technical_tasks=parse_json_field(model.technical_tasks),
+            subtasks=json.loads(model.subtasks) if model.subtasks else {"frontend": [], "backend": [], "configuration": []},
             definition_of_done=parse_json_field(model.definition_of_done),
             risk_notes=parse_json_field(model.risk_notes),
             story_points=model.story_points,

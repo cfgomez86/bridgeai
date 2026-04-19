@@ -100,7 +100,13 @@ class JiraTicketProvider(TicketProvider):
             }
         ]
         content.extend(section("Acceptance Criteria", story.acceptance_criteria))
-        content.extend(section("Technical Tasks", story.technical_tasks))
+        subtasks = story.subtasks or {}
+        if subtasks.get("frontend"):
+            content.extend(section("Subtareas Frontend", subtasks["frontend"]))
+        if subtasks.get("backend"):
+            content.extend(section("Subtareas Backend", subtasks["backend"]))
+        if subtasks.get("configuration"):
+            content.extend(section("Subtareas Configuración", subtasks["configuration"]))
         content.extend(section("Definition of Done", story.definition_of_done))
         if story.risk_notes:
             content.extend(section("Risk Notes", story.risk_notes))

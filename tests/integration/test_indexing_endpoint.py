@@ -1,5 +1,6 @@
 import uuid
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -10,6 +11,7 @@ from app.api.routes.indexing import get_indexing_service
 from app.database.session import Base
 from app.main import create_app
 from app.repositories.code_file_repository import CodeFileRepository
+from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.code_indexing_service import CodeIndexingService
 
 
@@ -59,8 +61,10 @@ def test_post_index_with_force_returns_200(tmp_path: Path) -> None:
 def test_post_index_invalid_project_root_returns_500(tmp_path: Path) -> None:
     client = make_client("/nonexistent/path/does_not_exist_xyz")
 
-    response = client.post("/api/v1/index", json={"force": False})
-    data = response.json()
+    # Mock SourceConnectionRepository to return no active connection (forces local indexing)
+    with patch.object(SourceConnectionRepository, "get_active", return_value=None):
+        response = client.post("/api/v1/index", json={"force": False})
+        data = response.json()
 
     assert response.status_code == 500
     assert "detail" in data

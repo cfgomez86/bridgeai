@@ -166,7 +166,7 @@ def make_client_with_story():
         title="User Registration with Email Confirmation",
         story_description="As a user, I want to register with email so I can access the platform.",
         acceptance_criteria=json.dumps(["User can register", "Email is validated", "Confirmation sent"]),
-        technical_tasks=json.dumps(["Create endpoint", "Add validation", "Send email"]),
+        subtasks=json.dumps({"frontend": ["Create form"], "backend": ["Create endpoint", "Add validation", "Send email"], "configuration": []}),
         definition_of_done=json.dumps(["Code reviewed", "Tests passing", "Deployed"]),
         risk_notes=json.dumps(["External email dependency"]),
         story_points=5,
@@ -207,8 +207,9 @@ def test_get_story_returns_full_details(story_client):
     assert data["risk_level"] == "LOW"
     assert isinstance(data["acceptance_criteria"], list)
     assert len(data["acceptance_criteria"]) == 3
-    assert isinstance(data["technical_tasks"], list)
-    assert len(data["technical_tasks"]) == 3
+    assert isinstance(data["subtasks"], dict)
+    assert isinstance(data["subtasks"]["backend"], list)
+    assert len(data["subtasks"]["backend"]) == 3
     assert isinstance(data["definition_of_done"], list)
     assert len(data["definition_of_done"]) == 3
     assert isinstance(data["risk_notes"], list)

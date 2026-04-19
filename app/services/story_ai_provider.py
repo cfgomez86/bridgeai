@@ -138,7 +138,7 @@ class AnthropicStoryProvider(StoryAIProvider):
         prompt = self._build_prompt(context)
         response = self._client.messages.create(
             model=self._model,
-            max_tokens=1024,
+            max_tokens=2048,
             temperature=0,
             timeout=self._timeout,
             messages=[{"role": "user", "content": prompt}],

@@ -34,7 +34,7 @@ def make_story(**kwargs) -> UserStory:
         title="User Registration with Email",
         story_description="As a user I want to register",
         acceptance_criteria=["Email is validated", "Password min 8 chars"],
-        technical_tasks=["Add endpoint", "Add repository"],
+        subtasks={"frontend": [], "backend": ["Add endpoint", "Add repository"], "configuration": []},
         definition_of_done=["Tests pass", "Code reviewed"],
         risk_notes=["No PII in logs"],
         story_points=5,
@@ -119,7 +119,7 @@ class TestAzurePayloadMapping:
         html = desc_op["value"]
         assert "As a user I want to register" in html
         assert "Acceptance Criteria" in html
-        assert "Technical Tasks" in html
+        assert "Subtareas Backend" in html
         assert "Definition of Done" in html
         assert "Risk Notes" in html
 
