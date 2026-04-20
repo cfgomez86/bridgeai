@@ -131,10 +131,11 @@ class TestJiraCreateSubtasks:
 
         responses = [{"key": "PROJ-2"}, {"key": "PROJ-3"}, {"key": "PROJ-4"}]
         with patch.object(provider, "_request", new=AsyncMock(side_effect=responses)):
-            ids, urls, failed = await provider.create_subtasks("PROJ-1", "PROJ", subtasks)
+            ids, urls, titles, failed = await provider.create_subtasks("PROJ-1", "PROJ", subtasks)
 
         assert ids == ["PROJ-2", "PROJ-3", "PROJ-4"]
         assert all("PROJ-2" in u or "PROJ-3" in u or "PROJ-4" in u for u in urls)
+        assert len(titles) == 3
         assert failed == []
 
     async def test_create_subtasks_payload_has_parent_and_label(self):
@@ -169,9 +170,10 @@ class TestJiraCreateSubtasks:
 
         error = HTTPError(url="", code=400, msg="Bad Request", hdrs=None, fp=None)
         with patch.object(provider, "_request", new=AsyncMock(side_effect=[error, {"key": "PROJ-2"}])):
-            ids, urls, failed = await provider.create_subtasks("PROJ-1", "PROJ", subtasks)
+            ids, urls, titles, failed = await provider.create_subtasks("PROJ-1", "PROJ", subtasks)
 
         assert ids == ["PROJ-2"]
+        assert len(titles) == 1
         assert failed == ["Task A"]
 
 

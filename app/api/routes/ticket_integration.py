@@ -60,6 +60,7 @@ class CreateTicketResponse(BaseModel):
     status: str
     message: str | None = None
     subtask_urls: list[str] = []
+    subtask_titles: list[str] = []
     failed_subtasks: list[str] = []
 
 
@@ -130,6 +131,7 @@ async def create_ticket(
         status=result.status,
         message="Ticket already exists" if is_duplicate else None,
         subtask_urls=result.subtask_urls,
+        subtask_titles=result.subtask_titles,
         failed_subtasks=result.failed_subtasks,
     )
 

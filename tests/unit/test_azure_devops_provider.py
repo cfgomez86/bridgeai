@@ -162,10 +162,11 @@ class TestAzureCreateChildTasks:
 
         responses = [{"id": 101}, {"id": 102}, {"id": 103}]
         with patch.object(provider, "_request", new=AsyncMock(side_effect=responses)):
-            ids, urls, failed = await provider.create_child_tasks(42, subtasks)
+            ids, urls, titles, failed = await provider.create_child_tasks(42, subtasks)
 
         assert ids == ["101", "102", "103"]
         assert all("101" in u or "102" in u or "103" in u for u in urls)
+        assert len(titles) == 3
         assert failed == []
 
     def test_child_task_payload_has_parent_relation(self):
@@ -206,9 +207,10 @@ class TestAzureCreateChildTasks:
 
         error = HTTPError(url="", code=400, msg="Bad Request", hdrs=None, fp=None)
         with patch.object(provider, "_request", new=AsyncMock(side_effect=[error, {"id": 55}])):
-            ids, urls, failed = await provider.create_child_tasks(10, subtasks)
+            ids, urls, titles, failed = await provider.create_child_tasks(10, subtasks)
 
         assert ids == ["55"]
+        assert len(titles) == 1
         assert failed == ["Task A"]
 
 

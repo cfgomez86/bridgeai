@@ -10,6 +10,7 @@ class TicketResult:
     status: str  # CREATED | FAILED | DUPLICATE
     subtask_ids: list[str] = field(default_factory=list)
     subtask_urls: list[str] = field(default_factory=list)
+    subtask_titles: list[str] = field(default_factory=list)
     failed_subtasks: list[str] = field(default_factory=list)
 
 

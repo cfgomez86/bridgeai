@@ -145,23 +145,49 @@ class AzureDevOpsTicketProvider(TicketProvider):
 
     async def _create_one_child_task(
         self, url: str, parent_id: int, summary: str, category: str, description: str = ""
-    ) -> tuple[str | None, str | None, str | None]:
+    ) -> tuple[str | None, str | None, str | None, str | None]:
+        """Returns (id, browse_url, title, error_summary). On success error_summary is None."""
         payload = self._build_child_task_payload(parent_id, summary, category, description)
-        try:
-            response = await self._request("POST", url, body=payload, patch=True)
-            work_item_id = response["id"]
-            return str(work_item_id), self._browse_url(work_item_id), None
-        except Exception:
-            logger.warning(
-                "azure_child_task_creation_failed",
-                extra={"parent_id": parent_id, "category": category, "summary": summary},
-            )
-            return None, None, summary
+        full_title = f"[{_CATEGORY_PREFIX.get(category, category.capitalize())}] {summary}"
+        max_retries = self._settings.AZURE_MAX_RETRIES
+        base_delay = self._settings.AZURE_RETRY_DELAY_SECONDS
+        last_error: Exception | None = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                response = await self._request("POST", url, body=payload, patch=True)
+                work_item_id = response["id"]
+                return str(work_item_id), self._browse_url(work_item_id), full_title, None
+            except HTTPError as exc:
+                if exc.code in (400, 401, 403):
+                    break
+                last_error = exc
+                retry_after = (getattr(exc, "headers", None) or {}).get("Retry-After") if exc.code == 429 else None
+                logger.warning(
+                    "azure_child_task_retryable_error",
+                    extra={"parent_id": parent_id, "category": category, "status": exc.code, "attempt": attempt + 1},
+                )
+            except Exception as exc:
+                last_error = exc
+                retry_after = None
+                logger.warning(
+                    "azure_child_task_network_error",
+                    extra={"parent_id": parent_id, "category": category, "attempt": attempt + 1},
+                )
+            if attempt < max_retries:
+                wait = self._backoff_seconds(attempt, base_delay, retry_after if isinstance(last_error, HTTPError) and getattr(last_error, "code", None) == 429 else None)
+                await asyncio.sleep(wait)
+
+        logger.warning(
+            "azure_child_task_creation_failed",
+            extra={"parent_id": parent_id, "category": category, "summary": summary},
+        )
+        return None, None, None, summary
 
     async def create_child_tasks(
         self, parent_id: int, subtasks: dict, description: str = ""
-    ) -> tuple[list[str], list[str], list[str]]:
-        """Create Azure DevOps Tasks in parallel. Returns (ids, urls, failed_summaries)."""
+    ) -> tuple[list[str], list[str], list[str], list[str]]:
+        """Create Azure DevOps Tasks in parallel. Returns (ids, urls, titles, failed_summaries)."""
         url = self._work_items_url("Task")
         coros = [
             self._create_one_child_task(url, parent_id, summary, category, description)
@@ -175,12 +201,13 @@ class AzureDevOpsTicketProvider(TicketProvider):
         results = await asyncio.gather(*coros)
         ids = [r[0] for r in results if r[0] is not None]
         urls = [r[1] for r in results if r[1] is not None]
-        failed = [r[2] for r in results if r[2] is not None]
-        return ids, urls, failed
+        titles = [r[2] for r in results if r[2] is not None]
+        failed = [r[3] for r in results if r[3] is not None]
+        return ids, urls, titles, failed
 
     async def create_subtasks_for(
         self, story: UserStory, parent_id: str, project_key: str
-    ) -> tuple[list[str], list[str], list[str]]:
+    ) -> tuple[list[str], list[str], list[str], list[str]]:
         description = f"Parent story: {story.title} | Risk: {story.risk_level} | {story.story_points} pts"
         return await self.create_child_tasks(int(parent_id), story.subtasks or {}, description)
 

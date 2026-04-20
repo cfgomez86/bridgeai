@@ -31,7 +31,7 @@ class TicketProvider(ABC):
 
     async def create_subtasks_for(
         self, story: UserStory, parent_id: str, project_key: str
-    ) -> tuple[list[str], list[str], list[str]]:
-        """Create subtasks linked to parent_id. Returns (ids, urls, failed_summaries).
+    ) -> tuple[list[str], list[str], list[str], list[str]]:
+        """Create subtasks linked to parent_id. Returns (ids, urls, titles, failed_summaries).
         Override in providers that support subtask creation."""
-        return [], [], []
+        return [], [], [], []

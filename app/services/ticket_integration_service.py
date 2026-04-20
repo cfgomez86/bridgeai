@@ -67,12 +67,12 @@ class TicketIntegrationService:
             timestamp=datetime.now(timezone.utc),
         )
 
-    def _existing_subtasks(self, story_id: str, provider: str) -> tuple[list[str], list[str]]:
+    def _existing_subtasks(self, story_id: str, provider: str) -> tuple[list[str], list[str], list[str]]:
         log = self._integration_repo.get_latest_subtask_audit(story_id, provider)
         if log and log.response:
             data = json.loads(log.response)
-            return data.get("subtask_ids", []), data.get("subtask_urls", [])
-        return [], []
+            return data.get("subtask_ids", []), data.get("subtask_urls", []), data.get("subtask_titles", [])
+        return [], [], []
 
     def _duplicate_url(self, provider_name: str, external_ticket_id: str | None) -> str:
         tid = external_ticket_id or ""
@@ -110,10 +110,10 @@ class TicketIntegrationService:
                     "external_ticket_id": existing.external_ticket_id,
                 },
             )
-            subtask_ids, subtask_urls = self._existing_subtasks(story_id, provider_name)
+            subtask_ids, subtask_urls, subtask_titles = self._existing_subtasks(story_id, provider_name)
             if create_subtasks and not subtask_ids and story.subtasks:
                 provider = self._get_provider(provider_name)
-                subtask_ids, subtask_urls, failed = await provider.create_subtasks_for(
+                subtask_ids, subtask_urls, subtask_titles, failed = await provider.create_subtasks_for(
                     story, existing.external_ticket_id or "", project_key
                 )
                 if subtask_ids:
@@ -122,7 +122,7 @@ class TicketIntegrationService:
                         provider=provider_name,
                         action="create_subtasks",
                         payload=None,
-                        response={"subtask_ids": subtask_ids, "subtask_urls": subtask_urls, "failed": failed},
+                        response={"subtask_ids": subtask_ids, "subtask_urls": subtask_urls, "subtask_titles": subtask_titles, "failed": failed},
                         status="CREATED",
                     )
             return (
@@ -133,6 +133,7 @@ class TicketIntegrationService:
                     status="DUPLICATE",
                     subtask_ids=subtask_ids,
                     subtask_urls=subtask_urls,
+                    subtask_titles=subtask_titles,
                 ),
                 True,
             )
@@ -154,9 +155,9 @@ class TicketIntegrationService:
         try:
             result = await provider.create_ticket(story, project_key, issue_type)
 
-            subtask_ids, subtask_urls, failed_subtasks = [], [], []
+            subtask_ids, subtask_urls, subtask_titles, failed_subtasks = [], [], [], []
             if create_subtasks and story.subtasks:
-                subtask_ids, subtask_urls, failed_subtasks = await provider.create_subtasks_for(
+                subtask_ids, subtask_urls, subtask_titles, failed_subtasks = await provider.create_subtasks_for(
                     story, result.external_id, project_key
                 )
 
@@ -172,7 +173,7 @@ class TicketIntegrationService:
                 provider=provider_name,
                 action="create_ticket",
                 payload=request_payload,
-                response={"external_id": result.external_id, "url": result.url, "subtask_ids": subtask_ids, "subtask_urls": subtask_urls},
+                response={"external_id": result.external_id, "url": result.url, "subtask_ids": subtask_ids, "subtask_urls": subtask_urls, "subtask_titles": subtask_titles},
                 status="CREATED",
             )
             logger.info(
@@ -193,6 +194,7 @@ class TicketIntegrationService:
                 status=result.status,
                 subtask_ids=subtask_ids,
                 subtask_urls=subtask_urls,
+                subtask_titles=subtask_titles,
                 failed_subtasks=failed_subtasks,
             ), False
 

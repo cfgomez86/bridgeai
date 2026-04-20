@@ -317,18 +317,22 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
                   {s.subtasks_created} ({ticket.subtask_urls.length})
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                  {ticket.subtask_urls.map((url, i) => (
-                    <a
-                      key={i}
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "2px" }}
-                    >
-                      <ExternalLink size={11} />
-                      {url.split("/").pop()}
-                    </a>
-                  ))}
+                  {ticket.subtask_urls.map((url, i) => {
+                    const id = url.split("/").pop()
+                    const title = ticket.subtask_titles?.[i]
+                    return (
+                      <a
+                        key={i}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: "block", fontSize: "12px", color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                      >
+                        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{id}</span>
+                        {title && <span style={{ fontFamily: "var(--font-sans)", fontWeight: 400, color: "var(--fg-2)", textDecoration: "none", marginLeft: "8px" }}>{title}</span>}
+                      </a>
+                    )
+                  })}
                 </div>
               </div>
             )}
