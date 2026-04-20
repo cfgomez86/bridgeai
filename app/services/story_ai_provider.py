@@ -75,7 +75,7 @@ Genera ÚNICAMENTE un JSON válido con estos campos exactos:
 - story_description: string en formato de historia de usuario estándar: "Como [tipo de usuario], quiero [acción] para que [beneficio]". Usa el mismo idioma que el texto del requerimiento.
 - acceptance_criteria: array de strings (mínimo 3 criterios verificables)
 - subtasks: objeto con tres claves obligatorias, cada una con un array de strings:
-    * "frontend": tareas para la capa de presentación/UI. Cada tarea debe referenciar el archivo o componente específico del codebase. Si no aplica, devuelve array vacío [].
+    * "frontend": tareas para la capa de presentación/UI. Cada tarea debe referenciar el archivo o componente específico del codebase. IMPORTANTE: Si la historia implica cambios backend/API/base de datos, proporciona siempre al menos 1-2 tareas frontend (actualizar componente, agregar pantalla, integrar endpoint, etc). Solo devuelve array vacío [] si NO hay interfaz o cambios visuales.
     * "backend": tareas para la lógica de negocio, servicios, rutas y base de datos. Cada tarea DEBE referenciar el archivo específico del codebase (ej: "Agregar endpoint en app/api/routes/X.py"). Mínimo 2 tareas.
     * "configuration": tareas de infraestructura, variables de entorno, dependencias, scripts de migración o CI/CD. Si no aplica, devuelve array vacío [].
     Usa los archivos impactados listados arriba para determinar la categoría correcta de cada tarea.
