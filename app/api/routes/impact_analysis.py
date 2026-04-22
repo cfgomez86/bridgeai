@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import uuid
+from app.core.clerk_auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -15,7 +16,7 @@ from app.services.semantic_impact_filter import get_semantic_filter
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["impact-analysis"])
+router = APIRouter(dependencies=[Depends(get_current_user)], tags=["impact-analysis"])
 
 
 class ImpactAnalysisRequest(BaseModel):

@@ -1,10 +1,10 @@
-import json
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.context import current_tenant_id, get_tenant_id
 from app.models.ticket_integration import IntegrationAuditLog, TicketIntegration
 
 
@@ -12,12 +12,16 @@ class TicketIntegrationRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
 
+    def _tid(self) -> str:
+        return get_tenant_id()
+
     def find_by_story_and_provider(
         self, story_id: str, provider: str
     ) -> Optional[TicketIntegration]:
         return (
             self._db.query(TicketIntegration)
             .filter(
+                TicketIntegration.tenant_id == self._tid(),
                 TicketIntegration.story_id == story_id,
                 TicketIntegration.provider == provider,
                 TicketIntegration.status == "CREATED",
@@ -36,6 +40,7 @@ class TicketIntegrationRepository:
         integration_id = str(uuid.uuid4())
         model = TicketIntegration(
             id=integration_id,
+            tenant_id=self._tid(),
             story_id=story_id,
             provider=provider,
             project_key=project_key,
@@ -69,7 +74,6 @@ class TicketIntegrationRepository:
         integration = self._db.get(TicketIntegration, integration_id)
         if not integration:
             return None
-
         integration.status = status
         integration.updated_at = datetime.now(timezone.utc)
         if external_ticket_id is not None:
@@ -78,7 +82,6 @@ class TicketIntegrationRepository:
             integration.error_message = error_message
         if retry_count is not None:
             integration.retry_count = retry_count
-
         self._db.commit()
         self._db.refresh(integration)
         return integration
@@ -86,7 +89,10 @@ class TicketIntegrationRepository:
     def find_all_by_story_id(self, story_id: str) -> list[TicketIntegration]:
         return (
             self._db.query(TicketIntegration)
-            .filter(TicketIntegration.story_id == story_id)
+            .filter(
+                TicketIntegration.tenant_id == self._tid(),
+                TicketIntegration.story_id == story_id,
+            )
             .order_by(TicketIntegration.created_at.desc())
             .all()
         )
@@ -94,7 +100,10 @@ class TicketIntegrationRepository:
     def get_audit_logs(self, story_id: str) -> list[IntegrationAuditLog]:
         return (
             self._db.query(IntegrationAuditLog)
-            .filter(IntegrationAuditLog.story_id == story_id)
+            .filter(
+                IntegrationAuditLog.tenant_id == self._tid(),
+                IntegrationAuditLog.story_id == story_id,
+            )
             .order_by(IntegrationAuditLog.timestamp.desc())
             .all()
         )
@@ -111,6 +120,7 @@ class TicketIntegrationRepository:
     ) -> None:
         log = IntegrationAuditLog(
             id=str(uuid.uuid4()),
+            tenant_id=self._tid(),
             story_id=story_id,
             provider=provider,
             action=action,
@@ -123,10 +133,10 @@ class TicketIntegrationRepository:
         self._db.commit()
 
     def get_latest_subtask_audit(self, story_id: str, provider: str) -> IntegrationAuditLog | None:
-        """Return the most recent audit log entry containing subtask data for a story+provider."""
         return (
             self._db.query(IntegrationAuditLog)
             .filter(
+                IntegrationAuditLog.tenant_id == self._tid(),
                 IntegrationAuditLog.story_id == story_id,
                 IntegrationAuditLog.provider == provider,
                 IntegrationAuditLog.status == "CREATED",

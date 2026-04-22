@@ -11,9 +11,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import Settings
+from app.core.context import current_tenant_id, current_user_id
 from app.database.session import Base
 from app.domain.ticket_integration import TicketResult
 from app.main import create_app
+from tests.integration.auth_helpers import apply_mock_auth, TEST_TENANT_ID, TEST_USER_ID
 from app.models.ticket_integration import IntegrationAuditLog, TicketIntegration
 from app.models.user_story import UserStory as UserStoryModel
 from app.api.routes.ticket_integration import get_integration_service
@@ -49,6 +51,7 @@ def make_db():
 def insert_story(db, story_id: str = "story-harden-1") -> UserStoryModel:
     story = UserStoryModel(
         id=story_id,
+        tenant_id=TEST_TENANT_ID,
         requirement_id="req-1",
         impact_analysis_id="ana-1",
         project_id="proj-1",
@@ -128,6 +131,8 @@ class TestJitterBackoff:
 
 class TestAuditPayloadCapture:
     async def test_audit_log_stores_full_jira_payload(self):
+        current_tenant_id.set(TEST_TENANT_ID)
+        current_user_id.set(TEST_USER_ID)
         db = make_db()
         insert_story(db, "story-audit-payload")
         settings = make_settings()
@@ -165,7 +170,7 @@ class TestQueryEndpoints:
         db = make_db()
         insert_story(db, story_id)
         settings = make_settings()
-        app = create_app()
+        app = apply_mock_auth(create_app())
         app.dependency_overrides[get_integration_service] = lambda: TicketIntegrationService(
             db=db, settings=settings
         )
@@ -183,6 +188,7 @@ class TestQueryEndpoints:
         now = datetime.now(timezone.utc)
         record = TicketIntegration(
             id=str(uuid.uuid4()),
+            tenant_id=TEST_TENANT_ID,
             story_id="story-has-ticket",
             provider="jira",
             project_key="PROJ",
@@ -217,6 +223,7 @@ class TestQueryEndpoints:
         now = datetime.now(timezone.utc)
         log = IntegrationAuditLog(
             id=str(uuid.uuid4()),
+            tenant_id=TEST_TENANT_ID,
             story_id="story-with-audit",
             provider="jira",
             action="create_ticket",
@@ -245,6 +252,7 @@ class TestQueryEndpoints:
         for i, action in enumerate(["attempt_1", "attempt_2", "attempt_3"]):
             db.add(IntegrationAuditLog(
                 id=str(uuid.uuid4()),
+                tenant_id=TEST_TENANT_ID,
                 story_id="story-ordered",
                 provider="jira",
                 action=action,

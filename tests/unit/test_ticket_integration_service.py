@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import Settings
 from app.database.session import Base
+from tests.unit.conftest import TEST_TENANT_ID
 from app.domain.ticket_integration import TicketResult
 from app.models.user_story import UserStory as UserStoryModel
 from app.services.ticket_integration_service import (
@@ -45,6 +46,7 @@ def make_db_session():
 def insert_story(db, story_id: str = "story-1") -> UserStoryModel:
     story = UserStoryModel(
         id=story_id,
+        tenant_id=TEST_TENANT_ID,
         requirement_id="req-1",
         impact_analysis_id="ana-1",
         project_id="proj-1",

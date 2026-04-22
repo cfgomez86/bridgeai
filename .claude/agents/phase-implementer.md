@@ -44,6 +44,12 @@ You are the Phase Implementer for BridgeAI. You own the end-to-end delivery of a
 - The `app/agents/orchestrator.py` pipeline context dict is the integration point between phases — update it as each phase adds a new stage.
 - Keep `DRY_RUN=true` support: if `settings.DRY_RUN` is True, agents must skip actual Anthropic API calls and return stub data.
 
+## Tenant context rules (mandatory for every phase that adds persistence)
+
+- Every new repository's `_tid()` method must call `get_tenant_id()` from `app.core.context`, never `current_tenant_id.get()` directly. The latter raises a silent `LookupError` → 500 with no log context.
+- Every new route that accesses tenant data must declare `_user: User = Depends(get_current_user)`. This is what populates `current_tenant_id` in context.
+- If a phase introduces unauthenticated endpoints (OAuth callbacks, webhooks, cron triggers): restore tenant context from a trusted stored record using `current_tenant_id.set(record.tenant_id)` before any repository call. Never assume the context is already set on these paths.
+
 ## Mandatory quality gates (run after step 9 — tests pass)
 
 ### All phases

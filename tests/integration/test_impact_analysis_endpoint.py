@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from app.main import create_app
+from tests.integration.auth_helpers import apply_mock_auth
 from app.database.session import Base, get_db
 from app.api.routes.impact_analysis import get_impact_service
 from app.repositories.code_file_repository import CodeFileRepository
@@ -34,7 +35,7 @@ def make_client(project_root: str) -> TestClient:
             DependencyAnalyzer(),
         )
 
-    app = create_app()
+    app = apply_mock_auth(create_app())
     app.dependency_overrides[get_impact_service] = override
     return TestClient(app)
 
@@ -66,7 +67,7 @@ def make_client_with_indexing(project_root: str) -> TestClient:
     def override_index() -> CodeIndexingService:
         return CodeIndexingService(CodeFileRepository(db), project_root)
 
-    app = create_app()
+    app = apply_mock_auth(create_app())
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_impact_service] = override_impact
     app.dependency_overrides[get_indexing_service] = override_index

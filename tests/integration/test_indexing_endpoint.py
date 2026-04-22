@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.routes.indexing import get_indexing_service
 from app.database.session import Base
 from app.main import create_app
+from tests.integration.auth_helpers import apply_mock_auth
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.code_indexing_service import CodeIndexingService
@@ -29,7 +30,7 @@ def make_client(project_root: str) -> TestClient:
         repo = CodeFileRepository(db)
         return CodeIndexingService(repo, project_root)
 
-    app = create_app()
+    app = apply_mock_auth(create_app())
     app.dependency_overrides[get_indexing_service] = override
     return TestClient(app)
 

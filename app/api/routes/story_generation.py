@@ -1,6 +1,7 @@
 import asyncio
 import json
 import uuid
+from app.core.clerk_auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -19,7 +20,7 @@ from app.utils.json_utils import parse_json_field
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["story-generation"])
+router = APIRouter(dependencies=[Depends(get_current_user)], tags=["story-generation"])
 
 
 class StoryGenerationRequest(BaseModel):

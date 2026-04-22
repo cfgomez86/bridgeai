@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.main import create_app
+from tests.integration.auth_helpers import apply_mock_auth, TEST_TENANT_ID
 from app.database.session import Base, get_db
 from app.api.routes.story_generation import get_story_service
 from app.repositories.requirement_repository import RequirementRepository
@@ -38,6 +39,7 @@ def make_client_with_data():
     _req_text = "Register with email"
     req = Requirement(
         id="req-endpoint-1",
+        tenant_id=TEST_TENANT_ID,
         requirement_text=_req_text,
         requirement_text_hash=hashlib.sha256(_req_text.encode()).hexdigest(),
         project_id="proj",
@@ -55,6 +57,7 @@ def make_client_with_data():
     )
     analysis = ImpactAnalysis(
         id="ana-endpoint-1",
+        tenant_id=TEST_TENANT_ID,
         requirement="Register with email",
         risk_level="LOW",
         files_impacted=2,
@@ -80,7 +83,7 @@ def make_client_with_data():
             settings=settings,
         )
 
-    app = create_app()
+    app = apply_mock_auth(create_app())
     app.dependency_overrides[get_story_service] = override
     return TestClient(app)
 
@@ -160,6 +163,7 @@ def make_client_with_story():
     db = TestSession()
     db.add(UserStory(
         id=_KNOWN_STORY_ID,
+        tenant_id=TEST_TENANT_ID,
         requirement_id="req-get-1",
         impact_analysis_id="ana-get-1",
         project_id="proj-get",
@@ -184,7 +188,7 @@ def make_client_with_story():
         finally:
             session.close()
 
-    app = create_app()
+    app = apply_mock_auth(create_app())
     app.dependency_overrides[get_db] = override_get_db
     return TestClient(app)
 

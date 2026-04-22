@@ -3,13 +3,6 @@ from datetime import datetime
 
 
 @dataclass(frozen=True)
-class PlatformConfig:
-    platform: str
-    client_id: str
-    configured: bool
-
-
-@dataclass(frozen=True)
 class Repository:
     full_name: str
     name: str

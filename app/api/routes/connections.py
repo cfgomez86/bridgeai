@@ -4,7 +4,9 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.clerk_auth import get_current_user
 from app.core.config import Settings, get_settings
+from app.models.user import User
 
 SUPPORTED_PLATFORMS_SET = {"github", "gitlab", "azure_devops"}
 from app.database.session import get_db
@@ -27,18 +29,10 @@ def get_service(
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
-class PlatformConfigRequest(BaseModel):
-    client_id: str
-    client_secret: str
-
-
 class PlatformResponse(BaseModel):
     platform: str
     label: str
-    configured: bool
-    client_id: str | None
     server_configured: bool = False
-    redirect_uri: str | None = None
 
 
 class ConnectionResponse(BaseModel):
@@ -65,42 +59,14 @@ class ActivateRequest(BaseModel):
     default_branch: str = "main"
 
 
-# ── Platform config endpoints ────────────────────────────────────────────────
+# ── Platform listing ────────────────────────────────────────────────────────
 
 @router.get("/platforms", response_model=list[PlatformResponse])
-def list_platforms(service: SourceConnectionService = Depends(get_service)):
+def list_platforms(
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
     return service.list_platforms()
-
-
-@router.put("/platforms/{platform}", response_model=PlatformResponse)
-def save_platform_config(
-    platform: str,
-    body: PlatformConfigRequest,
-    service: SourceConnectionService = Depends(get_service),
-):
-    try:
-        config = service.save_platform_config(platform, body.client_id, body.client_secret)
-        platforms = {p["platform"]: p for p in service.list_platforms()}
-        p = platforms.get(platform, {})
-        return {
-            "platform": config.platform,
-            "label": p.get("label", platform),
-            "configured": True,
-            "client_id": config.client_id,
-            "server_configured": p.get("server_configured", False),
-        }
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-
-
-@router.delete("/platforms/{platform}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_platform_config(
-    platform: str,
-    service: SourceConnectionService = Depends(get_service),
-):
-    deleted = service.delete_platform_config(platform)
-    if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Platform {platform!r} not configured")
 
 
 # ── OAuth flow endpoints ─────────────────────────────────────────────────────
@@ -152,6 +118,7 @@ def get_redirect_uri(
     request: Request,
     origin: str | None = Query(None),
     settings: Settings = Depends(get_settings),
+    _user: User = Depends(get_current_user),
 ):
     _require_platform(platform)
     base = _resolve_base(origin, request, settings)
@@ -165,6 +132,7 @@ def authorize(
     origin: str | None = Query(None),
     service: SourceConnectionService = Depends(get_service),
     settings: Settings = Depends(get_settings),
+    _user: User = Depends(get_current_user),
 ):
     _require_platform(platform)
     try:
@@ -199,7 +167,10 @@ def oauth_callback(
 # ── Connection management endpoints ─────────────────────────────────────────
 
 @router.get("", response_model=list[ConnectionResponse])
-def list_connections(service: SourceConnectionService = Depends(get_service)):
+def list_connections(
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
     conns = service.list_connections()
     return [
         ConnectionResponse(
@@ -217,7 +188,10 @@ def list_connections(service: SourceConnectionService = Depends(get_service)):
 
 
 @router.get("/active", response_model=ConnectionResponse | None)
-def get_active(service: SourceConnectionService = Depends(get_service)):
+def get_active(
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
     conn = service.get_active_connection()
     if not conn:
         return None
@@ -237,6 +211,7 @@ def get_active(service: SourceConnectionService = Depends(get_service)):
 def delete_connection(
     connection_id: str,
     service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
 ):
     deleted = service.delete_connection(connection_id)
     if not deleted:
@@ -247,6 +222,7 @@ def delete_connection(
 def list_repos(
     connection_id: str,
     service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
 ):
     try:
         repos = service.list_repos(connection_id)
@@ -272,6 +248,7 @@ def activate_repo(
     connection_id: str,
     body: ActivateRequest,
     service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
 ):
     try:
         conn = service.activate_repo(connection_id, body.repo_full_name, body.default_branch)

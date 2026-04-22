@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     # different host.
     TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
 
+    # Clerk auth
+    CLERK_SECRET_KEY: str = ""
+
     # First-party OAuth credentials — overridden per environment
     GITHUB_CLIENT_ID: str = ""
     GITHUB_CLIENT_SECRET: str = ""

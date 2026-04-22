@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
+import { useAuth } from "@clerk/nextjs"
 import {
   listPlatforms, listConnections,
-  getOAuthAuthorizeUrl, savePlatformConfig, deletePlatformConfig, deleteConnection,
+  getOAuthAuthorizeUrl, deleteConnection,
   type PlatformResponse, type ConnectionResponse,
 } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
@@ -38,19 +39,13 @@ function PlatformCardDesign({
 }) {
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
-  const [editing, setEditing] = useState(false)
-  const [clientId, setClientId] = useState(platform.client_id ?? "")
-  const [clientSecret, setClientSecret] = useState("")
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { t } = useLanguage()
   const s = t.connections
 
-  const isReady = platform.configured || platform.server_configured
   const conn = connections.find((c) => c.platform === platform.platform)
-
-  const tone: PlatformTone = conn ? "ok" : isReady ? "warn" : "neutral"
-  const statusLabel = conn ? s.status.connected : isReady ? s.status.configured : s.status.disconnected
+  const tone: PlatformTone = conn ? "ok" : platform.server_configured ? "warn" : "neutral"
+  const statusLabel = conn ? s.status.connected : platform.server_configured ? s.status.configured : s.status.disconnected
 
   async function handleConnect() {
     setConnecting(true)
@@ -64,50 +59,23 @@ function PlatformCardDesign({
     }
   }
 
-  async function handleSave() {
-    if (!clientId.trim() || !clientSecret.trim()) return
-    setSaving(true)
-    setError(null)
-    try {
-      await savePlatformConfig(platform.platform, clientId.trim(), clientSecret.trim())
-      setEditing(false)
-      setClientSecret("")
-      onUpdated()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : s.errors.save)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleDelete() {
-    setSaving(true)
-    setError(null)
-    try {
-      await deletePlatformConfig(platform.platform)
-      setEditing(false)
-      setClientId("")
-      setClientSecret("")
-      onUpdated()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : s.errors.delete)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function handleDisconnect() {
     if (!conn) return
     setDisconnecting(true)
     setError(null)
     try {
       await deleteConnection(conn.id)
-      onUpdated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : s.errors.disconnect)
-    } finally {
-      setDisconnecting(false)
+      // 404 means already deleted — desired state achieved, not an error
+      const msg = err instanceof Error ? err.message : ""
+      if (!msg.includes("404") && !msg.toLowerCase().includes("not found")) {
+        setError(msg || s.errors.disconnect)
+        setDisconnecting(false)
+        return
+      }
     }
+    onUpdated()
+    setDisconnecting(false)
   }
 
   const platformDesc = s.platform_desc[platform.platform as keyof typeof s.platform_desc] ?? s.default_platform_desc
@@ -161,169 +129,21 @@ function PlatformCardDesign({
         </div>
       )}
 
-      {/* BridgeAI OAuth mode */}
-      {platform.server_configured && (
-        <div style={{
-          border: "1px solid var(--border)", borderRadius: "var(--radius)",
-          overflow: "hidden",
-        }}>
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "8px 12px", background: "var(--surface-2)", gap: "10px",
-          }}>
-            <div>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: "6px" }}>
-                {s.oauth.bridge_title}
-                <span style={{
-                  fontSize: "10px", padding: "1px 6px", borderRadius: "3px",
-                  background: !platform.configured ? "var(--accent-soft)" : "var(--surface-3)",
-                  color: !platform.configured ? "var(--accent-strong)" : "var(--muted)",
-                  fontFamily: "var(--font-mono)",
-                }}>
-                  {!platform.configured ? s.oauth.active_tag : s.oauth.fallback_tag}
-                </span>
-              </div>
-              <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
-                {s.oauth.bridge_desc}
-              </div>
-            </div>
-            {!conn && (
-              <button
-                onClick={handleConnect}
-                disabled={connecting || !!platform.configured}
-                title={platform.configured ? t.connections.actions.connect : ""}
-                style={{
-                  padding: "4px 10px", borderRadius: "var(--radius)", border: "none",
-                  background: platform.configured ? "var(--surface-3)" : "var(--accent)",
-                  color: platform.configured ? "var(--muted)" : "var(--accent-fg)",
-                  fontSize: "12px", fontWeight: 500, flexShrink: 0,
-                  cursor: platform.configured ? "not-allowed" : connecting ? "not-allowed" : "pointer",
-                }}
-              >
-                {connecting && !platform.configured ? s.actions.connecting : s.actions.connect}
-              </button>
-            )}
-          </div>
-        </div>
+      {/* BridgeAI OAuth */}
+      {platform.server_configured && !conn && (
+        <button
+          onClick={handleConnect}
+          disabled={connecting}
+          style={{
+            padding: "5px 12px", borderRadius: "var(--radius)", border: "none",
+            background: "var(--accent)", color: "var(--accent-fg)",
+            fontSize: "12.5px", fontWeight: 500, alignSelf: "flex-start",
+            cursor: connecting ? "not-allowed" : "pointer",
+          }}
+        >
+          {connecting ? s.actions.connecting : s.actions.connect}
+        </button>
       )}
-
-      {/* Own OAuth App (BYOA) */}
-      <div style={{
-        border: "1px solid var(--border)", borderRadius: "var(--radius)",
-        overflow: "hidden",
-      }}>
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "8px 12px", background: "var(--surface-2)", gap: "10px",
-        }}>
-          <div>
-            <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: "6px" }}>
-              {s.oauth.own_app_title}
-              {platform.configured && (
-                <span style={{
-                  fontSize: "10px", padding: "1px 6px", borderRadius: "3px",
-                  background: "var(--accent-soft)", color: "var(--accent-strong)",
-                  fontFamily: "var(--font-mono)",
-                }}>{s.oauth.active_tag}</span>
-              )}
-            </div>
-            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
-              {platform.configured
-                ? `Client ID: ${platform.client_id?.slice(0, 8)}…`
-                : s.oauth.not_configured}
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "5px", flexShrink: 0 }}>
-            {!conn && platform.configured && (
-              <button
-                onClick={handleConnect}
-                disabled={connecting}
-                style={{
-                  padding: "4px 10px", borderRadius: "var(--radius)", border: "none",
-                  background: "var(--accent)", color: "var(--accent-fg)",
-                  fontSize: "12px", fontWeight: 500,
-                  cursor: connecting ? "not-allowed" : "pointer",
-                }}
-              >
-                {connecting ? s.actions.connecting : s.actions.connect}
-              </button>
-            )}
-            <button
-              onClick={() => setEditing((v) => !v)}
-              style={{
-                padding: "4px 10px", borderRadius: "var(--radius)",
-                border: "1px solid var(--border)", background: "var(--surface)",
-                color: "var(--fg-2)", fontSize: "12px", cursor: "pointer",
-              }}
-            >
-              {editing ? s.actions.cancel : platform.configured ? s.actions.edit : s.actions.configure}
-            </button>
-          </div>
-        </div>
-
-        {/* Inline form */}
-        {editing && (
-          <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: "7px", borderTop: "1px solid var(--border)" }}>
-            <input
-              placeholder="Client ID"
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              style={{
-                padding: "6px 10px", borderRadius: "var(--radius)",
-                border: "1px solid var(--border)", background: "var(--surface)",
-                color: "var(--fg)", fontSize: "13px", outline: "none", width: "100%", boxSizing: "border-box",
-              }}
-            />
-            <input
-              type="password"
-              placeholder="Client Secret"
-              value={clientSecret}
-              onChange={(e) => setClientSecret(e.target.value)}
-              style={{
-                padding: "6px 10px", borderRadius: "var(--radius)",
-                border: "1px solid var(--border)", background: "var(--surface)",
-                color: "var(--fg)", fontSize: "13px", outline: "none", width: "100%", boxSizing: "border-box",
-              }}
-            />
-            <div style={{ display: "flex", gap: "6px" }}>
-              <button
-                onClick={handleSave}
-                disabled={saving || !clientId.trim() || !clientSecret.trim()}
-                style={{
-                  padding: "5px 12px", borderRadius: "var(--radius)", border: "none",
-                  background: "var(--accent)", color: "var(--accent-fg)",
-                  fontSize: "12.5px", fontWeight: 500, cursor: "pointer",
-                }}
-              >
-                {saving ? s.actions.saving : s.actions.save}
-              </button>
-              <button
-                onClick={() => { setEditing(false); setError(null) }}
-                style={{
-                  padding: "5px 12px", borderRadius: "var(--radius)",
-                  border: "1px solid var(--border)", background: "var(--surface)",
-                  color: "var(--fg-2)", fontSize: "12.5px", cursor: "pointer",
-                }}
-              >
-                {s.actions.cancel}
-              </button>
-              {platform.configured && (
-                <button
-                  onClick={handleDelete}
-                  disabled={saving}
-                  style={{
-                    padding: "5px 12px", borderRadius: "var(--radius)",
-                    border: "1px solid var(--border)", background: "var(--surface)",
-                    color: "var(--err-fg)", fontSize: "12.5px", cursor: "pointer", marginLeft: "auto",
-                  }}
-                >
-                  {s.actions.delete}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Disconnect (if active connection) */}
       {conn && (
@@ -342,7 +162,7 @@ function PlatformCardDesign({
       )}
 
       {/* Connect (no connection, not ready) */}
-      {!conn && !isReady && (
+      {!conn && !platform.server_configured && (
         <button
           disabled
           style={{
@@ -360,14 +180,19 @@ function PlatformCardDesign({
 
 function ConnectionsContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const { isLoaded, isSignedIn } = useAuth()
   const [platforms, setPlatforms] = useState<PlatformResponse[]>([])
   const [connections, setConnections] = useState<ConnectionResponse[]>([])
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "err" } | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const refreshingRef = useRef(false)
   const { t } = useLanguage()
   const s = t.connections
 
   const refresh = useCallback(async () => {
+    if (refreshingRef.current) return
+    refreshingRef.current = true
     try {
       const [p, c] = await Promise.all([listPlatforms(), listConnections()])
       setPlatforms(p)
@@ -378,17 +203,26 @@ function ConnectionsContent() {
       setToast({ msg: `Error al cargar: ${message}`, tone: "err" })
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
       toastTimerRef.current = setTimeout(() => setToast(null), 5000)
+    } finally {
+      refreshingRef.current = false
     }
   }, [])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { if (isLoaded && isSignedIn) refresh() }, [refresh, isLoaded, isSignedIn])
 
   useEffect(() => {
     const connected = searchParams.get("connected")
     const error = searchParams.get("error")
+    if (!connected && !error) return
+
+    // Clear params from URL immediately so StrictMode double-mount doesn't re-process them
+    router.replace("/connections", { scroll: false })
+
     if (connected) {
       setToast({ msg: `${s.toast_connected} ${PLATFORM_LABELS[connected] ?? connected}`, tone: "ok" })
-      refresh()
+      // Only refresh now if Clerk is already loaded — otherwise the isLoaded/isSignedIn
+      // effect will fire refresh() once Clerk finishes initializing after the OAuth redirect.
+      if (isLoaded && isSignedIn) refresh()
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
       toastTimerRef.current = setTimeout(() => setToast(null), 5000)
     } else if (error) {
@@ -399,7 +233,7 @@ function ConnectionsContent() {
     return () => {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
-  }, [searchParams, refresh, s.toast_connected, s.toast_error])
+  }, [searchParams, router, refresh, isLoaded, isSignedIn, s.toast_connected, s.toast_error])
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: "1100px", display: "flex", flexDirection: "column", gap: "24px" }}>

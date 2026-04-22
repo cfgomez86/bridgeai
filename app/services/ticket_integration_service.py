@@ -29,6 +29,10 @@ class UnsupportedProviderError(Exception):
     pass
 
 
+class ProviderNotConfiguredError(Exception):
+    pass
+
+
 class TicketIntegrationService:
     def __init__(
         self,
@@ -46,6 +50,26 @@ class TicketIntegrationService:
                 f"Provider '{provider_name}' is not supported. "
                 f"Available: {list(_PROVIDERS.keys())}"
             )
+        if provider_name == "jira":
+            missing = [k for k, v in {
+                "JIRA_BASE_URL": self._settings.JIRA_BASE_URL,
+                "JIRA_USER_EMAIL": self._settings.JIRA_USER_EMAIL,
+                "JIRA_API_TOKEN": self._settings.JIRA_API_TOKEN,
+            }.items() if not v]
+            if missing:
+                raise ProviderNotConfiguredError(
+                    f"Jira is not configured. Missing: {', '.join(missing)}"
+                )
+        if provider_name == "azure_devops":
+            missing = [k for k, v in {
+                "AZURE_ORG_URL": self._settings.AZURE_ORG_URL,
+                "AZURE_DEVOPS_TOKEN": self._settings.AZURE_DEVOPS_TOKEN,
+                "AZURE_PROJECT": self._settings.AZURE_PROJECT,
+            }.items() if not v]
+            if missing:
+                raise ProviderNotConfiguredError(
+                    f"Azure DevOps is not configured. Missing: {', '.join(missing)}"
+                )
         return cls(self._settings)
 
     def _audit(

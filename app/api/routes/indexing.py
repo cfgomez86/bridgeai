@@ -1,6 +1,7 @@
 import logging
 import uuid
 
+from app.core.clerk_auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -15,7 +16,7 @@ from app.services.scm_providers import get_provider
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["indexing"])
+router = APIRouter(dependencies=[Depends(get_current_user)], tags=["indexing"])
 
 
 class IndexRequest(BaseModel):

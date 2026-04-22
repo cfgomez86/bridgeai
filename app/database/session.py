@@ -31,11 +31,6 @@ SessionLocal: sessionmaker[Session] = sessionmaker(
 )
 
 
-def init_db() -> None:
-    """Create all tables defined on Base metadata."""
-    Base.metadata.create_all(bind=engine)
-
-
 def get_db() -> Generator[Session, None, None]:
     """FastAPI dependency that yields a database session."""
     db = SessionLocal()

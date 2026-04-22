@@ -38,6 +38,8 @@ You are the API Route Builder for BridgeAI. You produce a complete vertical slic
 - Inject service via `Depends()`.
 - Return `dict` or a Pydantic response model — never a domain dataclass directly.
 - Include `request: Request` to forward `request_id` in response if relevant.
+- **Every route that touches a repository MUST include `_user: User = Depends(get_current_user)`**. This sets `current_tenant_id` in context. Without it, any repository call will raise `RuntimeError: Tenant context not set`.
+- **Unauthenticated callbacks (OAuth, webhooks)**: no `get_current_user`. Restore tenant context from a stored record (e.g. OAuthState) with `current_tenant_id.set(record.tenant_id)` before calling any repository method.
 
 ### Registration (`app/main.py`)
 - Add `app.include_router(<name>_router.router)` inside `create_app()`.
@@ -49,6 +51,18 @@ You are the API Route Builder for BridgeAI. You produce a complete vertical slic
 ## Delivery
 
 Produce ALL files in one response. After writing each file, show a one-line summary of what it does. End with the exact `include_router` line to add to `app/main.py`.
+
+## URL contract — never guess, always verify
+
+Before writing any route, check `app/api/routes/` for existing patterns. The frontend `api-client.ts` must use URLs that exactly match the backend. Common mistakes to avoid:
+
+| Wrong | Correct |
+|---|---|
+| `POST /{platform}/authorize` | `GET /oauth/authorize/{platform}?origin=` |
+| `POST /{platform}/config` | `PUT /platforms/{platform}` |
+| `DELETE /{platform}/config` | `DELETE /platforms/{platform}` |
+
+After writing a new route, grep `frontend/lib/api-client.ts` to verify no caller is using a stale URL pattern.
 
 ## Post-generation quality gates (mandatory, in order)
 

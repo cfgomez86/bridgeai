@@ -1,27 +1,13 @@
 import logging
-import time
 import uuid
 
 from app.core.config import Settings, get_settings
-from app.domain.source_connection import PlatformConfig, Repository, SourceConnection
-from app.models.source_connection import PlatformConfig as PlatformConfigORM
+from app.domain.source_connection import Repository, SourceConnection
 from app.models.source_connection import SourceConnection as SourceConnectionORM
 from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.scm_providers import SUPPORTED_PLATFORMS, get_provider
 
 logger = logging.getLogger(__name__)
-
-# redirect_uri store keyed by oauth_state UUID, with creation timestamp for TTL.
-# Single-process only; multi-process deployments need a shared store (Redis).
-_oauth_redirect_cache: dict[str, tuple[str, float]] = {}
-_OAUTH_STATE_TTL = 600  # 10 minutes
-
-
-def _prune_oauth_cache() -> None:
-    now = time.monotonic()
-    stale = [k for k, (_, ts) in _oauth_redirect_cache.items() if now - ts > _OAUTH_STATE_TTL]
-    for k in stale:
-        _oauth_redirect_cache.pop(k, None)
 
 _PLATFORM_LABELS = {
     "github": "GitHub",
@@ -54,7 +40,6 @@ class SourceConnectionService:
         self._settings = settings
 
     def _get_server_credentials(self, platform: str) -> dict | None:
-        """Return first-party OAuth credentials from .env, or None if not set."""
         mapping = {
             "github": (self._settings.GITHUB_CLIENT_ID, self._settings.GITHUB_CLIENT_SECRET),
             "gitlab": (self._settings.GITLAB_CLIENT_ID, self._settings.GITLAB_CLIENT_SECRET),
@@ -65,70 +50,60 @@ class SourceConnectionService:
             return {"client_id": client_id, "client_secret": client_secret}
         return None
 
-    # ── Platform configs ────────────────────────────────────────────────────
+    # ── Platform listing ────────────────────────────────────────────────────
 
     def list_platforms(self) -> list[dict]:
-        configs = {c.platform: c for c in self._repo.list_platform_configs()}
         result = []
         for platform in SUPPORTED_PLATFORMS:
-            config = configs.get(platform)
             server_creds = self._get_server_credentials(platform)
             result.append({
                 "platform": platform,
                 "label": _PLATFORM_LABELS.get(platform, platform),
-                "configured": config is not None,
-                "client_id": config.client_id if config else None,
                 "server_configured": server_creds is not None,
-                "redirect_uri": None,  # Now computed dynamically via /oauth/redirect-uri/{platform}
             })
         return result
-
-    def save_platform_config(self, platform: str, client_id: str, client_secret: str) -> PlatformConfig:
-        if platform not in SUPPORTED_PLATFORMS:
-            raise ValueError(f"Unsupported platform: {platform!r}")
-        orm = self._repo.upsert_platform_config(platform, client_id, client_secret)
-        return PlatformConfig(platform=orm.platform, client_id=orm.client_id, configured=True)
-
-    def delete_platform_config(self, platform: str) -> bool:
-        return self._repo.delete_platform_config(platform)
 
     # ── OAuth flow ──────────────────────────────────────────────────────────
 
     def _resolve_credentials(self, platform: str) -> tuple[str, str]:
-        """Return (client_id, client_secret): user DB config takes priority, then server .env."""
-        config = self._repo.get_platform_config(platform)
-        if config:
-            return config.client_id, config.client_secret
         server = self._get_server_credentials(platform)
         if server:
             return server["client_id"], server["client_secret"]
         raise ValueError(
             f"Platform {platform!r} is not configured. "
-            "Either set client_id/secret in the UI or configure server-side credentials in .env."
+            "Set server-side credentials in .env."
         )
 
     def get_authorize_url(self, platform: str, redirect_uri: str) -> str:
         client_id, _ = self._resolve_credentials(platform)
         provider = get_provider(platform)
         state = str(uuid.uuid4())
-        self._repo.create_pending(platform, state)
-        _prune_oauth_cache()
-        _oauth_redirect_cache[state] = (redirect_uri, time.monotonic())
+        self._repo.create_oauth_state(platform, state, redirect_uri)
         url = provider.get_authorize_url(client_id, redirect_uri, state)
-        logger.info("OAuth authorize initiated platform=%s state=%s mode=%s",
-                    platform, state, "byoa" if self._repo.get_platform_config(platform) else "server")
+        logger.info("OAuth authorize initiated platform=%s state=%s", platform, state)
         return url
 
     def handle_callback(self, platform: str, code: str, state: str) -> SourceConnection:
-        pending = self._repo.find_by_state(state)
-        if not pending:
-            raise ValueError("Invalid or expired OAuth state parameter.")
-        cached = _oauth_redirect_cache.pop(state, None)
-        if not cached:
-            raise ValueError(
-                "OAuth session expired or server was restarted. Please start the connection flow again."
-            )
-        redirect_uri, _ = cached
+        oauth_state = self._repo.consume_oauth_state(state)
+        if not oauth_state:
+            # Duplicate callback (browser/proxy double-hit): state already consumed.
+            # Restore tenant from the stored record and return the existing connection.
+            past = self._repo.find_oauth_state_by_token(state)
+            if past:
+                from app.core.context import current_tenant_id
+                current_tenant_id.set(past.tenant_id)
+                existing = self._repo.find_latest_for_platform(platform)
+                if existing:
+                    logger.info("OAuth duplicate callback platform=%s — returning existing connection", platform)
+                    return _to_domain_connection(existing)
+            raise ValueError("Invalid or expired OAuth state. Please start the connection flow again.")
+
+        # The callback arrives from GitHub without Clerk auth, so current_tenant_id is not set.
+        # Restore it from the OAuth state record, which was written during the authenticated authorize step.
+        from app.core.context import current_tenant_id
+        current_tenant_id.set(oauth_state.tenant_id)
+
+        redirect_uri = oauth_state.redirect_uri
         client_id, client_secret = self._resolve_credentials(platform)
         provider = get_provider(platform)
         try:
@@ -138,15 +113,14 @@ class SourceConnectionService:
         except Exception as exc:
             logger.error("OAuth token exchange failed platform=%s error=%s", platform, exc)
             raise ValueError("OAuth token exchange failed. Please try again.") from exc
+
         user_info = provider.get_user_info(tokens["access_token"])
-        orm = self._repo.update_after_oauth(
-            pending.id,
+        orm = self._repo.create_connection(
+            platform=platform,
             display_name=user_info["login"],
             access_token=tokens["access_token"],
             refresh_token=tokens.get("refresh_token"),
         )
-        if not orm:
-            raise ValueError("Connection record not found after OAuth exchange.")
         logger.info("OAuth callback success platform=%s user=%s", platform, user_info["login"])
         return _to_domain_connection(orm)
 

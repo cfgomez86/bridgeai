@@ -159,6 +159,7 @@ def test_prompt_injection_blocked_at_endpoint(tmp_path):
     from app.api.routes.understand_requirement import get_understanding_service
     from app.repositories.requirement_repository import RequirementRepository
     from app.services.requirement_understanding_service import RequirementUnderstandingService
+    from tests.integration.auth_helpers import apply_mock_auth
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine)
@@ -170,7 +171,7 @@ def test_prompt_injection_blocked_at_endpoint(tmp_path):
         parser = AIRequirementParser(StubAIProvider())
         return RequirementUnderstandingService(parser, repo)
 
-    app = create_app()
+    app = apply_mock_auth(create_app())
     app.dependency_overrides[get_understanding_service] = override
     client = TestClient(app)
 

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import DateTime, Index, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database.session import Base
 
@@ -11,6 +11,7 @@ class TicketIntegration(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
     story_id: Mapped[str] = mapped_column(String(36), nullable=False)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     project_key: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -27,6 +28,7 @@ class IntegrationAuditLog(Base):
     __tablename__ = "integration_audit_logs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
     story_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)

@@ -1,84 +1,112 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from uuid import uuid4
+
 from sqlalchemy.orm import Session
-from app.models.source_connection import PlatformConfig, SourceConnection
+
+from app.core.context import current_tenant_id, get_tenant_id
+from app.models.oauth_state import OAuthState
+from app.models.source_connection import SourceConnection
+
+_OAUTH_STATE_TTL_MINUTES = 10
 
 
 class SourceConnectionRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
 
-    # ── Platform configs ────────────────────────────────────────────────────
+    def _tid(self) -> str:
+        return get_tenant_id()
 
-    def get_platform_config(self, platform: str) -> Optional[PlatformConfig]:
-        return self._db.query(PlatformConfig).filter(PlatformConfig.platform == platform).first()
+    # ── OAuth state (DB-backed) ────────────────────────────────────────────
 
-    def list_platform_configs(self) -> list[PlatformConfig]:
-        return self._db.query(PlatformConfig).all()
-
-    def upsert_platform_config(self, platform: str, client_id: str, client_secret: str) -> PlatformConfig:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        existing = self.get_platform_config(platform)
-        if existing:
-            existing.client_id = client_id
-            existing.client_secret = client_secret
-            existing.updated_at = now
-            self._db.commit()
-            self._db.refresh(existing)
-            return existing
-        import uuid
-        config = PlatformConfig(
-            id=str(uuid.uuid4()),
+    def create_oauth_state(self, platform: str, state_token: str, redirect_uri: str) -> OAuthState:
+        record = OAuthState(
+            id=str(uuid4()),
+            tenant_id=self._tid(),
             platform=platform,
-            client_id=client_id,
-            client_secret=client_secret,
-            created_at=now,
-            updated_at=now,
+            state_token=state_token,
+            redirect_uri=redirect_uri,
+            expires_at=datetime.utcnow() + timedelta(minutes=_OAUTH_STATE_TTL_MINUTES),
+            consumed=False,
         )
-        self._db.add(config)
+        self._db.add(record)
         self._db.commit()
-        self._db.refresh(config)
-        return config
+        self._db.refresh(record)
+        return record
 
-    def delete_platform_config(self, platform: str) -> bool:
-        existing = self.get_platform_config(platform)
-        if not existing:
-            return False
-        self._db.delete(existing)
+    def consume_oauth_state(self, state_token: str) -> Optional[OAuthState]:
+        """Find a valid (non-expired, non-consumed) state, mark it consumed and return it."""
+        record = (
+            self._db.query(OAuthState)
+            .filter(
+                OAuthState.state_token == state_token,
+                OAuthState.consumed == False,  # noqa: E712
+                OAuthState.expires_at > datetime.utcnow(),
+            )
+            .first()
+        )
+        if not record:
+            return None
+        record.consumed = True
         self._db.commit()
-        return True
+        return record
+
+    def find_oauth_state_by_token(self, state_token: str) -> Optional[OAuthState]:
+        """Find any state by token regardless of consumed/expired status — for idempotent callbacks."""
+        return (
+            self._db.query(OAuthState)
+            .filter(OAuthState.state_token == state_token)
+            .first()
+        )
+
+    def find_latest_for_platform(self, platform: str) -> Optional[SourceConnection]:
+        """Return the most recently created connection for a platform, any status."""
+        return (
+            self._db.query(SourceConnection)
+            .filter(SourceConnection.tenant_id == get_tenant_id(), SourceConnection.platform == platform)
+            .order_by(SourceConnection.created_at.desc())
+            .first()
+        )
 
     # ── Source connections ──────────────────────────────────────────────────
 
-    def create_pending(self, platform: str, oauth_state: str) -> SourceConnection:
-        import uuid
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+    def create_connection(
+        self,
+        platform: str,
+        display_name: str,
+        access_token: str,
+        refresh_token: Optional[str],
+    ) -> SourceConnection:
         conn = SourceConnection(
-            id=str(uuid.uuid4()),
+            id=str(uuid4()),
+            tenant_id=self._tid(),
             platform=platform,
-            oauth_state=oauth_state,
-            created_at=now,
+            display_name=display_name,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         self._db.add(conn)
         self._db.commit()
         self._db.refresh(conn)
         return conn
 
-    def find_by_state(self, oauth_state: str) -> Optional[SourceConnection]:
+    def find_by_id(self, connection_id: str) -> Optional[SourceConnection]:
         return (
             self._db.query(SourceConnection)
-            .filter(SourceConnection.oauth_state == oauth_state)
+            .filter(SourceConnection.id == connection_id, SourceConnection.tenant_id == self._tid())
             .first()
         )
-
-    def find_by_id(self, connection_id: str) -> Optional[SourceConnection]:
-        return self._db.query(SourceConnection).filter(SourceConnection.id == connection_id).first()
 
     def list_connected(self) -> list[SourceConnection]:
         return (
             self._db.query(SourceConnection)
-            .filter(SourceConnection.display_name != "")
-            .filter(SourceConnection.access_token != "")
+            .filter(
+                SourceConnection.tenant_id == self._tid(),
+                SourceConnection.display_name != "",
+                SourceConnection.access_token != "",
+            )
             .order_by(SourceConnection.created_at.desc())
             .all()
         )
@@ -86,31 +114,17 @@ class SourceConnectionRepository:
     def get_active(self) -> Optional[SourceConnection]:
         return (
             self._db.query(SourceConnection)
-            .filter(SourceConnection.is_active == True)  # noqa: E712
+            .filter(SourceConnection.tenant_id == self._tid(), SourceConnection.is_active == True)  # noqa: E712
             .first()
         )
-
-    def update_after_oauth(
-        self, connection_id: str, display_name: str, access_token: str, refresh_token: str | None
-    ) -> Optional[SourceConnection]:
-        conn = self.find_by_id(connection_id)
-        if not conn:
-            return None
-        conn.display_name = display_name
-        conn.access_token = access_token
-        conn.refresh_token = refresh_token
-        conn.oauth_state = None
-        self._db.commit()
-        self._db.refresh(conn)
-        return conn
 
     def activate(
         self, connection_id: str, repo_full_name: str, repo_name: str, owner: str, default_branch: str
     ) -> Optional[SourceConnection]:
-        # deactivate all
-        self._db.query(SourceConnection).filter(SourceConnection.is_active == True).update(  # noqa: E712
-            {"is_active": False}, synchronize_session=False
-        )
+        self._db.query(SourceConnection).filter(
+            SourceConnection.tenant_id == self._tid(),
+            SourceConnection.is_active == True,  # noqa: E712
+        ).update({"is_active": False}, synchronize_session=False)
         conn = self.find_by_id(connection_id)
         if not conn:
             self._db.commit()

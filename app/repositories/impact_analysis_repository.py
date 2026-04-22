@@ -1,5 +1,8 @@
 from typing import Optional
+
 from sqlalchemy.orm import Session
+
+from app.core.context import current_tenant_id, get_tenant_id
 from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
 
 
@@ -7,7 +10,11 @@ class ImpactAnalysisRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
 
+    def _tid(self) -> str:
+        return get_tenant_id()
+
     def save(self, analysis: ImpactAnalysis, impacted_files: list[ImpactedFile]) -> ImpactAnalysis:
+        analysis.tenant_id = self._tid()
         self._db.add(analysis)
         self._db.add_all(impacted_files)
         self._db.commit()
@@ -15,7 +22,11 @@ class ImpactAnalysisRepository:
         return analysis
 
     def find_by_id(self, analysis_id: str) -> Optional[ImpactAnalysis]:
-        return self._db.get(ImpactAnalysis, analysis_id)
+        return (
+            self._db.query(ImpactAnalysis)
+            .filter(ImpactAnalysis.id == analysis_id, ImpactAnalysis.tenant_id == self._tid())
+            .first()
+        )
 
     def find_files_page(
         self, analysis_id: str, offset: int = 0, limit: int = 100

@@ -30,6 +30,8 @@ models/      → MAY import from database/ (Base). MUST NOT import from services
 4. Check that `domain/` files contain ONLY frozen dataclasses — no methods with side effects, no I/O.
 5. Check that `services/` accept dependencies via `__init__` constructor (DI), never import `get_db()` directly.
 6. Check that FastAPI `Depends()` is only used in `api/routes/`, never in `services/`.
+7. **Tenant context rule**: any `repositories/` file must call `get_tenant_id()` (from `app.core.context`), never `current_tenant_id.get()` directly. Flag bare `.get()` calls as a violation — they produce opaque `LookupError` 500s.
+8. **Route auth rule**: any `api/routes/` handler that calls a service/repository must declare `_user: User = Depends(get_current_user)`. Flag routes that access tenant data without this dependency. Sole exception: unauthenticated callbacks (OAuth, webhooks) that explicitly call `current_tenant_id.set()` from a trusted stored record.
 
 ## Output format
 
@@ -37,7 +39,7 @@ For each violation found:
 ```
 VIOLATION in <file>:<line>
   Layer: <layer of the file>
-  Imports: <the offending import>
+  Issue: <the offending import or pattern>
   Rule broken: <which rule above>
   Fix: <concrete one-line fix>
 ```

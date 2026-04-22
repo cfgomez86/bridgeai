@@ -13,6 +13,7 @@ from app.core.config import Settings
 from app.database.session import Base, get_db
 from app.domain.ticket_integration import TicketResult
 from app.main import create_app
+from tests.integration.auth_helpers import apply_mock_auth, TEST_TENANT_ID
 from app.models.user_story import UserStory as UserStoryModel
 from app.api.routes.ticket_integration import get_integration_service
 from app.services.ticket_integration_service import TicketIntegrationService
@@ -43,6 +44,7 @@ def make_client_with_story(story_id: str = "story-endpoint-1"):
 
     story = UserStoryModel(
         id=story_id,
+        tenant_id=TEST_TENANT_ID,
         requirement_id="req-1",
         impact_analysis_id="ana-1",
         project_id="proj-1",
@@ -61,7 +63,7 @@ def make_client_with_story(story_id: str = "story-endpoint-1"):
     db.commit()
 
     settings = make_settings()
-    app = create_app()
+    app = apply_mock_auth(create_app())
 
     def override_db():
         yield db
@@ -211,7 +213,7 @@ class TestIntegrationHealthEndpoint:
         Session = sessionmaker(bind=engine)
         db = Session()
         settings = make_settings(JIRA_BASE_URL="", JIRA_API_TOKEN="")
-        app = create_app()
+        app = apply_mock_auth(create_app())
         app.dependency_overrides[get_integration_service] = lambda: TicketIntegrationService(
             db=db, settings=settings
         )

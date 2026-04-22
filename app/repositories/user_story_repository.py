@@ -3,6 +3,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.context import current_tenant_id, get_tenant_id
 from app.domain.user_story import UserStory as DomainUserStory
 from app.models.user_story import UserStory
 from app.utils.json_utils import parse_json_field
@@ -12,14 +13,22 @@ class UserStoryRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
 
+    def _tid(self) -> str:
+        return get_tenant_id()
+
     def save(self, story: UserStory) -> UserStory:
+        story.tenant_id = self._tid()
         self._db.add(story)
         self._db.commit()
         self._db.refresh(story)
         return story
 
     def find_by_id(self, story_id: str) -> Optional[UserStory]:
-        return self._db.get(UserStory, story_id)
+        return (
+            self._db.query(UserStory)
+            .filter(UserStory.id == story_id, UserStory.tenant_id == self._tid())
+            .first()
+        )
 
     def find_domain_by_id(self, story_id: str) -> Optional[DomainUserStory]:
         model = self.find_by_id(story_id)
@@ -48,6 +57,7 @@ class UserStoryRepository:
         return (
             self._db.query(UserStory)
             .filter(
+                UserStory.tenant_id == self._tid(),
                 UserStory.requirement_id == requirement_id,
                 UserStory.impact_analysis_id == analysis_id,
                 UserStory.language == language,

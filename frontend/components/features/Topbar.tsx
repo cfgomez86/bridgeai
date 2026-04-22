@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import { useLanguage } from "@/lib/i18n"
+import { UserButton } from "@clerk/nextjs"
 
 export function Topbar() {
   const pathname = usePathname()
@@ -9,18 +10,18 @@ export function Topbar() {
   const segments = pathname.split("/").filter(Boolean)
 
   const ROUTE_LABELS: Record<string, string> = {
-    "": t.nav.home,
-    "workflow": t.nav.workflow,
-    "indexing": t.nav.indexing,
-    "connections": t.nav.connections,
-    "settings": t.nav.settings,
+    workflow: t.nav.workflow,
+    indexing: t.nav.indexing,
+    connections: t.nav.connections,
+    settings: t.nav.settings,
   }
 
   const crumbs: { label: string; href: string }[] = [{ label: "BridgeAI", href: "/" }]
   let cumulative = ""
   for (const seg of segments) {
     cumulative += "/" + seg
-    crumbs.push({ label: ROUTE_LABELS[seg] ?? seg, href: cumulative })
+    const label = ROUTE_LABELS[seg]
+    if (label) crumbs.push({ label, href: cumulative })
   }
 
   return (
@@ -55,6 +56,8 @@ export function Topbar() {
           </span>
         ))}
       </nav>
+
+      <UserButton />
     </header>
   )
 }

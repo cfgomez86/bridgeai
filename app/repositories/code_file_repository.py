@@ -2,6 +2,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.context import current_tenant_id, get_tenant_id
 from app.models.code_file import CodeFile
 
 
@@ -9,7 +10,11 @@ class CodeFileRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
 
+    def _tid(self) -> str:
+        return get_tenant_id()
+
     def save(self, code_file: CodeFile) -> CodeFile:
+        code_file.tenant_id = self._tid()
         self._db.add(code_file)
         self._db.commit()
         self._db.refresh(code_file)
@@ -24,12 +29,14 @@ class CodeFileRepository:
     def find_by_path(self, file_path: str) -> Optional[CodeFile]:
         return (
             self._db.query(CodeFile)
-            .filter(CodeFile.file_path == file_path)
+            .filter(CodeFile.tenant_id == self._tid(), CodeFile.file_path == file_path)
             .first()
         )
 
     def save_batch(self, code_files: list[CodeFile]) -> None:
+        tid = self._tid()
         for cf in code_files:
+            cf.tenant_id = tid
             self._db.add(cf)
         self._db.commit()
 
@@ -39,23 +46,34 @@ class CodeFileRepository:
         self._db.commit()
 
     def list_all(self) -> list[CodeFile]:
-        return self._db.query(CodeFile).all()
+        return self._db.query(CodeFile).filter(CodeFile.tenant_id == self._tid()).all()
 
     def iter_all(self, chunk_size: int = 500):
-        yield from self._db.query(CodeFile).yield_per(chunk_size)
+        yield from (
+            self._db.query(CodeFile)
+            .filter(CodeFile.tenant_id == self._tid())
+            .yield_per(chunk_size)
+        )
 
     def delete_by_paths(self, paths: set[str]) -> int:
         deleted = (
             self._db.query(CodeFile)
-            .filter(CodeFile.file_path.in_(paths))
+            .filter(CodeFile.tenant_id == self._tid(), CodeFile.file_path.in_(paths))
             .delete(synchronize_session=False)
         )
         self._db.commit()
         return deleted
 
     def get_all_paths(self) -> set[str]:
-        return {row[0] for row in self._db.query(CodeFile.file_path).all()}
+        return {
+            row[0]
+            for row in self._db.query(CodeFile.file_path)
+            .filter(CodeFile.tenant_id == self._tid())
+            .all()
+        }
 
     def get_all_map(self) -> dict[str, "CodeFile"]:
-        """Return {file_path: CodeFile} for all indexed files — single query."""
-        return {cf.file_path: cf for cf in self._db.query(CodeFile).all()}
+        return {
+            cf.file_path: cf
+            for cf in self._db.query(CodeFile).filter(CodeFile.tenant_id == self._tid()).all()
+        }

@@ -7,6 +7,7 @@ from app.database.session import Base
 class ImpactAnalysis(Base):
     __tablename__ = "impact_analysis"
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
     requirement: Mapped[str] = mapped_column(Text, nullable=False)
     risk_level: Mapped[str] = mapped_column(String(10), nullable=False)
     files_impacted: Mapped[int] = mapped_column(Integer, nullable=False)

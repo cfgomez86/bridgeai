@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database.session import Base
 from app.domain.user_story import UserStory
+from tests.unit.conftest import TEST_TENANT_ID
 from app.models.requirement import Requirement
 from app.models.impact_analysis import ImpactAnalysis
 from app.repositories.requirement_repository import RequirementRepository
@@ -47,6 +48,7 @@ def insert_requirement(db, req_id: str = "req-1") -> Requirement:
     text = "User registration with email"
     req = Requirement(
         id=req_id,
+        tenant_id=TEST_TENANT_ID,
         requirement_text=text,
         requirement_text_hash=hashlib.sha256(text.encode()).hexdigest(),
         project_id="proj",
@@ -70,6 +72,7 @@ def insert_requirement(db, req_id: str = "req-1") -> Requirement:
 def insert_analysis(db, ana_id: str = "ana-1") -> ImpactAnalysis:
     analysis = ImpactAnalysis(
         id=ana_id,
+        tenant_id=TEST_TENANT_ID,
         requirement="User registration with email",
         risk_level="LOW",
         files_impacted=2,

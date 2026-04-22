@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.main import create_app
+from tests.integration.auth_helpers import apply_mock_auth
 from app.database.session import Base
 from app.api.routes.understand_requirement import get_understanding_service
 from app.repositories.requirement_repository import RequirementRepository
@@ -29,7 +30,7 @@ def make_client() -> TestClient:
         parser = AIRequirementParser(StubAIProvider())
         return RequirementUnderstandingService(parser, repo)
 
-    app = create_app()
+    app = apply_mock_auth(create_app())
     app.dependency_overrides[get_understanding_service] = override
     return TestClient(app)
 

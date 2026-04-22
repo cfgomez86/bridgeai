@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.session import Base
@@ -8,9 +8,13 @@ from app.database.session import Base
 
 class CodeFile(Base):
     __tablename__ = "code_files"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "file_path", name="uq_code_files_tenant_path"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    file_path: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
+    file_path: Mapped[str] = mapped_column(Text, nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     extension: Mapped[str] = mapped_column(String(20), nullable=False)
     language: Mapped[str] = mapped_column(String(50), nullable=False)

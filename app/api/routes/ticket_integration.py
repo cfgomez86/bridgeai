@@ -2,6 +2,7 @@ import asyncio
 import uuid
 from urllib.error import HTTPError
 
+from app.core.clerk_auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.database.session import get_db
 from app.services.ticket_integration_service import (
+    ProviderNotConfiguredError,
     StoryNotFoundError,
     TicketIntegrationService,
     UnsupportedProviderError,
@@ -17,7 +19,7 @@ from app.services.ticket_integration_service import (
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["ticket-integration"])
+router = APIRouter(dependencies=[Depends(get_current_user)], tags=["ticket-integration"])
 
 
 class TicketStatusResponse(BaseModel):
@@ -97,6 +99,8 @@ async def create_ticket(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except UnsupportedProviderError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except ProviderNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except HTTPError as exc:
         retryable = exc.code not in (400, 401, 403)
         jira_body = getattr(exc, "jira_error_body", None)

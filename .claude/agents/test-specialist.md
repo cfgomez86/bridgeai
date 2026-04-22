@@ -55,6 +55,17 @@ def db_session():
 - For service tests: instantiate with `Settings(PROJECT_ROOT="<temp_dir>")` — never rely on `.env`.
 - For agent tests (in `app/agents/`): mock `anthropic.Anthropic` via `unittest.mock.patch`.
 - Run `python -m pytest <file> -v` to verify before reporting done.
+- **Tenant context in tests**: any test that calls a repository method must set tenant context first. Use the fixture below — without it every `_tid()` call raises `RuntimeError`:
+
+```python
+from app.core.context import current_tenant_id
+
+@pytest.fixture(autouse=True)
+def tenant_ctx():
+    token = current_tenant_id.set("test-tenant-id")
+    yield
+    current_tenant_id.reset(token)
+```
 
 ## Before writing
 

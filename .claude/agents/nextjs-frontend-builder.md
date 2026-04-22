@@ -16,7 +16,7 @@ You are the Next.js Frontend Builder for BridgeAI. You produce production-qualit
 
 ## Stack
 
-- **Next.js 15** — App Router, Server Components by default, Client Components only when needed (`"use client"`)
+- **Next.js 16** — App Router, Server Components by default, Client Components only when needed (`"use client"`)
 - **TypeScript** — strict mode, no `any`
 - **Tailwind CSS v4**
 - **shadcn/ui** — components live in `frontend/components/ui/`, copy-pasted not imported from npm
@@ -51,10 +51,13 @@ All API calls go through `frontend/lib/api-client.ts`. Never call `fetch` direct
 
 ```ts
 // lib/api-client.ts pattern
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+// BASE_URL is intentionally empty — all calls use relative paths so they go through
+// the Next.js rewrite proxy (/api/v1/* → backend). This works identically in
+// local dev, devtunnels, and production without any env var changes.
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ""
 
 export async function createTicket(body: CreateTicketRequest): Promise<CreateTicketResponse> {
-  const res = await fetch(`${API_BASE}/api/v1/tickets`, {
+  const res = await fetch(`${BASE_URL}/api/v1/tickets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -63,6 +66,24 @@ export async function createTicket(body: CreateTicketRequest): Promise<CreateTic
   return res.json()
 }
 ```
+
+### OAuth authorize — dynamic origin (critical for devtunnels)
+
+Never hardcode the redirect URI. Always pass `window.location.origin` so the backend builds the correct callback URL regardless of environment:
+
+```ts
+export async function getOAuthAuthorizeUrl(platform: string): Promise<{ url: string; redirect_uri: string }> {
+  const origin = typeof window !== "undefined" ? window.location.origin : undefined
+  const params = origin ? `?origin=${encodeURIComponent(origin)}` : ""
+  return apiFetch<{ url: string; redirect_uri: string }>(
+    `/api/v1/connections/oauth/authorize/${platform}${params}`
+  )
+}
+```
+
+### URL contract — verify before writing
+
+Always match backend routes exactly. Read `app/api/routes/` before adding a new `api-client.ts` function. After writing, grep both files to confirm the path matches end-to-end.
 
 ## Component rules
 
@@ -113,6 +134,8 @@ Each step should be visible and feel progressive — not a single long form.
 - Prefer `async/await` over `.then()` chains
 - Use `next/link` for internal navigation, never `<a href>`
 - Images via `next/image`, never `<img>`
+- **Proxy file**: Next.js 16 uses `proxy.ts` not `middleware.ts`. Never create or modify `middleware.ts`.
+- **No hardcoded API URLs**: never use `http://localhost:8000` in client code. Always use relative paths so the Next.js rewrite handles routing to the backend.
 
 ## Delivery
 

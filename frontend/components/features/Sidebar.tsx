@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useParams } from "next/navigation"
 import { useLanguage } from "@/lib/i18n"
 
 interface NavItem {
@@ -10,8 +10,6 @@ interface NavItem {
   shortcut: string
   icon: React.ReactNode
 }
-
-
 
 function IconWand() {
   return (
@@ -57,17 +55,19 @@ function IconSettings() {
   )
 }
 
-
-
 export function Sidebar() {
   const pathname = usePathname()
+  const params = useParams()
   const { t } = useLanguage()
 
+  const tenant = params?.tenant as string | undefined
+  const prefix = tenant ? `/app/${tenant}` : ""
+
   const NAV_ITEMS: NavItem[] = [
-    { href: "/workflow", label: t.nav.workflow, shortcut: "G W", icon: <IconWand /> },
-    { href: "/indexing", label: t.nav.indexing, shortcut: "G X", icon: <IconDatabase /> },
-    { href: "/connections", label: t.nav.connections, shortcut: "G C", icon: <IconPlug /> },
-    { href: "/settings", label: t.nav.settings, shortcut: "G S", icon: <IconSettings /> },
+    { href: `${prefix}/workflow`, label: t.nav.workflow, shortcut: "G W", icon: <IconWand /> },
+    { href: `${prefix}/indexing`, label: t.nav.indexing, shortcut: "G X", icon: <IconDatabase /> },
+    { href: `${prefix}/connections`, label: t.nav.connections, shortcut: "G C", icon: <IconPlug /> },
+    { href: `${prefix}/settings`, label: t.nav.settings, shortcut: "G S", icon: <IconSettings /> },
   ]
 
   function navItemStyle(isActive: boolean): React.CSSProperties {
@@ -124,7 +124,7 @@ export function Sidebar() {
       {/* Navigation */}
       <nav style={{ display: "flex", flexDirection: "column", gap: "1px", flex: 1 }}>
         {NAV_ITEMS.map(({ href, label, shortcut, icon }) => {
-          const isActive = pathname.startsWith(href)
+          const isActive = pathname === href || pathname.startsWith(href + "/")
           return (
             <Link key={href} href={href} style={navItemStyle(isActive)} className="group">
               <span style={{ flexShrink: 0, color: isActive ? "var(--accent)" : "var(--muted)" }}>

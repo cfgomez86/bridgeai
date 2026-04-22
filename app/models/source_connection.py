@@ -1,24 +1,14 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database.session import Base
-
-
-class PlatformConfig(Base):
-    __tablename__ = "platform_configs"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    platform: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
-    client_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    client_secret: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class SourceConnection(Base):
     __tablename__ = "source_connections"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
     platform: Mapped[str] = mapped_column(String(50), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     access_token: Mapped[str] = mapped_column(String(1024), nullable=False, default="")
