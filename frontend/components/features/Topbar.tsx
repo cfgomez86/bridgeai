@@ -57,7 +57,7 @@ export function Topbar() {
         ))}
       </nav>
 
-      <UserButton />
+      <UserButton afterSignOutUrl="/sign-in" />
     </header>
   )
 }
