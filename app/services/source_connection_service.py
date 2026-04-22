@@ -1,4 +1,5 @@
 import logging
+import time
 import uuid
 
 from app.core.config import Settings, get_settings
@@ -9,6 +10,18 @@ from app.repositories.source_connection_repository import SourceConnectionReposi
 from app.services.scm_providers import SUPPORTED_PLATFORMS, get_provider
 
 logger = logging.getLogger(__name__)
+
+# redirect_uri store keyed by oauth_state UUID, with creation timestamp for TTL.
+# Single-process only; multi-process deployments need a shared store (Redis).
+_oauth_redirect_cache: dict[str, tuple[str, float]] = {}
+_OAUTH_STATE_TTL = 600  # 10 minutes
+
+
+def _prune_oauth_cache() -> None:
+    now = time.monotonic()
+    stale = [k for k, (_, ts) in _oauth_redirect_cache.items() if now - ts > _OAUTH_STATE_TTL]
+    for k in stale:
+        _oauth_redirect_cache.pop(k, None)
 
 _PLATFORM_LABELS = {
     "github": "GitHub",
@@ -40,10 +53,6 @@ class SourceConnectionService:
         self._repo = repo
         self._settings = settings
 
-    def _redirect_uri(self, platform: str) -> str:
-        api_base = self._settings.API_BASE_URL.rstrip("/")
-        return f"{api_base}/api/v1/connections/oauth/callback/{platform}"
-
     def _get_server_credentials(self, platform: str) -> dict | None:
         """Return first-party OAuth credentials from .env, or None if not set."""
         mapping = {
@@ -70,7 +79,7 @@ class SourceConnectionService:
                 "configured": config is not None,
                 "client_id": config.client_id if config else None,
                 "server_configured": server_creds is not None,
-                "redirect_uri": self._redirect_uri(platform),
+                "redirect_uri": None,  # Now computed dynamically via /oauth/redirect-uri/{platform}
             })
         return result
 
@@ -98,12 +107,13 @@ class SourceConnectionService:
             "Either set client_id/secret in the UI or configure server-side credentials in .env."
         )
 
-    def get_authorize_url(self, platform: str) -> str:
+    def get_authorize_url(self, platform: str, redirect_uri: str) -> str:
         client_id, _ = self._resolve_credentials(platform)
         provider = get_provider(platform)
         state = str(uuid.uuid4())
         self._repo.create_pending(platform, state)
-        redirect_uri = self._redirect_uri(platform)
+        _prune_oauth_cache()
+        _oauth_redirect_cache[state] = (redirect_uri, time.monotonic())
         url = provider.get_authorize_url(client_id, redirect_uri, state)
         logger.info("OAuth authorize initiated platform=%s state=%s mode=%s",
                     platform, state, "byoa" if self._repo.get_platform_config(platform) else "server")
@@ -113,10 +123,21 @@ class SourceConnectionService:
         pending = self._repo.find_by_state(state)
         if not pending:
             raise ValueError("Invalid or expired OAuth state parameter.")
+        cached = _oauth_redirect_cache.pop(state, None)
+        if not cached:
+            raise ValueError(
+                "OAuth session expired or server was restarted. Please start the connection flow again."
+            )
+        redirect_uri, _ = cached
         client_id, client_secret = self._resolve_credentials(platform)
         provider = get_provider(platform)
-        redirect_uri = self._redirect_uri(platform)
-        tokens = provider.exchange_code(code, client_id, client_secret, redirect_uri)
+        try:
+            tokens = provider.exchange_code(code, client_id, client_secret, redirect_uri)
+        except ValueError:
+            raise
+        except Exception as exc:
+            logger.error("OAuth token exchange failed platform=%s error=%s", platform, exc)
+            raise ValueError("OAuth token exchange failed. Please try again.") from exc
         user_info = provider.get_user_info(tokens["access_token"])
         orm = self._repo.update_after_oauth(
             pending.id,

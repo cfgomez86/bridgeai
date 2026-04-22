@@ -368,9 +368,17 @@ function ConnectionsContent() {
   const s = t.connections
 
   const refresh = useCallback(async () => {
-    const [p, c] = await Promise.all([listPlatforms(), listConnections()])
-    setPlatforms(p)
-    setConnections(c)
+    try {
+      const [p, c] = await Promise.all([listPlatforms(), listConnections()])
+      setPlatforms(p)
+      setConnections(c)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load connections"
+      console.error("[Connections] Error loading platforms/connections:", err)
+      setToast({ msg: `Error al cargar: ${message}`, tone: "err" })
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 5000)
+    }
   }, [])
 
   useEffect(() => { refresh() }, [refresh])

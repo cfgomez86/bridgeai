@@ -1,10 +1,12 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+
+SUPPORTED_PLATFORMS_SET = {"github", "gitlab", "azure_devops"}
 from app.database.session import get_db
 from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.source_connection_service import SourceConnectionService
@@ -105,28 +107,73 @@ def delete_platform_config(
 
 class AuthorizeResponse(BaseModel):
     url: str
+    redirect_uri: str
 
 
 class RedirectUriResponse(BaseModel):
     redirect_uri: str
 
 
+def _resolve_base(
+    origin: str | None,
+    request: Request,
+    settings: Settings,
+) -> str:
+    """Return the validated base URL for building redirect_uri.
+
+    The `origin` param comes from window.location.origin in the browser.
+    We validate it against CORS_ORIGINS so a malicious actor cannot supply
+    an arbitrary redirect destination.
+    """
+    if origin is None:
+        return str(request.base_url).rstrip("/")
+    normalized = origin.rstrip("/")
+    allowed = {o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()}
+    if normalized not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid origin parameter.",
+        )
+    return normalized
+
+
+def _require_platform(platform: str) -> str:
+    if platform not in SUPPORTED_PLATFORMS_SET:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Platform {platform!r} is not supported.",
+        )
+    return platform
+
+
 @router.get("/oauth/redirect-uri/{platform}", response_model=RedirectUriResponse)
 def get_redirect_uri(
     platform: str,
-    service: SourceConnectionService = Depends(get_service),
+    request: Request,
+    origin: str | None = Query(None),
+    settings: Settings = Depends(get_settings),
 ):
-    return RedirectUriResponse(redirect_uri=service._redirect_uri(platform))
+    _require_platform(platform)
+    base = _resolve_base(origin, request, settings)
+    return RedirectUriResponse(redirect_uri=f"{base}/api/v1/connections/oauth/callback/{platform}")
 
 
 @router.get("/oauth/authorize/{platform}", response_model=AuthorizeResponse)
 def authorize(
     platform: str,
+    request: Request,
+    origin: str | None = Query(None),
     service: SourceConnectionService = Depends(get_service),
+    settings: Settings = Depends(get_settings),
 ):
+    _require_platform(platform)
     try:
-        url = service.get_authorize_url(platform)
-        return AuthorizeResponse(url=url)
+        base = _resolve_base(origin, request, settings)
+        redirect_uri = f"{base}/api/v1/connections/oauth/callback/{platform}"
+        url = service.get_authorize_url(platform, redirect_uri)
+        return AuthorizeResponse(url=url, redirect_uri=redirect_uri)
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -217,7 +264,7 @@ def list_repos(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except Exception as exc:
         logger.error("Failed to list repos connection=%s error=%s", connection_id, exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to fetch repos: {exc}")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to fetch repositories from the SCM provider.")
 
 
 @router.post("/{connection_id}/activate", response_model=ConnectionResponse)

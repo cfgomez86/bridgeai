@@ -1,14 +1,23 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# APP_ENV selects the environment overlay file:
+#   local   → .env + .env.local   (default)
+#   tunnel  → .env + .env.tunnel
+#   prod    → .env + .env.prod
+_APP_ENV = os.getenv("APP_ENV", "tunnel")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Files listed last take precedence — overlay overrides base.
+        env_file=[".env", f".env.{_APP_ENV}"],
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # Database
@@ -36,23 +45,27 @@ class Settings(BaseSettings):
     JIRA_REQUEST_TIMEOUT_SECONDS: int = 10
     JIRA_MAX_RETRIES: int = 3
     JIRA_RETRY_DELAY_SECONDS: int = 5
-    # Override issue type names when your Jira project uses a different language.
-    # Format: "Story=Historia,Task=Tarea,Bug=Error"
     JIRA_ISSUE_TYPE_MAP: str = ""
 
     # Azure DevOps integration
     AZURE_DEVOPS_TOKEN: str = ""
-    AZURE_ORG_URL: str = ""       # https://dev.azure.com/your-org
+    AZURE_ORG_URL: str = ""
     AZURE_PROJECT: str = ""
     AZURE_REQUEST_TIMEOUT_SECONDS: int = 10
     AZURE_MAX_RETRIES: int = 3
     AZURE_RETRY_DELAY_SECONDS: int = 5
 
-    # URLs used for OAuth flow
+    # URLs — overridden per environment in .env.{APP_ENV}
     FRONTEND_URL: str = "http://localhost:3000"
     API_BASE_URL: str = "http://localhost:8000"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
-    # First-party OAuth credentials (SaaS mode — set these in .env to skip per-user config)
+    # IPs allowed to set X-Forwarded-* headers (Next.js rewrite proxy, nginx, etc.)
+    # Restrict to loopback in all environments; extend only if your proxy runs on a
+    # different host.
+    TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
+
+    # First-party OAuth credentials — overridden per environment
     GITHUB_CLIENT_ID: str = ""
     GITHUB_CLIENT_SECRET: str = ""
     GITLAB_CLIENT_ID: str = ""

@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api.routes import health as health_router
 from app.api.routes import indexing as indexing_router
@@ -34,6 +35,12 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    # ProxyHeadersMiddleware reads X-Forwarded-* headers to reconstruct the real
+    # external URL. Restricted to localhost/loopback — the only legitimate proxy
+    # in both dev (Next.js rewrite) and tunnel scenarios.
+    trusted_proxies = [h.strip() for h in settings.TRUSTED_PROXY_IPS.split(",") if h.strip()]
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_proxies)
 
     # Order matters: CORS → Security → Logging
     add_cors(app)
