@@ -26,6 +26,14 @@ const PLATFORM_ICONS: Record<string, string> = {
   bitbucket: "BB",
 }
 
+// Shown immediately on paint — server_configured updates after the API responds
+const STATIC_PLATFORMS: PlatformResponse[] = [
+  { platform: "github",      label: "GitHub",        server_configured: false },
+  { platform: "gitlab",      label: "GitLab",        server_configured: false },
+  { platform: "azure_devops", label: "Azure DevOps", server_configured: false },
+  { platform: "bitbucket",   label: "Bitbucket",     server_configured: false },
+]
+
 type PlatformTone = "ok" | "warn" | "neutral"
 
 function PlatformCardDesign({
@@ -182,7 +190,7 @@ function ConnectionsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { isLoaded, isSignedIn } = useAuth()
-  const [platforms, setPlatforms] = useState<PlatformResponse[]>([])
+  const [platforms, setPlatforms] = useState<PlatformResponse[]>(STATIC_PLATFORMS)
   const [connections, setConnections] = useState<ConnectionResponse[]>([])
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "err" } | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -292,51 +300,6 @@ function ConnectionsContent() {
         {platforms.map((p) => (
           <PlatformCardDesign key={p.platform} platform={p} connections={connections} onUpdated={refresh} />
         ))}
-        {/* Placeholder for future platforms */}
-        {["bitbucket"].filter(id => !platforms.find(p => p.platform === id)).map((id) => {
-          const desc = s.platform_desc[id as keyof typeof s.platform_desc] ?? s.default_platform_desc
-          return (
-            <div key={id} style={{
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius-lg)",
-              padding: "16px",
-              opacity: 0.6,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div style={{
-                  width: "40px", height: "40px", borderRadius: "8px",
-                  background: "var(--surface-2)", border: "1px solid var(--border)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "11px", fontWeight: 700, color: "var(--muted)", fontFamily: "var(--font-mono)",
-                }}>
-                  {PLATFORM_ICONS[id] ?? "??"}
-                </div>
-                <div>
-                  <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--fg-2)", fontFamily: "var(--font-display)" }}>
-                    {PLATFORM_LABELS[id]}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                    {desc}
-                  </div>
-                </div>
-              </div>
-              <div style={{ marginTop: "12px" }}>
-                <button disabled style={{
-                  padding: "5px 12px",
-                  borderRadius: "var(--radius)",
-                  border: "1px solid var(--border)",
-                  background: "var(--surface-3)",
-                  color: "var(--muted)",
-                  fontSize: "12.5px",
-                  cursor: "not-allowed",
-                }}>
-                  {s.coming_soon}
-                </button>
-              </div>
-            </div>
-          )
-        })}
       </div>
     </div>
   )

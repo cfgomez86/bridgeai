@@ -13,6 +13,7 @@ _PLATFORM_LABELS = {
     "github": "GitHub",
     "gitlab": "GitLab",
     "azure_devops": "Azure DevOps",
+    "bitbucket": "Bitbucket",
 }
 
 
@@ -44,6 +45,7 @@ class SourceConnectionService:
             "github": (self._settings.GITHUB_CLIENT_ID, self._settings.GITHUB_CLIENT_SECRET),
             "gitlab": (self._settings.GITLAB_CLIENT_ID, self._settings.GITLAB_CLIENT_SECRET),
             "azure_devops": (self._settings.AZURE_DEVOPS_CLIENT_ID, self._settings.AZURE_DEVOPS_CLIENT_SECRET),
+            "bitbucket": (self._settings.BITBUCKET_CLIENT_ID, self._settings.BITBUCKET_CLIENT_SECRET),
         }
         client_id, client_secret = mapping.get(platform, ("", ""))
         if client_id and client_secret:

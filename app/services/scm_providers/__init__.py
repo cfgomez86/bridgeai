@@ -2,11 +2,13 @@ from app.services.scm_providers.base import ScmProvider
 from app.services.scm_providers.github import GitHubProvider
 from app.services.scm_providers.gitlab import GitLabProvider
 from app.services.scm_providers.azure_devops import AzureDevOpsProvider
+from app.services.scm_providers.bitbucket import BitbucketProvider
 
 _PROVIDERS: dict[str, ScmProvider] = {
     "github": GitHubProvider(),
     "gitlab": GitLabProvider(),
     "azure_devops": AzureDevOpsProvider(),
+    "bitbucket": BitbucketProvider(),
 }
 
 SUPPORTED_PLATFORMS = list(_PROVIDERS.keys())

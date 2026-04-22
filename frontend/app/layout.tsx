@@ -12,10 +12,17 @@ export const metadata: Metadata = {
   description: "Requirement to ticket automation",
 }
 
+const themeScript = `(function(){try{var t=localStorage.getItem('bridgeai-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
-      <html lang="es">
+      {/* suppressHydrationWarning: server renders without .dark; blocking script may add it before hydration */}
+      <html lang="es" suppressHydrationWarning>
+        <head>
+          {/* Blocking script — runs before CSS paint to avoid flash of light theme */}
+          <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        </head>
         <body>
           <ThemeProvider>
             <LanguageProvider>

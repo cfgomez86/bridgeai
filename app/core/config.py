@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     GITLAB_CLIENT_SECRET: str = ""
     AZURE_DEVOPS_CLIENT_ID: str = ""
     AZURE_DEVOPS_CLIENT_SECRET: str = ""
+    BITBUCKET_CLIENT_ID: str = ""
+    BITBUCKET_CLIENT_SECRET: str = ""
 
     @property
     def project_root_path(self) -> Path:
