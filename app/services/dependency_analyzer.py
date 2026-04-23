@@ -1,7 +1,7 @@
 import ast
 import re
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Optional
 
 from app.core.context import get_tenant_id
 
@@ -78,3 +78,15 @@ class DependencyAnalyzer:
         functions: list[str] = re.findall(r'(?:public|private|protected|static)[\s\w<>\[\]]+\s+(\w+)\s*\(', content)
 
         return FileAnalysis(file_path=file_path, language="Java", imports=imports, classes=classes, functions=functions)
+
+    @staticmethod
+    def quick_imports(file_path: str, content: str, language: str) -> FileAnalysis:
+        """Regex-only import extraction — no AST, no cache. Used for dependency graph on non-seed files."""
+        lang = language.lower()
+        if lang == "python":
+            imports = re.findall(r'^\s*(?:from|import)\s+([\w.]+)', content, re.MULTILINE)
+        elif lang == "java":
+            imports = re.findall(r'import\s+([\w.]+)\s*;', content)
+        else:
+            imports = []
+        return FileAnalysis(file_path=file_path, language=language, imports=imports, classes=[], functions=[])

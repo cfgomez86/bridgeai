@@ -85,7 +85,7 @@ class GitHubProvider(ScmProvider):
             url,
             headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read())
         return [
             RemoteFileEntry(path=item["path"], sha=item["sha"], size=item.get("size", 0))
@@ -105,7 +105,7 @@ class GitHubProvider(ScmProvider):
                     "Accept": "application/vnd.github.raw",
                 },
             )
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=60) as resp:
                 return resp.read().decode("utf-8", errors="replace")
 
         url = f"{self._API_BASE}/repos/{repo_full_name}/contents/{urllib.parse.quote(path)}"
@@ -113,6 +113,6 @@ class GitHubProvider(ScmProvider):
             url,
             headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read())
         return base64.b64decode(data.get("content", "")).decode("utf-8", errors="replace")

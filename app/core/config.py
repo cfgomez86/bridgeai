@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Feature flags
     DRY_RUN: bool = False
 
+    # Indexing
+    INDEXING_MAX_WORKERS: int = 20
+
     # AI Provider
     AI_PROVIDER: str = "stub"
     ANTHROPIC_API_KEY: str = ""

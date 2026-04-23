@@ -7,7 +7,8 @@ import { useLanguage } from "@/lib/i18n"
 import { Loader2, Database, Zap, RefreshCw, GitBranch } from "lucide-react"
 
 function timeAgo(isoDate: string): string {
-  const diff = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000)
+  const utc = isoDate.endsWith("Z") || isoDate.includes("+") ? isoDate : isoDate + "Z"
+  const diff = Math.floor((Date.now() - new Date(utc).getTime()) / 1000)
   if (diff < 60) return `${diff}s`
   if (diff < 3600) return `${Math.floor(diff / 60)}min`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`

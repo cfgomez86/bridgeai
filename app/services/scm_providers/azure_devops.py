@@ -109,7 +109,7 @@ class AzureDevOpsProvider(ScmProvider):
             f"&versionDescriptor.versionType=branch&api-version=7.1"
         )
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read())
         entries: list[RemoteFileEntry] = []
         for item in data.get("value", []):
@@ -129,5 +129,5 @@ class AzureDevOpsProvider(ScmProvider):
             f"?path={urllib.parse.quote('/' + path.lstrip('/'), safe='/')}&api-version=7.1"
         )
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}", "Accept": "text/plain"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             return resp.read().decode("utf-8", errors="replace")

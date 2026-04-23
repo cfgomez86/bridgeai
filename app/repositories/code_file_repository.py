@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from app.core.context import get_tenant_id
@@ -54,8 +54,23 @@ class CodeFileRepository:
         self._db.commit()
 
     def update_batch(self, code_files: list[CodeFile]) -> None:
-        for cf in code_files:
-            self._db.merge(cf)
+        if not code_files:
+            return
+        self._db.execute(
+            update(CodeFile),
+            [
+                {
+                    "id": cf.id,
+                    "hash": cf.hash,
+                    "size": cf.size,
+                    "last_modified": cf.last_modified,
+                    "lines_of_code": cf.lines_of_code,
+                    "indexed_at": cf.indexed_at,
+                    "content": cf.content,
+                }
+                for cf in code_files
+            ],
+        )
         self._db.commit()
 
     def list_all(self, source_connection_id: Optional[str] = None) -> list[CodeFile]:

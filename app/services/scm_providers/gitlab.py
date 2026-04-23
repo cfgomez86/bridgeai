@@ -91,7 +91,7 @@ class GitLabProvider(ScmProvider):
                 f"?recursive=true&per_page=100&page={page}&ref={urllib.parse.quote(branch, safe='')}"
             )
             req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=60) as resp:
                 batch = json.loads(resp.read())
             if not batch:
                 break
@@ -108,5 +108,5 @@ class GitLabProvider(ScmProvider):
         encoded_path = urllib.parse.quote(path, safe="")
         url = f"{self._API_BASE}/projects/{encoded_project}/repository/files/{encoded_path}/raw"
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             return resp.read().decode("utf-8", errors="replace")

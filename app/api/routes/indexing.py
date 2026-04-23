@@ -46,7 +46,7 @@ def get_indexing_service(
     settings: Settings = Depends(get_settings),
 ) -> CodeIndexingService:
     repo = CodeFileRepository(db)
-    return CodeIndexingService(repo, settings.PROJECT_ROOT)
+    return CodeIndexingService(repo, settings.PROJECT_ROOT, max_workers=settings.INDEXING_MAX_WORKERS)
 
 
 @router.get("/index/status", response_model=IndexStatusResponse)

@@ -49,12 +49,14 @@ class CodeIndexingService:
         language_map: dict[str, str] | None = None,
         ignore_patterns: list[str] | None = None,
         batch_size: int = 500,
+        max_workers: int = 20,
     ) -> None:
         self._repository = repository
         self._project_root = os.path.abspath(project_root)
         self._language_map = language_map if language_map is not None else DEFAULT_LANGUAGE_MAP
         self._ignore_patterns = DEFAULT_IGNORE_PATTERNS + (ignore_patterns if ignore_patterns is not None else [])
         self._batch_size = batch_size
+        self._max_workers = max_workers
 
     def index_repository(
         self, force: bool = False, source_connection_id: Optional[str] = None
@@ -217,9 +219,9 @@ class CodeIndexingService:
         repo_full_name: str,
         branch: str,
         force: bool = False,
-        max_workers: int = 10,
         source_connection_id: Optional[str] = None,
     ) -> IndexingResult:
+        max_workers = self._max_workers
         logger.info(
             "Starting remote indexing repo=%s branch=%s source_connection_id=%s",
             repo_full_name, branch, source_connection_id,

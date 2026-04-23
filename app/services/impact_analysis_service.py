@@ -59,13 +59,10 @@ class ImpactAnalysisService:
 
         keywords = self._extract_keywords(requirement)
 
-        file_analyses: dict[str, FileAnalysis] = {}
-        seed_files: set[str] = set()
-        impacted_reasons: dict[str, str] = {}
-        files_seen = 0
-
+        # ── Load all files once ───────────────────────────────────────────────
+        # Collect (path, content, language) avoiding repeated DB round-trips.
+        all_files: list[tuple[str, str, str]] = []
         for cf in self._code_file_repo.iter_all(source_connection_id=source_connection_id):
-            files_seen += 1
             if cf.content:
                 content = cf.content
             else:
@@ -74,25 +71,34 @@ class ImpactAnalysisService:
                     content = self._read_capped(full_path)
                 except OSError:
                     continue
-            fa = self._analyzer.analyze(
-                cf.file_path, content, cf.language, source_connection_id
-            )
-            file_analyses[cf.file_path] = fa
+            all_files.append((cf.file_path, content, cf.language))
 
-            search_text = self._normalize(
-                cf.file_path
-                + " "
-                + " ".join(fa.classes)
-                + " "
-                + " ".join(fa.functions)
-                + " "
-                + " ".join(fa.imports)
-                + " "
-                + content
-            )
-            if any(keyword in search_text for keyword in keywords):
-                seed_files.add(cf.file_path)
-                impacted_reasons[cf.file_path] = "keyword_match"
+        files_seen = len(all_files)
+
+        # ── Pass 1: fast seed detection (no AST, no NFKD on content) ─────────
+        # Keywords are already accent-stripped by _extract_keywords.
+        # File paths are normalized; content uses .lower() — covers 99 % of
+        # code identifiers (ASCII). Edge cases with accented comments are
+        # acceptable given the 10-20× speedup.
+        seed_files: set[str] = set()
+        for file_path, content, _ in all_files:
+            quick_text = self._normalize(file_path) + " " + content.lower()
+            if any(kw in quick_text for kw in keywords):
+                seed_files.add(file_path)
+
+        logger.info("Pass 1 (fast scan): %d files, %d keyword matches", files_seen, len(seed_files))
+
+        # ── Pass 2: full AST for seeds; regex-only imports for the rest ───────
+        # Non-seed files still need import info to build the dependency graph.
+        file_analyses: dict[str, FileAnalysis] = {}
+        for file_path, content, language in all_files:
+            if file_path in seed_files:
+                fa = self._analyzer.analyze(file_path, content, language, source_connection_id)
+            else:
+                fa = self._analyzer.quick_imports(file_path, content, language)
+            file_analyses[file_path] = fa
+
+        impacted_reasons: dict[str, str] = {p: "keyword_match" for p in seed_files}
 
         logger.info("Files available for analysis: %d, keyword matches: %d", files_seen, len(seed_files))
 

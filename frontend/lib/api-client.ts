@@ -186,10 +186,17 @@ export async function getActiveConnection(): Promise<ConnectionResponse | null> 
 // ---------------------------------------------------------------------------
 
 export async function indexCode(force = false): Promise<IndexResponse> {
-  return apiFetch<IndexResponse>("/api/v1/index", {
-    method: "POST",
-    body: JSON.stringify({ force }),
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 60_000)
+  try {
+    return await apiFetch<IndexResponse>("/api/v1/index", {
+      method: "POST",
+      body: JSON.stringify({ force }),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export async function getIndexStatus(): Promise<IndexStatusResponse> {
@@ -235,14 +242,21 @@ export async function analyzeImpact(
   modules_impacted: string[]
   risk_level: string
 }> {
-  return apiFetch("/api/v1/impact-analysis", {
-    method: "POST",
-    body: JSON.stringify({
-      requirement: requirementText,
-      project_id: projectId,
-      source_connection_id: sourceConnectionId,
-    }),
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 120_000)
+  try {
+    return await apiFetch("/api/v1/impact-analysis", {
+      method: "POST",
+      body: JSON.stringify({
+        requirement: requirementText,
+        project_id: projectId,
+        source_connection_id: sourceConnectionId,
+      }),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export async function generateStory(
