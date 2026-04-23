@@ -1,8 +1,3 @@
-"use client"
-
-import { useEffect } from "react"
-import Link from "next/link"
-
 const STEPS = [
   { n: "01", title: "Entiende", desc: "La IA extrae intención, complejidad y términos clave de tu requisito." },
   { n: "02", title: "Impacta", desc: "Cruza tu codebase para identificar archivos y módulos afectados." },
@@ -11,12 +6,6 @@ const STEPS = [
 ]
 
 export default function LoginPage() {
-  useEffect(() => {
-    const link = document.createElement("link")
-    link.rel = "prefetch"
-    link.href = "/api/auth/login"
-    document.head.appendChild(link)
-  }, [])
 
   return (
     <div style={{
@@ -122,7 +111,7 @@ export default function LoginPage() {
             Inicia sesión para acceder a tu workspace
           </p>
 
-          <Link
+          <a
             href="/api/auth/login"
             style={{
               display: "flex",
@@ -141,7 +130,7 @@ export default function LoginPage() {
             }}
           >
             Ingresar
-          </Link>
+          </a>
         </div>
 
       </div>

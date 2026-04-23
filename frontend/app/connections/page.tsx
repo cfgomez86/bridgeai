@@ -52,6 +52,7 @@ function PlatformCardDesign({
   const s = t.connections
 
   const conn = connections.find((c) => c.platform === platform.platform)
+  const hasAnyActive = connections.length > 0
   const tone: PlatformTone = conn ? "ok" : platform.server_configured ? "warn" : "neutral"
   const statusLabel = conn ? s.status.connected : platform.server_configured ? s.status.configured : s.status.disconnected
 
@@ -141,12 +142,14 @@ function PlatformCardDesign({
       {platform.server_configured && !conn && (
         <button
           onClick={handleConnect}
-          disabled={connecting}
+          disabled={connecting || hasAnyActive}
+          title={hasAnyActive ? s.actions.one_active : undefined}
           style={{
             padding: "5px 12px", borderRadius: "var(--radius)", border: "none",
-            background: "var(--accent)", color: "var(--accent-fg)",
+            background: hasAnyActive ? "var(--surface-3)" : "var(--accent)",
+            color: hasAnyActive ? "var(--muted)" : "var(--accent-fg)",
             fontSize: "12.5px", fontWeight: 500, alignSelf: "flex-start",
-            cursor: connecting ? "not-allowed" : "pointer",
+            cursor: (connecting || hasAnyActive) ? "not-allowed" : "pointer",
           }}
         >
           {connecting ? s.actions.connecting : s.actions.connect}

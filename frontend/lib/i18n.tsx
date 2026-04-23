@@ -38,6 +38,7 @@ interface Translations {
       cancel: string
       delete: string
       connect_first: string
+      one_active: string
     }
     oauth: {
       bridge_title: string
@@ -293,6 +294,7 @@ const es: Translations = {
       cancel: "Cancelar",
       delete: "Eliminar configuracion",
       connect_first: "Configura primero",
+      one_active: "Desconecta la conexión activa primero",
     },
     oauth: {
       bridge_title: "OAuth de BridgeAI",
@@ -583,6 +585,7 @@ const en: Translations = {
       cancel: "Cancel",
       delete: "Delete config",
       connect_first: "Configure first",
+      one_active: "Disconnect the active connection first",
     },
     oauth: {
       bridge_title: "BridgeAI OAuth",

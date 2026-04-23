@@ -5,8 +5,12 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.core.context import current_tenant_id, get_tenant_id
+from app.models.code_file import CodeFile
+from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
 from app.models.oauth_state import OAuthState
+from app.models.requirement import Requirement
 from app.models.source_connection import SourceConnection
+from app.models.user_story import UserStory
 
 _OAUTH_STATE_TTL_MINUTES = 10
 
@@ -142,6 +146,12 @@ class SourceConnectionRepository:
         conn = self.find_by_id(connection_id)
         if not conn:
             return False
+        # Delete in FK-safe order: children before parents
+        self._db.query(UserStory).filter(UserStory.source_connection_id == connection_id).delete(synchronize_session=False)
+        self._db.query(ImpactedFile).filter(ImpactedFile.source_connection_id == connection_id).delete(synchronize_session=False)
+        self._db.query(ImpactAnalysis).filter(ImpactAnalysis.source_connection_id == connection_id).delete(synchronize_session=False)
+        self._db.query(Requirement).filter(Requirement.source_connection_id == connection_id).delete(synchronize_session=False)
+        self._db.query(CodeFile).filter(CodeFile.source_connection_id == connection_id).delete(synchronize_session=False)
         self._db.delete(conn)
         self._db.commit()
         return True
