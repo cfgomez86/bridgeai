@@ -80,6 +80,13 @@ export interface RepoResponse {
   default_branch?: string | null
 }
 
+export interface JiraSiteResponse {
+  id: string
+  name: string
+  url: string
+  api_base_url: string
+}
+
 export interface IndexResponse {
   files_indexed: number
   files_scanned: number
@@ -144,10 +151,8 @@ export async function listConnections(): Promise<ConnectionResponse[]> {
 }
 
 export async function getOAuthAuthorizeUrl(platform: string): Promise<{ url: string; redirect_uri: string }> {
-  const origin = typeof window !== "undefined" ? window.location.origin : undefined
-  const params = origin ? `?origin=${encodeURIComponent(origin)}` : ""
   return apiFetch<{ url: string; redirect_uri: string }>(
-    `/api/v1/connections/oauth/authorize/${platform}${params}`
+    `/api/v1/connections/oauth/authorize/${platform}`
   )
 }
 
@@ -170,6 +175,28 @@ export async function activateRepo(
   await apiFetch<unknown>(`/api/v1/connections/${connectionId}/activate`, {
     method: "POST",
     body: JSON.stringify({ repo_full_name: repoFullName, default_branch: defaultBranch ?? "main" }),
+  })
+}
+
+export async function listSites(connectionId: string): Promise<JiraSiteResponse[]> {
+  return apiFetch<JiraSiteResponse[]>(`/api/v1/connections/${connectionId}/sites`)
+}
+
+export async function activateSite(
+  connectionId: string,
+  cloudId: string,
+  apiBaseUrl: string,
+  siteUrl: string,
+  siteName: string,
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/connections/${connectionId}/activate-site`, {
+    method: "POST",
+    body: JSON.stringify({
+      cloud_id: cloudId,
+      api_base_url: apiBaseUrl,
+      site_url: siteUrl,
+      site_name: siteName,
+    }),
   })
 }
 

@@ -7,6 +7,7 @@ from urllib.error import HTTPError
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.domain.ticket_integration import TicketResult
+from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.repositories.ticket_integration_repository import TicketIntegrationRepository
 from app.repositories.user_story_repository import UserStoryRepository
 from app.services.ticket_providers.azure_devops import AzureDevOpsTicketProvider
@@ -42,6 +43,7 @@ class TicketIntegrationService:
         self._settings = settings or get_settings()
         self._story_repo = UserStoryRepository(db)
         self._integration_repo = TicketIntegrationRepository(db)
+        self._conn_repo = SourceConnectionRepository(db)
 
     def _get_provider(self, provider_name: str) -> TicketProvider:
         cls = _PROVIDERS.get(provider_name)
@@ -51,6 +53,14 @@ class TicketIntegrationService:
                 f"Available: {list(_PROVIDERS.keys())}"
             )
         if provider_name == "jira":
+            # Prefer OAuth connection from DB; fall back to env-var credentials
+            db_conn = self._conn_repo.get_active_for_platform("jira")
+            if db_conn and db_conn.access_token and db_conn.base_url:
+                return JiraTicketProvider(
+                    self._settings,
+                    access_token=db_conn.access_token,
+                    base_url=db_conn.base_url,
+                )
             missing = [k for k, v in {
                 "JIRA_BASE_URL": self._settings.JIRA_BASE_URL,
                 "JIRA_USER_EMAIL": self._settings.JIRA_USER_EMAIL,
@@ -58,7 +68,7 @@ class TicketIntegrationService:
             }.items() if not v]
             if missing:
                 raise ProviderNotConfiguredError(
-                    f"Jira is not configured. Missing: {', '.join(missing)}"
+                    f"Jira is not configured. Connect via OAuth or set {', '.join(missing)} in .env"
                 )
         if provider_name == "azure_devops":
             missing = [k for k, v in {
@@ -101,7 +111,13 @@ class TicketIntegrationService:
     def _duplicate_url(self, provider_name: str, external_ticket_id: str | None) -> str:
         tid = external_ticket_id or ""
         if provider_name == "jira":
-            return f"{self._settings.JIRA_BASE_URL.rstrip('/')}/browse/{tid}"
+            db_conn = self._conn_repo.get_active_for_platform("jira")
+            jira_site = (
+                db_conn.repo_full_name.rstrip("/")
+                if db_conn and db_conn.repo_full_name
+                else self._settings.JIRA_BASE_URL.rstrip("/")
+            )
+            return f"{jira_site}/browse/{tid}"
         if provider_name == "azure_devops" and tid:
             org = self._settings.AZURE_ORG_URL.rstrip("/")
             return f"{org}/{self._settings.AZURE_PROJECT}/_workitems/edit/{tid}"
@@ -290,14 +306,21 @@ class TicketIntegrationService:
     async def health_check(self) -> dict[str, str]:
         results: dict[str, str] = {}
 
-        if not self._settings.JIRA_BASE_URL or not self._settings.JIRA_API_TOKEN:
-            results["jira"] = "not_configured"
-        else:
+        db_jira = self._conn_repo.get_active_for_platform("jira")
+        if db_jira and db_jira.access_token and db_jira.base_url:
+            try:
+                jira = JiraTicketProvider(self._settings, access_token=db_jira.access_token, base_url=db_jira.base_url)
+                results["jira"] = "healthy" if await jira.validate_connection() else "unhealthy"
+            except Exception:
+                results["jira"] = "unhealthy"
+        elif self._settings.JIRA_BASE_URL and self._settings.JIRA_API_TOKEN:
             try:
                 jira = JiraTicketProvider(self._settings)
                 results["jira"] = "healthy" if await jira.validate_connection() else "unhealthy"
             except Exception:
                 results["jira"] = "unhealthy"
+        else:
+            results["jira"] = "not_configured"
 
         if not self._settings.AZURE_ORG_URL or not self._settings.AZURE_DEVOPS_TOKEN:
             results["azure_devops"] = "not_configured"

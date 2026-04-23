@@ -21,6 +21,10 @@ interface Translations {
     description: string
     connected_accounts: string
     coming_soon: string
+    sections: {
+      repositories: string
+      management_tools: string
+    }
     status: {
       connected: string
       configured: string
@@ -277,6 +281,10 @@ const es: Translations = {
     description: "Conecta tus plataformas de codigo fuente para analizar impacto y generar historias.",
     connected_accounts: "Cuentas conectadas",
     coming_soon: "Proximamente",
+    sections: {
+      repositories: "Repositorios",
+      management_tools: "Herramientas de gestión",
+    },
     status: {
       connected: "Conectado",
       configured: "Configurado",
@@ -327,7 +335,7 @@ const es: Translations = {
     platform_desc: {
       github: "Conecta repositorios de GitHub para analizar codigo y estimar impacto.",
       gitlab: "Conecta proyectos de GitLab y analiza cambios con IA.",
-      azure_devops: "Integra repositorios de Azure DevOps y crea tickets directamente.",
+      azure_devops: "Integra repositorios de Azure Repos y crea tickets directamente.",
       bitbucket: "Soporte para repositorios Bitbucket en desarrollo.",
     },
     default_platform_desc: "Conecta esta plataforma para empezar.",
@@ -568,6 +576,10 @@ const en: Translations = {
     description: "Connect your source code platforms to analyze impact and generate stories.",
     connected_accounts: "Connected accounts",
     coming_soon: "Coming soon",
+    sections: {
+      repositories: "Repositories",
+      management_tools: "Management tools",
+    },
     status: {
       connected: "Connected",
       configured: "Configured",
@@ -618,7 +630,7 @@ const en: Translations = {
     platform_desc: {
       github: "Connect GitHub repositories to analyze code and estimate impact.",
       gitlab: "Connect GitLab projects and analyze changes with AI.",
-      azure_devops: "Integrate Azure DevOps repositories and create tickets directly.",
+      azure_devops: "Integrate Azure Repos repositories and create tickets directly.",
       bitbucket: "Bitbucket repository support coming soon.",
     },
     default_platform_desc: "Connect this platform to get started.",

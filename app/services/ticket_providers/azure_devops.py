@@ -186,7 +186,7 @@ class AzureDevOpsTicketProvider(TicketProvider):
     async def create_child_tasks(
         self, parent_id: int, subtasks: dict, description: str = ""
     ) -> tuple[list[str], list[str], list[str], list[str]]:
-        """Create Azure DevOps Tasks in parallel. Returns (ids, urls, titles, failed_summaries)."""
+        """Create Azure Repos Tasks in parallel. Returns (ids, urls, titles, failed_summaries)."""
         url = self._work_items_url("Task")
         coros = [
             self._create_one_child_task(url, parent_id, summary, category, description)

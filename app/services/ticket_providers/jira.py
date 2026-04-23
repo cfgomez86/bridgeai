@@ -31,8 +31,17 @@ _ISSUE_TYPE_ALIASES: dict[str, list[str]] = {
 
 
 class JiraTicketProvider(TicketProvider):
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        *,
+        access_token: str = "",
+        base_url: str = "",
+    ) -> None:
         self._settings = settings or get_settings()
+        # OAuth credentials take precedence over env-var credentials
+        self._oauth_token = access_token
+        self._oauth_base_url = base_url.rstrip("/") if base_url else ""
         self._issue_type_map = self._parse_issue_type_map()
         self._client = httpx.AsyncClient(timeout=self._settings.JIRA_REQUEST_TIMEOUT_SECONDS)
 
@@ -58,6 +67,8 @@ class JiraTicketProvider(TicketProvider):
         return issue_type
 
     def _auth_header(self) -> str:
+        if self._oauth_token:
+            return f"Bearer {self._oauth_token}"
         raw = f"{self._settings.JIRA_USER_EMAIL}:{self._settings.JIRA_API_TOKEN}"
         return "Basic " + base64.b64encode(raw.encode()).decode()
 
@@ -69,7 +80,9 @@ class JiraTicketProvider(TicketProvider):
         }
 
     def _api_url(self, path: str) -> str:
-        base = self._settings.JIRA_BASE_URL.rstrip("/")
+        # OAuth: base_url = https://api.atlassian.com/ex/jira/{cloud_id}
+        # API token: base_url = https://mysite.atlassian.net
+        base = self._oauth_base_url or self._settings.JIRA_BASE_URL.rstrip("/")
         return f"{base}/rest/api/3/{path.lstrip('/')}"
 
     def _build_description_doc(self, story: UserStory) -> dict:

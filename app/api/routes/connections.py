@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -8,7 +8,7 @@ from app.core.auth0_auth import get_current_user
 from app.core.config import Settings, get_settings
 from app.models.user import User
 
-SUPPORTED_PLATFORMS_SET = {"github", "gitlab", "azure_devops"}
+SUPPORTED_PLATFORMS_SET = {"github", "gitlab", "azure_devops", "jira"}
 from app.database.session import get_db
 from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.source_connection_service import SourceConnectionService
@@ -80,29 +80,6 @@ class RedirectUriResponse(BaseModel):
     redirect_uri: str
 
 
-def _resolve_base(
-    origin: str | None,
-    request: Request,
-    settings: Settings,
-) -> str:
-    """Return the validated base URL for building redirect_uri.
-
-    The `origin` param comes from window.location.origin in the browser.
-    We validate it against CORS_ORIGINS so a malicious actor cannot supply
-    an arbitrary redirect destination.
-    """
-    if origin is None:
-        return str(request.base_url).rstrip("/")
-    normalized = origin.rstrip("/")
-    allowed = {o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()}
-    if normalized not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid origin parameter.",
-        )
-    return normalized
-
-
 def _require_platform(platform: str) -> str:
     if platform not in SUPPORTED_PLATFORMS_SET:
         raise HTTPException(
@@ -112,32 +89,31 @@ def _require_platform(platform: str) -> str:
     return platform
 
 
+def _callback_uri(platform: str, settings: Settings) -> str:
+    base = settings.API_BASE_URL.rstrip("/")
+    return f"{base}/api/v1/connections/oauth/callback/{platform}"
+
+
 @router.get("/oauth/redirect-uri/{platform}", response_model=RedirectUriResponse)
 def get_redirect_uri(
     platform: str,
-    request: Request,
-    origin: str | None = Query(None),
     settings: Settings = Depends(get_settings),
     _user: User = Depends(get_current_user),
 ):
     _require_platform(platform)
-    base = _resolve_base(origin, request, settings)
-    return RedirectUriResponse(redirect_uri=f"{base}/api/v1/connections/oauth/callback/{platform}")
+    return RedirectUriResponse(redirect_uri=_callback_uri(platform, settings))
 
 
 @router.get("/oauth/authorize/{platform}", response_model=AuthorizeResponse)
 def authorize(
     platform: str,
-    request: Request,
-    origin: str | None = Query(None),
     service: SourceConnectionService = Depends(get_service),
     settings: Settings = Depends(get_settings),
     _user: User = Depends(get_current_user),
 ):
     _require_platform(platform)
     try:
-        base = _resolve_base(origin, request, settings)
-        redirect_uri = f"{base}/api/v1/connections/oauth/callback/{platform}"
+        redirect_uri = _callback_uri(platform, settings)
         url = service.get_authorize_url(platform, redirect_uri)
         return AuthorizeResponse(url=url, redirect_uri=redirect_uri)
     except HTTPException:
@@ -252,6 +228,63 @@ def activate_repo(
 ):
     try:
         conn = service.activate_repo(connection_id, body.repo_full_name, body.default_branch)
+        return ConnectionResponse(
+            id=conn.id,
+            platform=conn.platform,
+            display_name=conn.display_name,
+            repo_full_name=conn.repo_full_name,
+            repo_name=conn.repo_name,
+            owner=conn.owner,
+            default_branch=conn.default_branch,
+            is_active=conn.is_active,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+# ── Jira site selection ──────────────────────────────────────────────────────
+
+class JiraSiteResponse(BaseModel):
+    id: str
+    name: str
+    url: str
+    api_base_url: str
+
+
+class ActivateSiteRequest(BaseModel):
+    cloud_id: str
+    api_base_url: str
+    site_url: str
+    site_name: str
+
+
+@router.get("/{connection_id}/sites", response_model=list[JiraSiteResponse])
+def list_sites(
+    connection_id: str,
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
+    try:
+        sites = service.list_sites(connection_id)
+        return [JiraSiteResponse(**s) for s in sites]
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to list Jira sites connection=%s error=%s", connection_id, exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to fetch Jira sites.")
+
+
+@router.post("/{connection_id}/activate-site", response_model=ConnectionResponse)
+def activate_site(
+    connection_id: str,
+    body: ActivateSiteRequest,
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
+    try:
+        conn = service.activate_site(
+            connection_id, body.cloud_id, body.api_base_url, body.site_url, body.site_name
+        )
         return ConnectionResponse(
             id=conn.id,
             platform=conn.platform,

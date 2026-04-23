@@ -12,8 +12,9 @@ logger = logging.getLogger(__name__)
 _PLATFORM_LABELS = {
     "github": "GitHub",
     "gitlab": "GitLab",
-    "azure_devops": "Azure DevOps",
+    "azure_devops": "Azure Repos",
     "bitbucket": "Bitbucket",
+    "jira": "Jira",
 }
 
 
@@ -46,6 +47,7 @@ class SourceConnectionService:
             "gitlab": (self._settings.GITLAB_CLIENT_ID, self._settings.GITLAB_CLIENT_SECRET),
             "azure_devops": (self._settings.AZURE_DEVOPS_CLIENT_ID, self._settings.AZURE_DEVOPS_CLIENT_SECRET),
             "bitbucket": (self._settings.BITBUCKET_CLIENT_ID, self._settings.BITBUCKET_CLIENT_SECRET),
+            "jira": (self._settings.JIRA_CLIENT_ID, self._settings.JIRA_CLIENT_SECRET),
         }
         client_id, client_secret = mapping.get(platform, ("", ""))
         if client_id and client_secret:
@@ -166,3 +168,19 @@ class SourceConnectionService:
     def get_active_connection(self) -> SourceConnection | None:
         orm = self._repo.get_active()
         return _to_domain_connection(orm) if orm else None
+
+    def list_sites(self, connection_id: str) -> list[dict]:
+        conn = self._repo.find_by_id(connection_id)
+        if not conn or conn.platform != "jira":
+            raise ValueError(f"Jira connection {connection_id!r} not found.")
+        provider = get_provider("jira")
+        return provider.list_sites(conn.access_token)  # type: ignore[attr-defined]
+
+    def activate_site(
+        self, connection_id: str, cloud_id: str, api_base_url: str, site_url: str, site_name: str
+    ) -> SourceConnection:
+        orm = self._repo.activate_site(connection_id, cloud_id, api_base_url, site_url, site_name)
+        if not orm:
+            raise ValueError(f"Connection {connection_id!r} not found.")
+        logger.info("Jira site activated connection=%s site=%s", connection_id, site_name)
+        return _to_domain_connection(orm)

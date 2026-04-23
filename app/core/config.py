@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     AZURE_DEVOPS_CLIENT_SECRET: str = ""
     BITBUCKET_CLIENT_ID: str = ""
     BITBUCKET_CLIENT_SECRET: str = ""
+    JIRA_CLIENT_ID: str = ""
+    JIRA_CLIENT_SECRET: str = ""
 
     @property
     def project_root_path(self) -> Path:

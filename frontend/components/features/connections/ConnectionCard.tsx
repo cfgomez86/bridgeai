@@ -4,19 +4,24 @@ import { useState } from "react"
 import { deleteConnection, type ConnectionResponse } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import { RepoSelector } from "./RepoSelector"
-import { GitBranch, FolderGit2, Trash2, Loader2 } from "lucide-react"
+import { SiteSelector } from "./SiteSelector"
+import { GitBranch, FolderGit2, Globe, Trash2, Loader2 } from "lucide-react"
 
 const PLATFORM_LABELS: Record<string, string> = {
   github: "GitHub",
   gitlab: "GitLab",
-  azure_devops: "Azure DevOps",
+  azure_devops: "Azure Repos",
+  jira: "Jira Cloud",
 }
 
 const PLATFORM_ICONS: Record<string, string> = {
   github: "GH",
   gitlab: "GL",
   azure_devops: "AZ",
+  jira: "JR",
 }
+
+const TICKET_PLATFORMS = new Set(["jira"])
 
 interface ConnectionCardProps {
   connection: ConnectionResponse
@@ -26,9 +31,11 @@ interface ConnectionCardProps {
 export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
   const [deleting, setDeleting] = useState(false)
   const [showRepos, setShowRepos] = useState(false)
+  const [showSites, setShowSites] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { t } = useLanguage()
   const s = t.connections
+  const isTicket = TICKET_PLATFORMS.has(connection.platform)
 
   async function handleDelete() {
     setDeleting(true)
@@ -85,7 +92,7 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
           {/* Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
             <button
-              onClick={() => setShowRepos(true)}
+              onClick={() => isTicket ? setShowSites(true) : setShowRepos(true)}
               style={{
                 display: "flex", alignItems: "center", gap: "5px",
                 padding: "5px 10px", borderRadius: "var(--radius)",
@@ -93,8 +100,8 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
                 color: "var(--fg-2)", fontSize: "12px", fontWeight: 500, cursor: "pointer",
               }}
             >
-              <FolderGit2 size={13} />
-              {s.card.select_repo}
+              {isTicket ? <Globe size={13} /> : <FolderGit2 size={13} />}
+              {isTicket ? "Seleccionar site" : s.card.select_repo}
             </button>
             <button
               onClick={handleDelete}
@@ -112,8 +119,8 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
           </div>
         </div>
 
-        {/* Active repo */}
-        {connection.repo_full_name && (
+        {/* Active repo (SCM) or active site (Jira) */}
+        {connection.repo_full_name && !isTicket && (
           <div style={{
             display: "flex", alignItems: "center", gap: "6px",
             padding: "6px 10px", borderRadius: "var(--radius)",
@@ -124,6 +131,21 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
               {connection.repo_full_name}
             </span>
             <span style={{ fontSize: "11px", color: "var(--muted)" }}>{connection.default_branch}</span>
+          </div>
+        )}
+        {isTicket && connection.repo_name && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: "6px",
+            padding: "6px 10px", borderRadius: "var(--radius)",
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+          }}>
+            <Globe size={12} style={{ color: "var(--muted)", flexShrink: 0 }} />
+            <span style={{ fontSize: "12px", color: "var(--fg-2)", flex: 1 }}>
+              {connection.repo_name}
+            </span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px" }}>
+              {connection.repo_full_name}
+            </span>
           </div>
         )}
 
@@ -137,6 +159,13 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
           connectionId={connection.id}
           onActivated={() => { setShowRepos(false); onUpdated() }}
           onClose={() => setShowRepos(false)}
+        />
+      )}
+      {showSites && (
+        <SiteSelector
+          connectionId={connection.id}
+          onActivated={() => { setShowSites(false); onUpdated() }}
+          onClose={() => setShowSites(false)}
         />
       )}
     </>

@@ -40,7 +40,7 @@ class AzureDevOpsProvider(ScmProvider):
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
         if "error" in data:
-            raise ValueError(f"Azure DevOps OAuth error: {data.get('error_description', data['error'])}")
+            raise ValueError(f"Azure Repos OAuth error: {data.get('error_description', data['error'])}")
         return {
             "access_token": data["access_token"],
             "refresh_token": data.get("refresh_token"),

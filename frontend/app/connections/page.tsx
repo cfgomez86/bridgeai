@@ -15,7 +15,7 @@ import { ConnectionCard } from "@/components/features/connections/ConnectionCard
 const PLATFORM_LABELS: Record<string, string> = {
   github: "GitHub",
   gitlab: "GitLab",
-  azure_devops: "Azure DevOps",
+  azure_devops: "Azure Repos",
   bitbucket: "Bitbucket",
 }
 
@@ -24,13 +24,16 @@ const PLATFORM_ICONS: Record<string, string> = {
   gitlab: "GL",
   azure_devops: "AZ",
   bitbucket: "BB",
+  jira: "JR",
 }
+
+const SCM_PLATFORMS = new Set(["github", "gitlab", "azure_devops", "bitbucket"])
 
 // Shown immediately on paint — server_configured updates after the API responds
 const STATIC_PLATFORMS: PlatformResponse[] = [
   { platform: "github",      label: "GitHub",        server_configured: false },
   { platform: "gitlab",      label: "GitLab",        server_configured: false },
-  { platform: "azure_devops", label: "Azure DevOps", server_configured: false },
+  { platform: "azure_devops", label: "Azure Repos",  server_configured: false },
   { platform: "bitbucket",   label: "Bitbucket",     server_configured: false },
 ]
 
@@ -198,6 +201,7 @@ function ConnectionsContent() {
   const [platforms, setPlatforms] = useState<PlatformResponse[]>(STATIC_PLATFORMS)
   const [connections, setConnections] = useState<ConnectionResponse[]>([])
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "err" } | null>(null)
+  const [activeSection, setActiveSection] = useState("repositorios")
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const refreshingRef = useRef(false)
   const { t } = useLanguage()
@@ -245,9 +249,14 @@ function ConnectionsContent() {
     }
   }, [searchParams, router, refresh, isLoaded, isSignedIn, s.toast_connected, s.toast_error])
 
+  const NAV_ITEMS = [
+    { id: "repositorios",  label: s.sections.repositories },
+    { id: "herramientas",  label: s.sections.management_tools },
+  ]
+
   return (
-    <div style={{ padding: "28px 32px", maxWidth: "1100px", display: "flex", flexDirection: "column", gap: "24px" }}>
-      {/* Toast */}
+    <>
+      {/* Toast — fixed position, independent of layout */}
       {toast && (
         <div style={{
           position: "fixed",
@@ -268,42 +277,123 @@ function ConnectionsContent() {
         </div>
       )}
 
-      {/* Header */}
-      <div>
-        <h1 style={{
-          fontSize: "20px",
-          fontWeight: 700,
-          fontFamily: "var(--font-display)",
-          color: "var(--fg)",
-          margin: 0,
-          letterSpacing: "-0.01em",
-        }}>{s.title}</h1>
-        <p style={{ fontSize: "13px", color: "var(--muted)", marginTop: "4px", marginBottom: 0 }}>
-          {s.description}
-        </p>
-      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", minHeight: "calc(100vh - 48px)" }}>
+        {/* Left nav */}
+        <nav style={{
+          background: "var(--surface)",
+          borderRight: "1px solid var(--border)",
+          padding: "16px 8px",
+          position: "sticky",
+          top: "48px",
+          height: "calc(100vh - 48px)",
+          overflow: "auto",
+        }}>
+          {NAV_ITEMS.map((item) => {
+            const isActive = item.id === activeSection
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "6px 10px",
+                  borderRadius: "5px",
+                  border: "none",
+                  background: isActive ? "var(--accent-soft)" : "transparent",
+                  color: isActive ? "var(--accent-strong)" : "var(--fg-2)",
+                  fontSize: "13px",
+                  fontWeight: isActive ? 500 : 400,
+                  cursor: "pointer",
+                  marginBottom: "1px",
+                }}
+              >
+                {item.label}
+              </button>
+            )
+          })}
+        </nav>
 
-      {/* Connected accounts */}
-      {connections.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <h2 style={{ fontSize: "13px", fontWeight: 600, color: "var(--fg-2)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {s.connected_accounts}
-          </h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {connections.map((c) => (
-              <ConnectionCard key={c.id} connection={c} onUpdated={refresh} />
-            ))}
+        {/* Main content */}
+        <div style={{ padding: "28px 32px", maxWidth: "900px", display: "flex", flexDirection: "column", gap: "24px" }}>
+          {/* Header */}
+          <div>
+            <h1 style={{
+              fontSize: "20px",
+              fontWeight: 700,
+              fontFamily: "var(--font-display)",
+              color: "var(--fg)",
+              margin: 0,
+              letterSpacing: "-0.01em",
+            }}>{NAV_ITEMS.find((n) => n.id === activeSection)?.label}</h1>
+            <p style={{ fontSize: "13px", color: "var(--muted)", marginTop: "4px", marginBottom: 0 }}>
+              {s.description}
+            </p>
           </div>
-        </div>
-      )}
 
-      {/* Platform cards grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-        {platforms.map((p) => (
-          <PlatformCardDesign key={p.platform} platform={p} connections={connections} onUpdated={refresh} />
-        ))}
+          {activeSection === "repositorios" && (
+            <>
+              {/* Connected SCM accounts */}
+              {connections.filter((c) => SCM_PLATFORMS.has(c.platform)).length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <h2 style={{ fontSize: "13px", fontWeight: 600, color: "var(--fg-2)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    {s.connected_accounts}
+                  </h2>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {connections.filter((c) => SCM_PLATFORMS.has(c.platform)).map((c) => (
+                      <ConnectionCard key={c.id} connection={c} onUpdated={refresh} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SCM platform cards */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                {platforms.filter((p) => SCM_PLATFORMS.has(p.platform)).map((p) => (
+                  <PlatformCardDesign
+                    key={p.platform}
+                    platform={p}
+                    connections={connections.filter((c) => SCM_PLATFORMS.has(c.platform))}
+                    onUpdated={refresh}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          {activeSection === "herramientas" && (
+            <>
+              {/* Connected management tool accounts */}
+              {connections.filter((c) => !SCM_PLATFORMS.has(c.platform)).length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <h2 style={{ fontSize: "13px", fontWeight: 600, color: "var(--fg-2)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    {s.connected_accounts}
+                  </h2>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {connections.filter((c) => !SCM_PLATFORMS.has(c.platform)).map((c) => (
+                      <ConnectionCard key={c.id} connection={c} onUpdated={refresh} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Management tool platform cards */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                {platforms.filter((p) => !SCM_PLATFORMS.has(p.platform)).map((p) => (
+                  <PlatformCardDesign
+                    key={p.platform}
+                    platform={p}
+                    connections={connections.filter((c) => !SCM_PLATFORMS.has(c.platform))}
+                    onUpdated={refresh}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 

@@ -35,7 +35,7 @@ python -m pytest
 
 ## User Flow
 
-1. **Connect** a source code repository (GitHub, GitLab, Azure DevOps, Bitbucket) via `/connections`
+1. **Connect** a source code repository (GitHub, GitLab, Azure Repos, Bitbucket) via `/connections`
 2. **Index** the active repository — files are stored per-connection, never mixed
 3. **Understand** a requirement — extracts intent, complexity, keywords
 4. **Analyze impact** — identifies affected files/modules and risk level
@@ -51,7 +51,7 @@ app/
 ├── database/            # SQLAlchemy engine & session factory
 ├── domain/              # Pure domain models (frozen dataclasses, no framework deps)
 ├── services/            # Business logic
-│   ├── scm_providers/   # ScmProvider ABC → GitHub, GitLab, Azure DevOps, Bitbucket
+│   ├── scm_providers/   # ScmProvider ABC → GitHub, GitLab, Azure Repos, Bitbucket
 │   └── ticket_providers/# TicketProvider ABC → JiraTicketProvider, AzureDevOpsTicketProvider
 ├── repositories/        # Data access layer (all queries scoped by tenant_id)
 ├── models/              # ORM models

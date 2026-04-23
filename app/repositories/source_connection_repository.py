@@ -5,6 +5,8 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.core.context import current_tenant_id, get_tenant_id
+
+_SCM_PLATFORMS = {"github", "gitlab", "azure_devops", "bitbucket"}
 from app.models.code_file import CodeFile
 from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
 from app.models.oauth_state import OAuthState
@@ -116,17 +118,35 @@ class SourceConnectionRepository:
         )
 
     def get_active(self) -> Optional[SourceConnection]:
+        """Return the active SCM connection (GitHub, GitLab, etc.)."""
         return (
             self._db.query(SourceConnection)
-            .filter(SourceConnection.tenant_id == self._tid(), SourceConnection.is_active == True)  # noqa: E712
+            .filter(
+                SourceConnection.tenant_id == self._tid(),
+                SourceConnection.platform.in_(_SCM_PLATFORMS),
+                SourceConnection.is_active == True,  # noqa: E712
+            )
+            .first()
+        )
+
+    def get_active_for_platform(self, platform: str) -> Optional[SourceConnection]:
+        return (
+            self._db.query(SourceConnection)
+            .filter(
+                SourceConnection.tenant_id == self._tid(),
+                SourceConnection.platform == platform,
+                SourceConnection.is_active == True,  # noqa: E712
+            )
             .first()
         )
 
     def activate(
         self, connection_id: str, repo_full_name: str, repo_name: str, owner: str, default_branch: str
     ) -> Optional[SourceConnection]:
+        # Deactivate only other SCM connections — ticket connections remain unaffected
         self._db.query(SourceConnection).filter(
             SourceConnection.tenant_id == self._tid(),
+            SourceConnection.platform.in_(_SCM_PLATFORMS),
             SourceConnection.is_active == True,  # noqa: E712
         ).update({"is_active": False}, synchronize_session=False)
         conn = self.find_by_id(connection_id)
@@ -138,6 +158,28 @@ class SourceConnectionRepository:
         conn.repo_name = repo_name
         conn.owner = owner
         conn.default_branch = default_branch
+        self._db.commit()
+        self._db.refresh(conn)
+        return conn
+
+    def activate_site(
+        self, connection_id: str, cloud_id: str, api_base_url: str, site_url: str, site_name: str
+    ) -> Optional[SourceConnection]:
+        # Deactivate other Jira connections only
+        self._db.query(SourceConnection).filter(
+            SourceConnection.tenant_id == self._tid(),
+            SourceConnection.platform == "jira",
+            SourceConnection.is_active == True,  # noqa: E712
+        ).update({"is_active": False}, synchronize_session=False)
+        conn = self.find_by_id(connection_id)
+        if not conn:
+            self._db.commit()
+            return None
+        conn.is_active = True
+        conn.owner = cloud_id
+        conn.base_url = api_base_url
+        conn.repo_full_name = site_url
+        conn.repo_name = site_name
         self._db.commit()
         self._db.refresh(conn)
         return conn

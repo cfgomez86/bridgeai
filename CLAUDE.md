@@ -62,7 +62,7 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 **Domain objects** (`app/domain/`) — frozen dataclasses with no SQLAlchemy or FastAPI imports. Key entities: `FileInfo`, `RequirementUnderstanding`, `UserStory`, `TicketResult`, `TicketIntegration`.
 
-**Services** (`app/services/`) — accept `Settings` via constructor injection (default: `get_settings()`). Ticket providers live in `app/services/ticket_providers/` and follow the `TicketProvider` ABC — `JiraTicketProvider` and `AzureDevOpsTicketProvider` are the two implementations. SCM providers live in `app/services/scm_providers/` and follow the `ScmProvider` ABC — GitHub, GitLab, Azure DevOps, and Bitbucket implementations exist.
+**Services** (`app/services/`) — accept `Settings` via constructor injection (default: `get_settings()`). Ticket providers live in `app/services/ticket_providers/` and follow the `TicketProvider` ABC — `JiraTicketProvider` and `AzureDevOpsTicketProvider` are the two implementations. SCM providers live in `app/services/scm_providers/` and follow the `ScmProvider` ABC — GitHub, GitLab, Azure Repos, and Bitbucket implementations exist.
 
 **Ticket integration** (`app/services/ticket_integration_service.py`) — orchestrates idempotency check, payload build (for audit), provider call with exponential-backoff retry, and audit log persistence. Supports `jira` and `azure_devops` integration types.
 
