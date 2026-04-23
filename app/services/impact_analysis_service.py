@@ -59,9 +59,14 @@ class ImpactAnalysisService:
 
         keywords = self._extract_keywords(requirement)
 
-        # ── Load all files once ───────────────────────────────────────────────
-        # Collect (path, content, language) avoiding repeated DB round-trips.
-        all_files: list[tuple[str, str, str]] = []
+        # ── Single streaming pass: keyword scan + AST/imports merged ─────────
+        # Content for non-seed files is processed inline and not retained,
+        # avoiding accumulation of all file content in memory at once.
+        file_analyses: dict[str, FileAnalysis] = {}
+        seed_files: set[str] = set()
+        files_seen = 0
+
+        t0 = time.monotonic()
         for cf in self._code_file_repo.iter_all(source_connection_id=source_connection_id):
             if cf.content:
                 content = cf.content
@@ -71,42 +76,30 @@ class ImpactAnalysisService:
                     content = self._read_capped(full_path)
                 except OSError:
                     continue
-            all_files.append((cf.file_path, content, cf.language))
 
-        files_seen = len(all_files)
-
-        # ── Pass 1: fast seed detection (no AST, no NFKD on content) ─────────
-        # Keywords are already accent-stripped by _extract_keywords.
-        # File paths are normalized; content uses .lower() — covers 99 % of
-        # code identifiers (ASCII). Edge cases with accented comments are
-        # acceptable given the 10-20× speedup.
-        seed_files: set[str] = set()
-        for file_path, content, _ in all_files:
-            quick_text = self._normalize(file_path) + " " + content.lower()
+            files_seen += 1
+            quick_text = self._normalize(cf.file_path) + " " + content.lower()
             if any(kw in quick_text for kw in keywords):
-                seed_files.add(file_path)
-
-        logger.info("Pass 1 (fast scan): %d files, %d keyword matches", files_seen, len(seed_files))
-
-        # ── Pass 2: full AST for seeds; regex-only imports for the rest ───────
-        # Non-seed files still need import info to build the dependency graph.
-        file_analyses: dict[str, FileAnalysis] = {}
-        for file_path, content, language in all_files:
-            if file_path in seed_files:
-                fa = self._analyzer.analyze(file_path, content, language, source_connection_id)
+                seed_files.add(cf.file_path)
+                fa = self._analyzer.analyze(cf.file_path, content, cf.language, source_connection_id)
             else:
-                fa = self._analyzer.quick_imports(file_path, content, language)
-            file_analyses[file_path] = fa
+                fa = self._analyzer.quick_imports(cf.file_path, content, cf.language)
+            file_analyses[cf.file_path] = fa
+
+        logger.info(
+            "Scan+AST pass: %d files, %d keyword seeds, %.2fs",
+            files_seen, len(seed_files), time.monotonic() - t0,
+        )
 
         impacted_reasons: dict[str, str] = {p: "keyword_match" for p in seed_files}
 
-        logger.info("Files available for analysis: %d, keyword matches: %d", files_seen, len(seed_files))
-
         if self._semantic_filter is not None and seed_files:
+            t_sem = time.monotonic()
             seed_candidates = {p: file_analyses[p] for p in seed_files if p in file_analyses}
             seed_files = self._semantic_filter.filter(requirement, seed_candidates)
-            logger.info("After semantic filter: %d seed files", len(seed_files))
+            logger.info("Semantic filter: %.2fs → %d seed files", time.monotonic() - t_sem, len(seed_files))
 
+        t_dep = time.monotonic()
         dep_map: dict[str, set[str]] = {}
         for path, fa in file_analyses.items():
             resolved_deps: set[str] = set()
@@ -126,7 +119,10 @@ class ImpactAnalysisService:
                 if dep not in impacted_reasons:
                     impacted_reasons[dep] = "imported_by_impacted_file"
 
-        logger.info("Dependencies resolved, total impacted: %d", len(impacted_reasons))
+        logger.info(
+            "Dependency graph: %.2fs, total impacted: %d",
+            time.monotonic() - t_dep, len(impacted_reasons),
+        )
 
         total_impacted = len(impacted_reasons)
         if total_impacted < 3:
@@ -164,7 +160,9 @@ class ImpactAnalysisService:
             for path, reason in impacted_reasons.items()
         ]
 
+        t_save = time.monotonic()
         self._impact_repo.save(impact_analysis, impacted_file_models, source_connection_id)
+        logger.info("Persist: %.2fs", time.monotonic() - t_save)
 
         duration = time.monotonic() - start
 

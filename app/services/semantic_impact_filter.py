@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.core.config import Settings, get_settings
 from app.services.dependency_analyzer import FileAnalysis
@@ -68,12 +69,24 @@ class SemanticImpactFilter(ABC):
         batches = [items[i : i + _BATCH_SIZE] for i in range(0, len(items), _BATCH_SIZE)]
         relevant: set[str] = set()
 
-        for batch in batches:
+        def _process_batch(batch: list) -> set[str]:
             signatures = "\n".join(_build_signature(p, fa) for p, fa in batch)
             prompt = _FILTER_PROMPT.format(requirement=requirement, file_signatures=signatures)
             batch_paths = {p for p, _ in batch}
             raw = self._call_llm(prompt)
-            relevant |= _parse_response(raw, batch_paths)
+            return _parse_response(raw, batch_paths)
+
+        with ThreadPoolExecutor(max_workers=min(len(batches), 5)) as executor:
+            future_to_paths = {
+                executor.submit(_process_batch, batch): {p for p, _ in batch}
+                for batch in batches
+            }
+            for future, batch_paths in future_to_paths.items():
+                try:
+                    relevant |= future.result()
+                except Exception as exc:
+                    logger.warning("SemanticImpactFilter: batch failed, keeping all: %s", exc)
+                    relevant |= batch_paths
 
         logger.info(
             "SemanticImpactFilter: %d candidates → %d relevant",
