@@ -207,8 +207,8 @@ class CodeIndexingService:
         except OSError:
             return 0
 
-    def get_status(self) -> tuple[int, Optional[datetime]]:
-        return self._repository.get_status()
+    def get_status(self, source_connection_id: Optional[str] = None) -> tuple[int, Optional[datetime]]:
+        return self._repository.get_status(source_connection_id)
 
     def index_remote(
         self,

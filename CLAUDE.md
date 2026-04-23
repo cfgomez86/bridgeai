@@ -12,6 +12,9 @@ docker compose up -d
 python -m pip install -e ".[dev]"
 # psycopg2-binary is included; no extra install needed for PostgreSQL support
 
+# Run DB migrations (required after first install or after pulling new migrations)
+python -m alembic upgrade head
+
 # Run the API
 uvicorn app.main:app --reload
 
@@ -46,7 +49,7 @@ services/        ← business logic, depends only on domain/
 repositories/    ← data access abstractions (to be implemented per feature)
 api/routes/      ← FastAPI routers, depend on services via DI
 database/        ← SQLAlchemy infrastructure, injected via get_db()
-core/            ← cross-cutting: config, logging middleware, security middleware
+core/            ← cross-cutting: config, logging middleware, security middleware, tenant context
 ```
 
 ### Key patterns
@@ -59,9 +62,17 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 **Domain objects** (`app/domain/`) — frozen dataclasses with no SQLAlchemy or FastAPI imports. Key entities: `FileInfo`, `RequirementUnderstanding`, `UserStory`, `TicketResult`, `TicketIntegration`.
 
-**Services** (`app/services/`) — accept `Settings` via constructor injection (default: `get_settings()`). Ticket providers live in `app/services/ticket_providers/` and follow the `TicketProvider` ABC — `JiraTicketProvider` and `AzureDevOpsTicketProvider` are the two implementations.
+**Services** (`app/services/`) — accept `Settings` via constructor injection (default: `get_settings()`). Ticket providers live in `app/services/ticket_providers/` and follow the `TicketProvider` ABC — `JiraTicketProvider` and `AzureDevOpsTicketProvider` are the two implementations. SCM providers live in `app/services/scm_providers/` and follow the `ScmProvider` ABC — GitHub, GitLab, Azure DevOps, and Bitbucket implementations exist.
 
 **Ticket integration** (`app/services/ticket_integration_service.py`) — orchestrates idempotency check, payload build (for audit), provider call with exponential-backoff retry, and audit log persistence. Supports `jira` and `azure_devops` integration types.
+
+**Authentication** (`app/core/auth0_auth.py`) — Auth0 JWT validation via JWKS (cached 1 hour). `get_current_user()` FastAPI dependency verifies the bearer token, loads the `User` record, and sets `current_tenant_id` + `current_user_id` in `ContextVar`. Every route that touches a repository must declare `_user: User = Depends(get_current_user)`.
+
+**Tenant context** (`app/core/context.py`) — `ContextVar`-based isolation. `get_tenant_id()` raises `RuntimeError` if the context is not set, making missing auth hard to miss. All repositories call `_tid()` which delegates to `get_tenant_id()` — no cross-tenant query is possible at the data layer.
+
+**Repository isolation** (`app/models/code_file.py`) — `CodeFile` has a `source_connection_id` FK scoping files to a specific SCM connection. The unique constraint is `(tenant_id, source_connection_id, file_path)`. All `CodeFileRepository` methods accept an optional `source_connection_id` to filter to a single repo. `ImpactAnalysisService` resolves the active connection before iterating files, so analysis never mixes repos. This means:
+- Two different users never see each other's files.
+- A single user switching repos never gets cross-repo contamination in analysis or status counts.
 
 **Logging** (`app/core/logging.py`) — `RequestLoggingMiddleware` attaches a `request_id` UUID to `request.state` on every request. Access it in route handlers via `request.state.request_id`. Use `get_logger(__name__)` everywhere else.
 
@@ -69,9 +80,10 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 1. Define domain objects in `app/domain/`.
 2. Implement business logic as a service in `app/services/`.
-3. Add a repository in `app/repositories/` if persistence is needed (inject `Session` via `get_db()`).
-4. Create a router in `app/api/routes/` and register it in `create_app()`.
+3. Add a repository in `app/repositories/` if persistence is needed (inject `Session` via `get_db()`). Every repository must implement `_tid()` calling `get_tenant_id()`.
+4. Create a router in `app/api/routes/` and register it in `create_app()`. Every route accessing tenant data must declare `_user: User = Depends(get_current_user)`.
 5. Add tests under `tests/`; use `TestClient(create_app())` as the fixture.
+6. If the feature adds new tables, create an Alembic migration: `python -m alembic revision --autogenerate -m "description"` then `python -m alembic upgrade head`.
 
 ## Configuration
 
@@ -80,11 +92,13 @@ Copy `.env.example` to `.env` before running. Relevant variables:
 | Variable | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | `postgresql://bridgeai:bridgeai@localhost:5432/bridgeai` | PostgreSQL connection string |
-| `PROJECT_ROOT` | `.` | Root path scanned by `CodeScanner` |
+| `PROJECT_ROOT` | `.` | Root path scanned by local `CodeIndexingService` |
 | `LOG_LEVEL` | `INFO` | Standard Python logging level |
 | `DRY_RUN` | `false` | Prevents side-effects in future write operations |
 | `AI_PROVIDER` | `stub` | `stub` \| `anthropic` \| `openai` |
 | `ANTHROPIC_API_KEY` | — | Required when `AI_PROVIDER=anthropic` |
+| `AUTH0_DOMAIN` | — | e.g. `your-tenant.auth0.com` |
+| `AUTH0_AUDIENCE` | — | API audience configured in Auth0 dashboard |
 | `JIRA_BASE_URL` | — | e.g. `https://your-org.atlassian.net` |
 | `JIRA_USER_EMAIL` | — | Jira account email |
 | `JIRA_API_TOKEN` | — | Jira API token (generate at id.atlassian.com) |
@@ -97,6 +111,13 @@ Frontend env — create `frontend/.env.local`:
 
 ```
 NEXT_PUBLIC_API_URL=http://localhost:8000
+
+AUTH0_SECRET=a-long-random-secret-at-least-32-chars
+AUTH0_BASE_URL=http://localhost:3000
+AUTH0_ISSUER_BASE_URL=https://your-tenant.auth0.com
+AUTH0_CLIENT_ID=your-client-id
+AUTH0_CLIENT_SECRET=your-client-secret
+AUTH0_AUDIENCE=https://your-api-audience
 ```
 
 ## Development agents (`.claude/agents/`)
@@ -123,4 +144,5 @@ Specialized Claude Code roles for common development tasks:
 | 5a | Jira integration — provider pattern, idempotency, audit log | Done |
 | 5b | Hardening — exponential backoff, Retry-After, full audit payload | Done |
 | 5c | Azure DevOps integration | Done |
-| 6 | Next.js frontend (replaces Streamlit) | Done |
+| 6 | Next.js 16 frontend — Auth0, multi-tenant, i18n, dark mode | Done |
+| 7 | Repository isolation — per-connection file scoping, clean re-index | Done |

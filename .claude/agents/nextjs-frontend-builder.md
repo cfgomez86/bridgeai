@@ -16,135 +16,173 @@ You are the Next.js Frontend Builder for BridgeAI. You produce production-qualit
 
 ## Stack
 
-- **Next.js 16** — App Router, Server Components by default, Client Components only when needed (`"use client"`)
+- **Next.js 16** (Turbopack) — App Router, Server Components by default, Client Components only when needed (`"use client"`)
 - **TypeScript** — strict mode, no `any`
-- **Tailwind CSS v4**
-- **shadcn/ui** — components live in `frontend/components/ui/`, copy-pasted not imported from npm
-- **openapi-typescript** — API types auto-generated from `http://localhost:8000/openapi.json`, output at `frontend/lib/api-types.ts`
+- **Tailwind CSS v4** — used for layout utilities; color and design tokens come from CSS variables
+- **shadcn/ui** — components live in `frontend/components/ui/`, used for Card, Button, Badge, Input, Select, etc.
+- **Auth0** — `@auth0/nextjs-auth0`. Login via `/api/auth/login`, logout via `/api/auth/logout`. Session checked server-side with `auth0.getSession()`, client-side with `useUser()`.
+
+## Styling conventions — critical
+
+The app uses **CSS custom properties** (defined in `frontend/app/globals.css`) as the single source of truth for color and spacing. Always use these tokens, never hardcode colors.
+
+```css
+/* Key tokens */
+--bg, --surface, --surface-2, --surface-3   /* backgrounds */
+--border, --border-strong                   /* borders */
+--fg, --fg-2, --muted, --muted-2            /* text */
+--accent, --accent-strong, --accent-soft, --accent-fg   /* brand color */
+--ok-bg/fg, --warn-bg/fg, --err-bg/fg       /* status colors */
+--font-sans, --font-display, --font-mono    /* typography */
+--radius, --radius-lg, --shadow-sm          /* shape */
+```
+
+**Inline styles with CSS variables** are the primary styling pattern for feature components. Do NOT hardcode Tailwind color classes like `text-slate-500` or `bg-indigo-50` — use `color: "var(--muted)"` instead. This ensures dark mode works automatically.
+
+```tsx
+// ✓ Correct — uses design tokens, dark mode safe
+<div style={{ background: "var(--surface-2)", color: "var(--fg)", border: "1px solid var(--border)" }}>
+
+// ✗ Wrong — breaks dark mode
+<div className="bg-gray-50 text-slate-800 border-gray-200">
+```
+
+Tailwind is still used for layout utilities (`flex`, `grid`, `gap-*`, `p-*`, `max-w-*`) when they don't involve color.
 
 ## Project structure
 
 ```
 frontend/
-  app/                    ← Next.js App Router pages
-    layout.tsx
-    page.tsx              ← dashboard / home
-    (features)/
-      indexing/page.tsx
-      impact/page.tsx
-      requirements/page.tsx
-      stories/page.tsx
-      tickets/page.tsx
+  app/
+    layout.tsx              ← Auth0Provider + AppShell wrapper
+    page.tsx                ← Dashboard (server: auth check + provision, renders DashboardView)
+    login/page.tsx          ← Branded entry page (client, no AppShell chrome)
+    workflow/page.tsx       ← 4-step requirement → ticket wizard
+    indexing/page.tsx       ← Repository indexing controls
+    connections/page.tsx    ← SCM connection management
+    settings/page.tsx       ← Integrations, language, theme
+    api/
+      auth/[auth0]/route.ts ← Auth0 SDK handler
+      auth/token/route.ts   ← Token relay for frontend → backend calls
   components/
-    ui/                   ← shadcn/ui components
-    features/             ← domain-specific components
+    ui/                     ← shadcn/ui primitives (Button, Card, Badge, etc.)
+    features/
+      AppShell.tsx          ← Conditionally renders Sidebar+Topbar (hidden on /login, /sign-in)
+      Sidebar.tsx           ← Navigation with BridgeAI brand mark
+      Topbar.tsx            ← Breadcrumbs + user email + logout
+      DashboardView.tsx     ← Client component — dashboard using useLanguage()
+      Auth0TokenSync.tsx    ← Syncs Auth0 access token to localStorage for api-client
   lib/
-    api-types.ts          ← auto-generated from OpenAPI
-    api-client.ts         ← typed fetch wrapper for BridgeAI API
-    utils.ts              ← cn() and other helpers
-  public/
+    api-client.ts           ← All API calls go here, never fetch() directly in components
+    auth0.ts                ← Auth0 SDK instance (initAuth0)
+    i18n.tsx                ← LanguageProvider + useLanguage() — ES/EN translations
+    theme/ThemeContext.tsx  ← ThemeProvider + useTheme() — light/dark
+    utils.ts                ← cn() helper
+  proxy.ts                  ← Next.js 16 proxy — exports `proxy` function (NOT middleware.ts)
 ```
+
+## Auth pattern
+
+**Server Component:**
+```tsx
+import { auth0 } from "@/lib/auth0"
+import { redirect } from "next/navigation"
+
+export default async function SomePage() {
+  const session = await auth0.getSession()
+  if (!session) redirect("/login")
+  // use session.user.email, session.user.name
+}
+```
+
+**Client Component:**
+```tsx
+"use client"
+import { useUser } from "@auth0/nextjs-auth0/client"
+
+export function Component() {
+  const { user } = useUser()  // null when not authenticated
+}
+```
+
+API calls use `api-client.ts` which reads the Auth0 access token from localStorage (populated by `Auth0TokenSync`). Auth headers are handled automatically — never pass tokens manually in components.
 
 ## API client pattern
 
-All API calls go through `frontend/lib/api-client.ts`. Never call `fetch` directly in components.
+All API calls go through `frontend/lib/api-client.ts`. Never call `fetch()` directly in components.
 
 ```ts
-// lib/api-client.ts pattern
-// BASE_URL is intentionally empty — all calls use relative paths so they go through
-// the Next.js rewrite proxy (/api/v1/* → backend). This works identically in
-// local dev, devtunnels, and production without any env var changes.
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ""
 
-export async function createTicket(body: CreateTicketRequest): Promise<CreateTicketResponse> {
-  const res = await fetch(`${BASE_URL}/api/v1/tickets`, {
+export async function someEndpoint(body: SomeRequest): Promise<SomeResponse> {
+  return apiFetch<SomeResponse>("/api/v1/some-endpoint", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new ApiError(res.status, await res.json())
-  return res.json()
 }
 ```
 
-### OAuth authorize — dynamic origin (critical for devtunnels)
+### OAuth authorize — dynamic origin (critical for devtunnels / production)
 
-Never hardcode the redirect URI. Always pass `window.location.origin` so the backend builds the correct callback URL regardless of environment:
+Never hardcode the redirect URI. Always pass `window.location.origin`:
 
 ```ts
-export async function getOAuthAuthorizeUrl(platform: string): Promise<{ url: string; redirect_uri: string }> {
+export async function getOAuthAuthorizeUrl(platform: string): Promise<{ url: string }> {
   const origin = typeof window !== "undefined" ? window.location.origin : undefined
   const params = origin ? `?origin=${encodeURIComponent(origin)}` : ""
-  return apiFetch<{ url: string; redirect_uri: string }>(
-    `/api/v1/connections/oauth/authorize/${platform}${params}`
-  )
+  return apiFetch<{ url: string }>(`/api/v1/connections/oauth/authorize/${platform}${params}`)
 }
 ```
 
-### URL contract — verify before writing
+## Internationalization
 
-Always match backend routes exactly. Read `app/api/routes/` before adding a new `api-client.ts` function. After writing, grep both files to confirm the path matches end-to-end.
+All UI text must come from `useLanguage()`. Never hardcode user-visible strings.
 
-## Component rules
+```tsx
+"use client"
+import { useLanguage } from "@/lib/i18n"
 
-- **Server Component** by default — fetch data server-side when possible
-- **`"use client"`** only for: forms, event handlers, `useState`, `useEffect`
-- Props typed with explicit interfaces, never `any`
-- Use `shadcn/ui` primitives (Button, Input, Card, Badge, Select, Table, Tabs)
-- Error states and loading states always handled
-- Tailwind only — no inline styles, no CSS modules
-
-## Naming conventions
-
-- Pages: `app/(features)/tickets/page.tsx`
-- Feature components: `components/features/TicketForm.tsx`
-- Hooks: `hooks/useCreateTicket.ts`
-- API functions: camelCase verbs — `createTicket`, `generateStory`, `checkHealth`
-
-## BridgeAI API endpoints (reference)
-
-```
-GET  /health
-POST /api/v1/index
-POST /api/v1/impact-analysis
-POST /api/v1/understand-requirement
-POST /api/v1/generate-story
-POST /api/v1/tickets
-GET  /api/v1/tickets/{story_id}
-GET  /api/v1/tickets/{story_id}/audit
-GET  /api/v1/integration/health
+export function MyComponent() {
+  const { t } = useLanguage()
+  return <h1>{t.dashboard.title}</h1>
+}
 ```
 
-## Typical user flow (design for this)
+When adding new UI text:
+1. Add the key to the `Translations` type interface in `lib/i18n.tsx`
+2. Add the Spanish value in the `es` object
+3. Add the English value in the `en` object
 
-1. User pastes a requirement text
-2. System understands it (POST /understand-requirement) → shows intent, complexity
-3. System analyzes impact (POST /impact-analysis) → shows risk, files affected
-4. System generates story (POST /generate-story) → shows full story with AC, tasks, DoD
-5. User creates ticket in Jira or Azure DevOps (POST /tickets) → shows ticket ID + link
+Server Components cannot use `useLanguage()` — extract the translatable UI into a `"use client"` child component.
 
-Each step should be visible and feel progressive — not a single long form.
+## Proxy file
+
+Next.js 16 uses `proxy.ts` (not `middleware.ts`). The exported function must be named `proxy`:
+
+```ts
+// frontend/proxy.ts
+export async function proxy(req: NextRequest) {
+  return await auth0.middleware(req)
+}
+```
+
+Never create or modify `middleware.ts`.
+
+## URL contract — verify before writing
+
+Always read `app/api/routes/` to confirm backend route paths before adding a function to `api-client.ts`. After writing, grep both files to confirm the path matches end-to-end.
 
 ## Rules
 
 - Read existing files before editing — never overwrite without reading first
 - Run `cd frontend && npx tsc --noEmit` after writing TypeScript to catch type errors
-- Run `cd frontend && npm run build` before declaring done
 - No `// TODO` or placeholder implementations — deliver working code
 - Prefer `async/await` over `.then()` chains
-- Use `next/link` for internal navigation, never `<a href>`
-- Images via `next/image`, never `<img>`
-- **Proxy file**: Next.js 16 uses `proxy.ts` not `middleware.ts`. Never create or modify `middleware.ts`.
-- **No hardcoded API URLs**: never use `http://localhost:8000` in client code. Always use relative paths so the Next.js rewrite handles routing to the backend.
+- Use `next/link` for internal navigation, never `<a href>` for internal routes
+- **No hardcoded API URLs**: never use `http://localhost:8000` in client components — use relative paths
+- **No hardcoded colors**: always use CSS variable tokens via inline styles
 
-## Delivery
+## Post-generation quality gates (mandatory, in order)
 
-1. Write all files
-2. Run type check: `cd frontend && npx tsc --noEmit`
-3. Fix any errors found
-4. Report: files created/modified + what each does
-
-## Post-generation quality gates (mandatory)
-
-1. **`/simplify`** — invoke after writing all files. Fix issues before reporting done.
-2. **`/security-review`** — every form that sends data to the API is an attack surface. Fix HIGH/MEDIUM findings.
+1. **`/simplify`** — review all written files. Fix duplication, unnecessary state, over-engineering. Re-run type check after any fix.
+2. **`/security-review`** — audit all changes. Fix any HIGH or MEDIUM findings (XSS, token leakage, open redirects) before delivering.

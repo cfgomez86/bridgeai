@@ -51,9 +51,12 @@ def get_indexing_service(
 
 @router.get("/index/status", response_model=IndexStatusResponse)
 async def get_index_status(
+    db: Session = Depends(get_db),
     service: CodeIndexingService = Depends(get_indexing_service),
 ) -> IndexStatusResponse:
-    total_files, last_indexed_at = service.get_status()
+    active = SourceConnectionRepository(db).get_active()
+    source_connection_id = active.id if active else None
+    total_files, last_indexed_at = service.get_status(source_connection_id)
     return IndexStatusResponse(total_files=total_files, last_indexed_at=last_indexed_at)
 
 
