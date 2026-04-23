@@ -22,9 +22,6 @@ from app.services.ticket_integration_service import TicketIntegrationService
 def make_settings(**kwargs) -> Settings:
     defaults = dict(
         DATABASE_URL="sqlite:///:memory:",
-        JIRA_BASE_URL="https://test.atlassian.net",
-        JIRA_USER_EMAIL="user@test.com",
-        JIRA_API_TOKEN="token123",
         JIRA_MAX_RETRIES=1,
         JIRA_RETRY_DELAY_SECONDS=0,
     )
@@ -214,7 +211,7 @@ class TestIntegrationHealthEndpoint:
         Base.metadata.create_all(bind=engine)
         Session = sessionmaker(bind=engine)
         db = Session()
-        settings = make_settings(JIRA_BASE_URL="", JIRA_API_TOKEN="")
+        settings = make_settings()
         app = apply_mock_auth(create_app())
         app.dependency_overrides[get_integration_service] = lambda: TicketIntegrationService(
             db=db, settings=settings

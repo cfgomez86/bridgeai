@@ -1,4 +1,3 @@
-import base64
 import json
 import uuid
 from datetime import datetime, timezone
@@ -14,9 +13,6 @@ from app.services.ticket_providers.jira import JiraTicketProvider
 def make_settings(**kwargs) -> Settings:
     defaults = dict(
         DATABASE_URL="sqlite:///:memory:",
-        JIRA_BASE_URL="https://test.atlassian.net",
-        JIRA_USER_EMAIL="user@test.com",
-        JIRA_API_TOKEN="token123",
         JIRA_REQUEST_TIMEOUT_SECONDS=5,
         JIRA_MAX_RETRIES=2,
         JIRA_RETRY_DELAY_SECONDS=0,
@@ -24,6 +20,16 @@ def make_settings(**kwargs) -> Settings:
     )
     defaults.update(kwargs)
     return Settings(**defaults)
+
+
+def make_provider(settings: Settings | None = None, **kwargs) -> JiraTicketProvider:
+    provider_kwargs = dict(
+        access_token="test-oauth-token",
+        base_url="https://api.atlassian.com/ex/jira/cloud-id",
+        site_url="https://test.atlassian.net",
+    )
+    provider_kwargs.update(kwargs)
+    return JiraTicketProvider(settings or make_settings(), **provider_kwargs)
 
 
 def make_story(**kwargs) -> UserStory:
@@ -48,27 +54,21 @@ def make_story(**kwargs) -> UserStory:
 
 
 class TestJiraAuth:
-    def test_basic_auth_header_is_base64_encoded(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
-        header = provider._auth_header()
-        assert header.startswith("Basic ")
-        decoded = base64.b64decode(header[6:]).decode()
-        assert decoded == "user@test.com:token123"
+    def test_oauth_bearer_header(self):
+        provider = make_provider(access_token="my-token")
+        assert provider._auth_header() == "Bearer my-token"
 
     def test_headers_contain_auth_and_json(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         headers = provider._headers()
-        assert "Authorization" in headers
+        assert headers["Authorization"].startswith("Bearer ")
         assert headers["Content-Type"] == "application/json"
         assert headers["Accept"] == "application/json"
 
 
 class TestJiraPayloadMapping:
     def test_payload_maps_story_fields(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         story = make_story()
         payload = provider.build_payload(story, "PROJ", "Story")
 
@@ -81,25 +81,24 @@ class TestJiraPayloadMapping:
 
     def test_issue_type_map_translates_story_to_historia(self):
         settings = make_settings(JIRA_ISSUE_TYPE_MAP="Story=Historia,Task=Tarea,Bug=Error")
-        provider = JiraTicketProvider(settings)
+        provider = JiraTicketProvider(settings, access_token="tok", base_url="https://api.atlassian.com/ex/jira/abc")
         payload = provider.build_payload(make_story(), "PROJ", "Story")
         assert payload["fields"]["issuetype"]["name"] == "Historia"
 
     def test_issue_type_map_is_case_insensitive(self):
         settings = make_settings(JIRA_ISSUE_TYPE_MAP="Story=Historia")
-        provider = JiraTicketProvider(settings)
+        provider = JiraTicketProvider(settings, access_token="tok", base_url="https://api.atlassian.com/ex/jira/abc")
         payload = provider.build_payload(make_story(), "PROJ", "story")
         assert payload["fields"]["issuetype"]["name"] == "Historia"
 
     def test_issue_type_unknown_passes_through(self):
         settings = make_settings(JIRA_ISSUE_TYPE_MAP="Story=Historia")
-        provider = JiraTicketProvider(settings)
+        provider = JiraTicketProvider(settings, access_token="tok", base_url="https://api.atlassian.com/ex/jira/abc")
         payload = provider.build_payload(make_story(), "PROJ", "Epic")
         assert payload["fields"]["issuetype"]["name"] == "Epic"
 
     def test_description_contains_acceptance_criteria(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         story = make_story()
         payload = provider.build_payload(story, "PROJ", "Story")
         description_json = json.dumps(payload["fields"]["description"])
@@ -107,8 +106,7 @@ class TestJiraPayloadMapping:
         assert "Password is hashed" in description_json
 
     def test_description_does_not_contain_subtasks(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         story = make_story()
         payload = provider.build_payload(story, "PROJ", "Story")
         description_json = json.dumps(payload["fields"]["description"])
@@ -116,8 +114,7 @@ class TestJiraPayloadMapping:
         assert "Subtareas" not in description_json
 
     def test_payload_only_contains_required_fields(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         payload = provider.build_payload(make_story(), "PROJ", "Story")
         fields = set(payload["fields"].keys())
         assert fields == {"project", "summary", "description", "issuetype"}
@@ -125,8 +122,7 @@ class TestJiraPayloadMapping:
 
 class TestJiraCreateSubtasks:
     async def test_create_subtasks_returns_created_keys(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         subtasks = {"frontend": ["Build form"], "backend": ["Add endpoint", "Add repo"], "configuration": []}
 
         responses = [{"key": "PROJ-2"}, {"key": "PROJ-3"}, {"key": "PROJ-4"}]
@@ -139,8 +135,7 @@ class TestJiraCreateSubtasks:
         assert failed == []
 
     async def test_create_subtasks_payload_has_parent_and_label(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         payload = provider._build_subtask_payload("PROJ-1", "PROJ", "Add endpoint", "backend")
 
         fields = payload["fields"]
@@ -150,22 +145,19 @@ class TestJiraCreateSubtasks:
         assert fields["summary"] == "[Backend] Add endpoint"
 
     async def test_create_subtasks_payload_uses_config_prefix_for_configuration(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         payload = provider._build_subtask_payload("PROJ-1", "PROJ", "Add env vars", "configuration")
         assert payload["fields"]["summary"] == "[Config] Add env vars"
 
     async def test_create_subtasks_payload_uses_frontend_prefix(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         payload = provider._build_subtask_payload("PROJ-1", "PROJ", "Build form", "frontend")
         assert payload["fields"]["summary"] == "[Frontend] Build form"
 
     async def test_create_subtasks_skips_failed_items(self):
         from urllib.error import HTTPError
 
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         subtasks = {"frontend": [], "backend": ["Task A", "Task B"], "configuration": []}
 
         error = HTTPError(url="", code=400, msg="Bad Request", hdrs=None, fp=None)
@@ -179,8 +171,7 @@ class TestJiraCreateSubtasks:
 
 class TestJiraCreateTicket:
     async def test_create_ticket_success(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         story = make_story()
 
         with patch.object(provider, "_request", new=AsyncMock(return_value={"key": "PROJ-42"})):
@@ -195,8 +186,7 @@ class TestJiraCreateTicket:
     async def test_create_ticket_retries_on_5xx(self):
         from urllib.error import HTTPError
 
-        settings = make_settings(JIRA_MAX_RETRIES=2, JIRA_RETRY_DELAY_SECONDS=0)
-        provider = JiraTicketProvider(settings)
+        provider = make_provider(settings=make_settings(JIRA_MAX_RETRIES=2, JIRA_RETRY_DELAY_SECONDS=0))
         story = make_story()
 
         error_500 = HTTPError(url="", code=500, msg="Server Error", hdrs=None, fp=None)
@@ -213,8 +203,7 @@ class TestJiraCreateTicket:
     async def test_create_ticket_does_not_retry_on_401(self):
         from urllib.error import HTTPError
 
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
         story = make_story()
 
         error_401 = HTTPError(url="", code=401, msg="Unauthorized", hdrs=None, fp=None)
@@ -228,8 +217,7 @@ class TestJiraCreateTicket:
     async def test_create_ticket_raises_after_max_retries(self):
         from urllib.error import HTTPError
 
-        settings = make_settings(JIRA_MAX_RETRIES=1, JIRA_RETRY_DELAY_SECONDS=0)
-        provider = JiraTicketProvider(settings)
+        provider = make_provider(settings=make_settings(JIRA_MAX_RETRIES=1, JIRA_RETRY_DELAY_SECONDS=0))
         story = make_story()
 
         error_503 = HTTPError(url="", code=503, msg="Unavailable", hdrs=None, fp=None)
@@ -241,13 +229,11 @@ class TestJiraCreateTicket:
 
 class TestJiraValidateConnection:
     async def test_validate_connection_returns_false_when_not_configured(self):
-        settings = make_settings(JIRA_BASE_URL="", JIRA_API_TOKEN="")
-        provider = JiraTicketProvider(settings)
+        provider = make_provider(access_token="", base_url="")
         assert await provider.validate_connection() is False
 
     async def test_validate_connection_returns_true_on_success(self):
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
 
         with patch.object(provider, "_request", new=AsyncMock(return_value={"accountId": "abc"})):
             assert await provider.validate_connection() is True
@@ -255,8 +241,7 @@ class TestJiraValidateConnection:
     async def test_validate_connection_returns_false_on_error(self):
         from urllib.error import HTTPError
 
-        settings = make_settings()
-        provider = JiraTicketProvider(settings)
+        provider = make_provider()
 
         with patch.object(
             provider, "_request",

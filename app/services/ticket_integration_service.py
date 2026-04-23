@@ -53,23 +53,17 @@ class TicketIntegrationService:
                 f"Available: {list(_PROVIDERS.keys())}"
             )
         if provider_name == "jira":
-            # Prefer OAuth connection from DB; fall back to env-var credentials
             db_conn = self._conn_repo.get_active_for_platform("jira")
-            if db_conn and db_conn.access_token and db_conn.base_url:
-                return JiraTicketProvider(
-                    self._settings,
-                    access_token=db_conn.access_token,
-                    base_url=db_conn.base_url,
-                )
-            missing = [k for k, v in {
-                "JIRA_BASE_URL": self._settings.JIRA_BASE_URL,
-                "JIRA_USER_EMAIL": self._settings.JIRA_USER_EMAIL,
-                "JIRA_API_TOKEN": self._settings.JIRA_API_TOKEN,
-            }.items() if not v]
-            if missing:
+            if not (db_conn and db_conn.access_token and db_conn.base_url):
                 raise ProviderNotConfiguredError(
-                    f"Jira is not configured. Connect via OAuth or set {', '.join(missing)} in .env"
+                    "Jira is not configured. Connect via OAuth in Conexiones → Herramientas de gestión."
                 )
+            return JiraTicketProvider(
+                self._settings,
+                access_token=db_conn.access_token,
+                base_url=db_conn.base_url,
+                site_url=db_conn.repo_full_name or "",
+            )
         if provider_name == "azure_devops":
             missing = [k for k, v in {
                 "AZURE_ORG_URL": self._settings.AZURE_ORG_URL,
@@ -112,12 +106,8 @@ class TicketIntegrationService:
         tid = external_ticket_id or ""
         if provider_name == "jira":
             db_conn = self._conn_repo.get_active_for_platform("jira")
-            jira_site = (
-                db_conn.repo_full_name.rstrip("/")
-                if db_conn and db_conn.repo_full_name
-                else self._settings.JIRA_BASE_URL.rstrip("/")
-            )
-            return f"{jira_site}/browse/{tid}"
+            site = db_conn.repo_full_name.rstrip("/") if db_conn and db_conn.repo_full_name else ""
+            return f"{site}/browse/{tid}" if site else ""
         if provider_name == "azure_devops" and tid:
             org = self._settings.AZURE_ORG_URL.rstrip("/")
             return f"{org}/{self._settings.AZURE_PROJECT}/_workitems/edit/{tid}"
@@ -309,13 +299,12 @@ class TicketIntegrationService:
         db_jira = self._conn_repo.get_active_for_platform("jira")
         if db_jira and db_jira.access_token and db_jira.base_url:
             try:
-                jira = JiraTicketProvider(self._settings, access_token=db_jira.access_token, base_url=db_jira.base_url)
-                results["jira"] = "healthy" if await jira.validate_connection() else "unhealthy"
-            except Exception:
-                results["jira"] = "unhealthy"
-        elif self._settings.JIRA_BASE_URL and self._settings.JIRA_API_TOKEN:
-            try:
-                jira = JiraTicketProvider(self._settings)
+                jira = JiraTicketProvider(
+                    self._settings,
+                    access_token=db_jira.access_token,
+                    base_url=db_jira.base_url,
+                    site_url=db_jira.repo_full_name or "",
+                )
                 results["jira"] = "healthy" if await jira.validate_connection() else "unhealthy"
             except Exception:
                 results["jira"] = "unhealthy"

@@ -339,7 +339,6 @@ class TestHealthCheckWithAzure:
         db = sessionmaker(bind=engine)()
 
         settings = make_settings(
-            JIRA_BASE_URL="", JIRA_API_TOKEN="",
             AZURE_ORG_URL="", AZURE_DEVOPS_TOKEN="",
         )
         service = TicketIntegrationService(db, settings)
@@ -363,7 +362,7 @@ class TestHealthCheckWithAzure:
         Base.metadata.create_all(bind=engine)
         db = sessionmaker(bind=engine)()
 
-        settings = make_settings(JIRA_BASE_URL="", JIRA_API_TOKEN="")
+        settings = make_settings()
         service = TicketIntegrationService(db, settings)
 
         with patch(

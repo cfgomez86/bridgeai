@@ -27,9 +27,6 @@ from app.domain.user_story import UserStory
 def make_settings(**kwargs) -> Settings:
     defaults = dict(
         DATABASE_URL="sqlite:///:memory:",
-        JIRA_BASE_URL="https://test.atlassian.net",
-        JIRA_USER_EMAIL="user@test.com",
-        JIRA_API_TOKEN="token123",
         JIRA_MAX_RETRIES=2,
         JIRA_RETRY_DELAY_SECONDS=1,
     )
@@ -120,7 +117,7 @@ class TestJitterBackoff:
         from urllib.error import HTTPError
 
         settings = make_settings(JIRA_MAX_RETRIES=2, JIRA_RETRY_DELAY_SECONDS=0)
-        provider = JiraTicketProvider(settings)
+        provider = JiraTicketProvider(settings, access_token="test-token", base_url="https://api.atlassian.com/ex/jira/cloud-id")
         story = make_domain_story()
 
         error_429 = HTTPError(url="", code=429, msg="Too Many Requests", hdrs=None, fp=None)

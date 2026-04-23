@@ -41,9 +41,6 @@ class Settings(BaseSettings):
     AI_MAX_RETRIES: int = 2
 
     # Jira integration
-    JIRA_BASE_URL: str = ""
-    JIRA_USER_EMAIL: str = ""
-    JIRA_API_TOKEN: str = ""
     JIRA_REQUEST_TIMEOUT_SECONDS: int = 10
     JIRA_MAX_RETRIES: int = 3
     JIRA_RETRY_DELAY_SECONDS: int = 5

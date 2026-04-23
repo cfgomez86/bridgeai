@@ -1,9 +1,7 @@
 import asyncio
-import base64
 import json
 import random
 from urllib.error import HTTPError
-from urllib.parse import urljoin
 
 import httpx
 
@@ -37,11 +35,12 @@ class JiraTicketProvider(TicketProvider):
         *,
         access_token: str = "",
         base_url: str = "",
+        site_url: str = "",
     ) -> None:
         self._settings = settings or get_settings()
-        # OAuth credentials take precedence over env-var credentials
         self._oauth_token = access_token
         self._oauth_base_url = base_url.rstrip("/") if base_url else ""
+        self._site_url = site_url.rstrip("/") if site_url else ""
         self._issue_type_map = self._parse_issue_type_map()
         self._client = httpx.AsyncClient(timeout=self._settings.JIRA_REQUEST_TIMEOUT_SECONDS)
 
@@ -67,10 +66,7 @@ class JiraTicketProvider(TicketProvider):
         return issue_type
 
     def _auth_header(self) -> str:
-        if self._oauth_token:
-            return f"Bearer {self._oauth_token}"
-        raw = f"{self._settings.JIRA_USER_EMAIL}:{self._settings.JIRA_API_TOKEN}"
-        return "Basic " + base64.b64encode(raw.encode()).decode()
+        return f"Bearer {self._oauth_token}"
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -80,10 +76,12 @@ class JiraTicketProvider(TicketProvider):
         }
 
     def _api_url(self, path: str) -> str:
-        # OAuth: base_url = https://api.atlassian.com/ex/jira/{cloud_id}
-        # API token: base_url = https://mysite.atlassian.net
-        base = self._oauth_base_url or self._settings.JIRA_BASE_URL.rstrip("/")
-        return f"{base}/rest/api/3/{path.lstrip('/')}"
+        if not self._oauth_base_url:
+            raise ValueError("Jira OAuth connection is required but not configured.")
+        return f"{self._oauth_base_url}/rest/api/3/{path.lstrip('/')}"
+
+    def _browse_url(self, key: str) -> str:
+        return f"{self._site_url}/browse/{key}" if self._site_url else f"/browse/{key}"
 
     def _build_description_doc(self, story: UserStory) -> dict:
         def section(heading: str, items: list[str]) -> list[dict]:
@@ -188,7 +186,7 @@ class JiraTicketProvider(TicketProvider):
             try:
                 response = await self._request("POST", url, payload)
                 key = response["key"]
-                ticket_url = urljoin(self._settings.JIRA_BASE_URL, f"/browse/{key}")
+                ticket_url = self._browse_url(key)
                 return key, ticket_url, full_title, None
             except HTTPError as exc:
                 if exc.code in (400, 401, 403):
@@ -258,7 +256,7 @@ class JiraTicketProvider(TicketProvider):
                 )
                 response = await self._request("POST", url, payload)
                 ticket_id = response["key"]
-                ticket_url = urljoin(self._settings.JIRA_BASE_URL, f"/browse/{ticket_id}")
+                ticket_url = self._browse_url(ticket_id)
                 return TicketResult(external_id=ticket_id, url=ticket_url, provider="jira", status="CREATED")
             except HTTPError as exc:
                 if exc.code in (400, 401, 403):
@@ -286,12 +284,12 @@ class JiraTicketProvider(TicketProvider):
     async def get_ticket(self, external_id: str) -> TicketResult:
         url = self._api_url(f"issue/{external_id}")
         response = await self._request("GET", url)
-        ticket_url = urljoin(self._settings.JIRA_BASE_URL, f"/browse/{external_id}")
+        ticket_url = self._browse_url(external_id)
         status = response.get("fields", {}).get("status", {}).get("name", "Unknown")
         return TicketResult(external_id=external_id, url=ticket_url, provider="jira", status=status)
 
     async def validate_connection(self) -> bool:
-        if not self._settings.JIRA_BASE_URL or not self._settings.JIRA_API_TOKEN:
+        if not self._oauth_token or not self._oauth_base_url:
             return False
         try:
             await self._request("GET", self._api_url("myself"))

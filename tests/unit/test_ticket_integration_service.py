@@ -22,9 +22,6 @@ from app.services.ticket_integration_service import (
 def make_settings(**kwargs) -> Settings:
     defaults = dict(
         DATABASE_URL="sqlite:///:memory:",
-        JIRA_BASE_URL="https://test.atlassian.net",
-        JIRA_USER_EMAIL="user@test.com",
-        JIRA_API_TOKEN="token123",
         JIRA_MAX_RETRIES=1,
         JIRA_RETRY_DELAY_SECONDS=0,
     )
@@ -168,7 +165,7 @@ class TestCreateTicket:
 class TestHealthCheck:
     async def test_health_check_not_configured(self):
         db = make_db_session()
-        settings = make_settings(JIRA_BASE_URL="", JIRA_API_TOKEN="")
+        settings = make_settings()
         service = TicketIntegrationService(db, settings)
 
         result = await service.health_check()
