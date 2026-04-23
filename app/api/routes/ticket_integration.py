@@ -66,6 +66,26 @@ class CreateTicketResponse(BaseModel):
     failed_subtasks: list[str] = []
 
 
+class BulkTicketResultItem(BaseModel):
+    story_id: str
+    success: bool
+    ticket_id: str | None = None
+    url: str | None = None
+    status: str | None = None
+    error: str | None = None
+    subtask_urls: list[str] = []
+    subtask_titles: list[str] = []
+    failed_subtasks: list[str] = []
+
+
+class BulkCreateTicketsRequest(BaseModel):
+    tickets: list[CreateTicketRequest]
+
+
+class BulkCreateTicketsResponse(BaseModel):
+    results: list[BulkTicketResultItem]
+
+
 def get_integration_service(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
@@ -138,6 +158,53 @@ async def create_ticket(
         subtask_titles=result.subtask_titles,
         failed_subtasks=result.failed_subtasks,
     )
+
+
+@router.post("/tickets/bulk", response_model=BulkCreateTicketsResponse)
+async def create_tickets_bulk(
+    body: BulkCreateTicketsRequest,
+    request: Request,
+    service: TicketIntegrationService = Depends(get_integration_service),
+):
+    request_id = str(getattr(request.state, "request_id", uuid.uuid4()))
+    logger.info(
+        "POST /tickets/bulk request_id=%s count=%d",
+        request_id, len(body.tickets),
+    )
+
+    async def _create_one(item: CreateTicketRequest) -> BulkTicketResultItem:
+        try:
+            result, is_duplicate = await service.create_ticket(
+                story_id=item.story_id,
+                provider_name=item.integration_type,
+                project_key=item.project_key,
+                issue_type=item.issue_type,
+                request_id=request_id,
+                create_subtasks=item.create_subtasks,
+            )
+            return BulkTicketResultItem(
+                story_id=item.story_id,
+                success=True,
+                ticket_id=result.external_id,
+                url=result.url,
+                status=result.status,
+                subtask_urls=result.subtask_urls,
+                subtask_titles=result.subtask_titles,
+                failed_subtasks=result.failed_subtasks,
+            )
+        except Exception as exc:
+            logger.warning(
+                "bulk_ticket_item_failed request_id=%s story_id=%s error=%s",
+                request_id, item.story_id, exc,
+            )
+            return BulkTicketResultItem(
+                story_id=item.story_id,
+                success=False,
+                error=str(exc),
+            )
+
+    results = await asyncio.gather(*[_create_one(item) for item in body.tickets])
+    return BulkCreateTicketsResponse(results=list(results))
 
 
 @router.get("/tickets/{story_id}", response_model=list[TicketStatusResponse])

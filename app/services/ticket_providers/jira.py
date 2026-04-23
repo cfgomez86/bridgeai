@@ -34,6 +34,7 @@ class JiraTicketProvider(TicketProvider):
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
         self._issue_type_map = self._parse_issue_type_map()
+        self._client = httpx.AsyncClient(timeout=self._settings.JIRA_REQUEST_TIMEOUT_SECONDS)
 
     def _parse_issue_type_map(self) -> dict[str, str]:
         result: dict[str, str] = {}
@@ -124,11 +125,9 @@ class JiraTicketProvider(TicketProvider):
         }
 
     async def _request(self, method: str, url: str, body: dict | None = None) -> dict:
-        timeout = self._settings.JIRA_REQUEST_TIMEOUT_SECONDS
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.request(
-                method, url, json=body, headers=self._headers()
-            )
+        response = await self._client.request(
+            method, url, json=body, headers=self._headers()
+        )
         if response.status_code >= 400:
             error_body = response.text
             logger.error("jira_api_error status=%s body=%s", response.status_code, error_body)

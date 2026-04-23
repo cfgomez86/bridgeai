@@ -18,4 +18,5 @@ export const auth0 = new Auth0Client({
     logout: "/api/auth/logout",
     callback: "/api/auth/callback",
   },
+  logoutReturnTo: `${process.env.AUTH0_BASE_URL ?? "http://localhost:3000"}/api/auth/login`,
 })

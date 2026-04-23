@@ -39,6 +39,7 @@ _PRIORITY_MAP = {
 class AzureDevOpsTicketProvider(TicketProvider):
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
+        self._client = httpx.AsyncClient(timeout=self._settings.AZURE_REQUEST_TIMEOUT_SECONDS)
 
     def _auth_header(self) -> str:
         raw = f":{self._settings.AZURE_DEVOPS_TOKEN}"
@@ -110,11 +111,9 @@ class AzureDevOpsTicketProvider(TicketProvider):
         }
 
     async def _request(self, method: str, url: str, body: list | dict | None = None, patch: bool = False) -> dict:
-        timeout = self._settings.AZURE_REQUEST_TIMEOUT_SECONDS
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.request(
-                method, url, json=body, headers=self._headers(patch=patch)
-            )
+        response = await self._client.request(
+            method, url, json=body, headers=self._headers(patch=patch)
+        )
         if response.status_code >= 400:
             exc = HTTPError(url, response.status_code, response.reason_phrase, {}, None)  # type: ignore[arg-type]
             raise exc

@@ -232,12 +232,9 @@ function ConnectionsContent() {
     router.replace("/connections", { scroll: false })
 
     if (connected) {
-      setToast({ msg: `${s.toast_connected} ${PLATFORM_LABELS[connected] ?? connected}`, tone: "ok" })
       // Only refresh now if Auth0 is already loaded — otherwise the isLoaded/isSignedIn
       // effect will fire refresh() once Auth0 finishes initializing after the OAuth redirect.
       if (isLoaded && isSignedIn) refresh()
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
-      toastTimerRef.current = setTimeout(() => setToast(null), 5000)
     } else if (error) {
       setToast({ msg: `${s.toast_error} ${PLATFORM_LABELS[error] ?? error}`, tone: "err" })
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
@@ -254,7 +251,7 @@ function ConnectionsContent() {
       {toast && (
         <div style={{
           position: "fixed",
-          top: "16px",
+          top: "64px",
           right: "16px",
           zIndex: 50,
           background: toast.tone === "ok" ? "var(--ok-bg)" : "var(--err-bg)",
