@@ -13,43 +13,65 @@ class ImpactAnalysisRepository:
     def _tid(self) -> str:
         return get_tenant_id()
 
-    def save(self, analysis: ImpactAnalysis, impacted_files: list[ImpactedFile]) -> ImpactAnalysis:
-        analysis.tenant_id = self._tid()
+    def save(
+        self,
+        analysis: ImpactAnalysis,
+        impacted_files: list[ImpactedFile],
+        source_connection_id: str,
+    ) -> ImpactAnalysis:
+        tid = self._tid()
+        analysis.tenant_id = tid
+        analysis.source_connection_id = source_connection_id
+        for f in impacted_files:
+            f.tenant_id = tid
+            f.source_connection_id = source_connection_id
         self._db.add(analysis)
         self._db.add_all(impacted_files)
         self._db.commit()
         self._db.refresh(analysis)
         return analysis
 
-    def find_by_id(self, analysis_id: str) -> Optional[ImpactAnalysis]:
+    def find_by_id(
+        self, analysis_id: str, source_connection_id: str
+    ) -> Optional[ImpactAnalysis]:
         return (
             self._db.query(ImpactAnalysis)
-            .filter(ImpactAnalysis.id == analysis_id, ImpactAnalysis.tenant_id == self._tid())
+            .filter(
+                ImpactAnalysis.id == analysis_id,
+                ImpactAnalysis.tenant_id == self._tid(),
+                ImpactAnalysis.source_connection_id == source_connection_id,
+            )
             .first()
         )
 
     def find_files_page(
-        self, analysis_id: str, offset: int = 0, limit: int = 100
+        self,
+        analysis_id: str,
+        source_connection_id: str,
+        offset: int = 0,
+        limit: int = 100,
     ) -> tuple[list[ImpactedFile], int]:
         base = (
             self._db.query(ImpactedFile)
-            .join(ImpactAnalysis, ImpactAnalysis.id == ImpactedFile.analysis_id)
             .filter(
                 ImpactedFile.analysis_id == analysis_id,
-                ImpactAnalysis.tenant_id == self._tid(),
+                ImpactedFile.tenant_id == self._tid(),
+                ImpactedFile.source_connection_id == source_connection_id,
             )
         )
         total = base.count()
         files = base.offset(offset).limit(limit).all()
         return files, total
 
-    def find_file_paths(self, analysis_id: str, limit: int = 20) -> list[str]:
+    def find_file_paths(
+        self, analysis_id: str, source_connection_id: str, limit: int = 20
+    ) -> list[str]:
         rows = (
             self._db.query(ImpactedFile.file_path)
-            .join(ImpactAnalysis, ImpactAnalysis.id == ImpactedFile.analysis_id)
             .filter(
                 ImpactedFile.analysis_id == analysis_id,
-                ImpactAnalysis.tenant_id == self._tid(),
+                ImpactedFile.tenant_id == self._tid(),
+                ImpactedFile.source_connection_id == source_connection_id,
             )
             .limit(limit)
             .all()

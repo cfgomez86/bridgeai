@@ -7,11 +7,18 @@ from app.database.session import Base
 class UserStory(Base):
     __tablename__ = "user_stories"
     __table_args__ = (
-        Index("ix_user_stories_req_analysis", "requirement_id", "impact_analysis_id"),
+        Index(
+            "ix_user_stories_req_analysis_conn",
+            "requirement_id", "impact_analysis_id", "source_connection_id",
+        ),
+        Index("ix_user_stories_tenant_connection", "tenant_id", "source_connection_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
+    source_connection_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("source_connections.id"), nullable=False, index=True
+    )
     requirement_id: Mapped[str] = mapped_column(String(36), nullable=False)
     impact_analysis_id: Mapped[str] = mapped_column(String(36), nullable=False)
     project_id: Mapped[str] = mapped_column(String(255), nullable=False)

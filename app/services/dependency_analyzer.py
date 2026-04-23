@@ -5,8 +5,9 @@ from typing import Callable
 
 from app.core.context import get_tenant_id
 
-# Module-level cache: survives across DependencyAnalyzer instances (one per request).
-# Key: (tenant_id, file_path, content_hash) — stale entries evicted when file content changes.
+# Key: (tenant_id, source_connection_id, file_path, content_hash).
+# El scope incluye connection porque dos repos del mismo tenant pueden tener
+# el mismo file_path con contenido distinto (o igual) y no deben compartir análisis.
 _analysis_cache: dict[tuple, "FileAnalysis"] = {}
 
 
@@ -32,8 +33,10 @@ class DependencyAnalyzer:
         except RuntimeError:
             self._tid = ""
 
-    def analyze(self, file_path: str, content: str, language: str) -> FileAnalysis:
-        key = (self._tid, file_path, hash(content))
+    def analyze(
+        self, file_path: str, content: str, language: str, source_connection_id: str
+    ) -> FileAnalysis:
+        key = (self._tid, source_connection_id, file_path, hash(content))
         cached = _analysis_cache.get(key)
         if cached is not None:
             return cached

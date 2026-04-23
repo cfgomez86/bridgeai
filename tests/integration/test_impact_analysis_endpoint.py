@@ -1,12 +1,15 @@
 import uuid
-from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from app.main import create_app
-from tests.integration.auth_helpers import apply_mock_auth
+from tests.integration.auth_helpers import (
+    apply_mock_auth,
+    seed_source_connection,
+    TEST_CONNECTION_ID,
+)
 from app.database.session import Base, get_db
 from app.api.routes.impact_analysis import get_impact_service
 from app.repositories.code_file_repository import CodeFileRepository
@@ -26,6 +29,17 @@ def make_client(project_root: str) -> TestClient:
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine)
 
+    seed_db = Session()
+    seed_source_connection(seed_db)
+    seed_db.close()
+
+    def override_get_db():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
     def override() -> ImpactAnalysisService:
         db = Session()
         return ImpactAnalysisService(
@@ -36,6 +50,7 @@ def make_client(project_root: str) -> TestClient:
         )
 
     app = apply_mock_auth(create_app())
+    app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_impact_service] = override
     return TestClient(app)
 
@@ -49,6 +64,14 @@ def make_client_with_indexing(project_root: str) -> TestClient:
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine)
     db = Session()  # Shared session across all overrides
+    seed_source_connection(db)
+    # Clear access_token/repo_full_name so /api/v1/index falls back to local
+    # filesystem indexing instead of trying to hit GitHub.
+    from app.models.source_connection import SourceConnection
+    conn = db.query(SourceConnection).first()
+    conn.access_token = ""
+    conn.repo_full_name = None
+    db.commit()
 
     def override_get_db():
         try:
@@ -74,24 +97,27 @@ def make_client_with_indexing(project_root: str) -> TestClient:
     return TestClient(app)
 
 
+def _body(requirement: str, project_id: str = "test") -> dict:
+    return {
+        "requirement": requirement,
+        "project_id": project_id,
+        "source_connection_id": TEST_CONNECTION_ID,
+    }
+
+
 def test_post_impact_analysis_returns_200(tmp_path):
     client = make_client(str(tmp_path))
-    response = client.post(
-        "/api/v1/impact-analysis",
-        json={"requirement": "add user email validation", "project_id": "test"},
-    )
+    response = client.post("/api/v1/impact-analysis", json=_body("add user email validation"))
     assert response.status_code == 200
     data = response.json()
     assert "analysis_id" in data
+    assert data["source_connection_id"] == TEST_CONNECTION_ID
     assert "risk_level" in data
 
 
 def test_response_has_valid_uuid(tmp_path):
     client = make_client(str(tmp_path))
-    response = client.post(
-        "/api/v1/impact-analysis",
-        json={"requirement": "add user email validation", "project_id": "test"},
-    )
+    response = client.post("/api/v1/impact-analysis", json=_body("add user email validation"))
     assert response.status_code == 200
     data = response.json()
     uuid.UUID(data["request_id"])
@@ -100,11 +126,17 @@ def test_response_has_valid_uuid(tmp_path):
 
 def test_empty_requirement_returns_400(tmp_path):
     client = make_client(str(tmp_path))
+    response = client.post("/api/v1/impact-analysis", json=_body(""))
+    assert response.status_code == 400
+
+
+def test_invalid_connection_returns_404(tmp_path):
+    client = make_client(str(tmp_path))
     response = client.post(
         "/api/v1/impact-analysis",
-        json={"requirement": "", "project_id": "test"},
+        json={"requirement": "x", "project_id": "test", "source_connection_id": "nope"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
 
 
 def test_files_impacted_with_real_file(tmp_path):
@@ -116,10 +148,7 @@ def test_files_impacted_with_real_file(tmp_path):
     index_response = client.post("/api/v1/index", json={"force": False})
     assert index_response.status_code == 200
 
-    response = client.post(
-        "/api/v1/impact-analysis",
-        json={"requirement": "add user email validation", "project_id": "test"},
-    )
+    response = client.post("/api/v1/impact-analysis", json=_body("add user email validation"))
     assert response.status_code == 200
     data = response.json()
     assert data["files_impacted"] >= 1
@@ -127,10 +156,7 @@ def test_files_impacted_with_real_file(tmp_path):
 
 def test_risk_level_is_valid_value(tmp_path):
     client = make_client(str(tmp_path))
-    response = client.post(
-        "/api/v1/impact-analysis",
-        json={"requirement": "add user email validation", "project_id": "test"},
-    )
+    response = client.post("/api/v1/impact-analysis", json=_body("add user email validation"))
     assert response.status_code == 200
     data = response.json()
     assert data["risk_level"] in ("LOW", "MEDIUM", "HIGH")

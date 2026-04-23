@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -6,11 +7,14 @@ from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.domain.user_story import UserStory
 from app.models.user_story import UserStory as UserStoryModel
+from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.repositories.requirement_repository import RequirementRepository
 from app.repositories.user_story_repository import UserStoryRepository
 from app.services.ai_story_generator import AIStoryGenerator
 from app.services.story_points_calculator import StoryPointsCalculator
+
+_WHITELIST_CAP = 300
 
 
 class StoryGenerationService:
@@ -21,6 +25,7 @@ class StoryGenerationService:
         impact_repo: ImpactAnalysisRepository,
         story_repo: UserStoryRepository,
         points_calculator: StoryPointsCalculator,
+        code_file_repo: CodeFileRepository,
         settings: Settings = None,
     ) -> None:
         self._generator = ai_generator
@@ -28,24 +33,50 @@ class StoryGenerationService:
         self._impact_repo = impact_repo
         self._story_repo = story_repo
         self._points_calculator = points_calculator
+        self._code_file_repo = code_file_repo
         self._settings = settings or get_settings()
         self._logger = get_logger(__name__)
 
-    def generate(self, requirement_id: str, analysis_id: str, project_id: str, language: str = "es") -> UserStory:
-        cached = self._story_repo.find_by_requirement_and_analysis(requirement_id, analysis_id, language)
+    def generate(
+        self,
+        requirement_id: str,
+        analysis_id: str,
+        project_id: str,
+        source_connection_id: str,
+        language: str = "es",
+    ) -> UserStory:
+        if not source_connection_id:
+            raise ValueError("source_connection_id is required")
+
+        cached = self._story_repo.find_by_requirement_and_analysis(
+            requirement_id, analysis_id, source_connection_id, language
+        )
         if cached:
-            self._logger.info("Cache hit for requirement_id=%s analysis_id=%s", requirement_id, analysis_id)
+            self._logger.info(
+                "Cache hit for requirement_id=%s analysis_id=%s connection=%s",
+                requirement_id, analysis_id, source_connection_id,
+            )
             return self._to_domain(cached)
 
-        requirement = self._requirement_repo.find_by_id(requirement_id)
+        requirement = self._requirement_repo.find_by_id(requirement_id, source_connection_id)
         if not requirement:
-            raise ValueError(f"Requirement {requirement_id} not found")
+            # No existe o pertenece a otra conexión: bloqueamos cross-repo aunque
+            # el cliente haya combinado IDs de distintos repos.
+            raise ValueError(
+                f"Requirement {requirement_id} not found for connection {source_connection_id}"
+            )
 
-        analysis = self._impact_repo.find_by_id(analysis_id)
+        analysis = self._impact_repo.find_by_id(analysis_id, source_connection_id)
         if not analysis:
-            raise ValueError(f"ImpactAnalysis {analysis_id} not found")
+            raise ValueError(
+                f"ImpactAnalysis {analysis_id} not found for connection {source_connection_id}"
+            )
 
-        impacted_file_paths = self._impact_repo.find_file_paths(analysis_id)
+        impacted_file_paths = self._impact_repo.find_file_paths(analysis_id, source_connection_id)
+        all_paths = self._code_file_repo.get_all_paths(source_connection_id)
+        available_file_paths = self._build_whitelist(
+            all_paths, impacted_file_paths, _WHITELIST_CAP
+        )
 
         context = {
             "requirement_text": requirement.requirement_text,
@@ -58,6 +89,7 @@ class StoryGenerationService:
             "modules_impacted": analysis.modules_impacted,
             "risk_level": analysis.risk_level,
             "impacted_file_paths": impacted_file_paths,
+            "available_file_paths": available_file_paths,
             "language": language,
         }
 
@@ -91,10 +123,10 @@ class StoryGenerationService:
             generation_time_seconds=generation_time,
             created_at=created_at,
         )
-        self._story_repo.save(orm_story)
+        self._story_repo.save(orm_story, source_connection_id)
         self._logger.info(
-            "Story generated id=%s points=%d time=%.3fs",
-            story_id, story_points, generation_time,
+            "Story generated id=%s connection=%s points=%d time=%.3fs",
+            story_id, source_connection_id, story_points, generation_time,
         )
 
         return UserStory(
@@ -113,6 +145,30 @@ class StoryGenerationService:
             created_at=created_at,
             generation_time_seconds=generation_time,
         )
+
+    @staticmethod
+    def _build_whitelist(
+        all_paths: set[str], impacted: list[str], cap: int
+    ) -> list[str]:
+        """Prioriza rutas que el AI puede citar: impactadas → mismo módulo → sample."""
+        if not all_paths:
+            return []
+        if len(all_paths) <= cap:
+            return sorted(all_paths)
+
+        selected: set[str] = set(p for p in impacted if p in all_paths)
+        parent_dirs = {os.path.dirname(p) for p in selected if os.path.dirname(p)}
+        for p in sorted(all_paths):
+            if len(selected) >= cap:
+                break
+            parent = os.path.dirname(p)
+            if any(parent == d or parent.startswith(d + "/") for d in parent_dirs):
+                selected.add(p)
+        for p in sorted(all_paths):
+            if len(selected) >= cap:
+                break
+            selected.add(p)
+        return sorted(selected)
 
     def _to_domain(self, orm: UserStoryModel) -> UserStory:
         return UserStory(

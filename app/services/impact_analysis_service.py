@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -11,7 +12,6 @@ from typing import Optional
 from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
-from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.dependency_analyzer import DependencyAnalyzer, FileAnalysis
 from app.services.semantic_impact_filter import SemanticImpactFilter
 
@@ -35,58 +35,60 @@ class ImpactAnalysisService:
         project_root: str,
         analyzer: DependencyAnalyzer | None = None,
         semantic_filter: SemanticImpactFilter | None = None,
-        source_connection_repo: SourceConnectionRepository | None = None,
     ) -> None:
         self._code_file_repo = code_file_repo
         self._impact_repo = impact_repo
         self._project_root = os.path.abspath(project_root)
         self._analyzer = analyzer if analyzer is not None else DependencyAnalyzer()
         self._semantic_filter = semantic_filter
-        self._source_connection_repo = source_connection_repo
 
-    def analyze(self, requirement: str, project_id: str) -> ImpactAnalysisResult:
+    def analyze(
+        self, requirement: str, project_id: str, source_connection_id: str
+    ) -> ImpactAnalysisResult:
         if requirement.strip() == "":
             raise ValueError("requirement cannot be empty")
+        if not source_connection_id:
+            raise ValueError("source_connection_id is required")
 
-        logger.info("Impact analysis started requirement=%r project_id=%s", requirement, project_id)
+        logger.info(
+            "Impact analysis started requirement=%r project_id=%s connection=%s",
+            requirement, project_id, source_connection_id,
+        )
 
         start = time.monotonic()
 
         keywords = self._extract_keywords(requirement)
-
-        # Scope file iteration to the active repository connection when available
-        active_connection_id: Optional[str] = None
-        if self._source_connection_repo is not None:
-            try:
-                active = self._source_connection_repo.get_active()
-                if active is not None:
-                    active_connection_id = active.id
-            except Exception as exc:
-                logger.warning("Could not resolve active connection; falling back to unscoped query: %s", exc)
 
         file_analyses: dict[str, FileAnalysis] = {}
         seed_files: set[str] = set()
         impacted_reasons: dict[str, str] = {}
         files_seen = 0
 
-        for cf in self._code_file_repo.iter_all(source_connection_id=active_connection_id):
+        for cf in self._code_file_repo.iter_all(source_connection_id=source_connection_id):
             files_seen += 1
-            full_path = os.path.join(self._project_root, cf.file_path)
-            try:
-                content = self._read_capped(full_path)
-                fa = self._analyzer.analyze(cf.file_path, content, cf.language)
-                file_analyses[cf.file_path] = fa
-            except OSError:
-                continue
+            if cf.content:
+                content = cf.content
+            else:
+                full_path = os.path.join(self._project_root, cf.file_path)
+                try:
+                    content = self._read_capped(full_path)
+                except OSError:
+                    continue
+            fa = self._analyzer.analyze(
+                cf.file_path, content, cf.language, source_connection_id
+            )
+            file_analyses[cf.file_path] = fa
 
-            search_text = (
-                cf.file_path.lower()
+            search_text = self._normalize(
+                cf.file_path
                 + " "
-                + " ".join(fa.classes).lower()
+                + " ".join(fa.classes)
                 + " "
-                + " ".join(fa.functions).lower()
+                + " ".join(fa.functions)
                 + " "
-                + content.lower()
+                + " ".join(fa.imports)
+                + " "
+                + content
             )
             if any(keyword in search_text for keyword in keywords):
                 seed_files.add(cf.file_path)
@@ -156,7 +158,7 @@ class ImpactAnalysisService:
             for path, reason in impacted_reasons.items()
         ]
 
-        self._impact_repo.save(impact_analysis, impacted_file_models)
+        self._impact_repo.save(impact_analysis, impacted_file_models, source_connection_id)
 
         duration = time.monotonic() - start
 
@@ -180,14 +182,24 @@ class ImpactAnalysisService:
             # English
             "the", "a", "an", "in", "of", "for", "to", "and", "or",
             "is", "are", "with", "on", "at", "by", "that", "this", "add", "change",
-            # Spanish
+            "new", "old", "all", "any", "can", "has", "have", "had", "not",
+            "sobre", "entre", "desde", "hasta",
+            # Spanish (todas sin acentos porque _normalize los remueve)
             "que", "con", "del", "los", "las", "una", "uno", "por", "para",
             "como", "cuando", "donde", "quiero", "tener", "poder", "hacer",
             "este", "esta", "estos", "estas", "cual", "cuales", "sea", "ser",
-            "hay", "han", "sus", "sin", "más", "mas", "nos", "les", "fue",
+            "hay", "han", "sus", "sin", "mas", "nos", "les", "fue", "son",
         }
-        words = re.findall(r'[a-zA-Z\u00c0-\u024f][a-zA-Z0-9_\u00c0-\u024f]*', requirement.lower())
-        return [w for w in words if w not in stop_words and len(w) >= 4]
+        normalized = self._normalize(requirement)
+        words = re.findall(r"[a-z][a-z0-9_]*", normalized)
+        return [w for w in words if w not in stop_words and len(w) >= 3]
+
+    @staticmethod
+    def _normalize(text: str) -> str:
+        """Lowercase + unicode-fold (strip accents) for language-agnostic matching."""
+        lowered = text.lower()
+        decomposed = unicodedata.normalize("NFKD", lowered)
+        return "".join(c for c in decomposed if not unicodedata.combining(c))
 
     @staticmethod
     def _read_capped(full_path: str, max_bytes: int = 51_200) -> str:

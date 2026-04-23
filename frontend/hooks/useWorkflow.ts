@@ -3,6 +3,7 @@
 import { useState } from "react"
 
 export type WorkflowState = {
+  sourceConnectionId: string | null
   projectId: string
   requirementText: string
   language: string
@@ -22,6 +23,7 @@ export type WorkflowState = {
 }
 
 const initialState: WorkflowState = {
+  sourceConnectionId: null,
   projectId: "my-project",
   requirementText: "",
   language: "es",
@@ -53,6 +55,15 @@ export function useWorkflow() {
 
   function setLanguage(language: string) {
     setState((prev) => ({ ...prev, language }))
+  }
+
+  function syncSourceConnection(nextId: string | null) {
+    setState((prev) => {
+      if (prev.sourceConnectionId === nextId) return prev
+      // Si cambia la conexión, reseteamos todo lo generado para no mezclar
+      // requirement/analysis/historia de repos distintos en la misma UI.
+      return { ...initialState, sourceConnectionId: nextId, language: prev.language }
+    })
   }
 
   function completeStep1(data: {
@@ -98,7 +109,7 @@ export function useWorkflow() {
   }
 
   function reset() {
-    setState(initialState)
+    setState((prev) => ({ ...initialState, sourceConnectionId: prev.sourceConnectionId }))
   }
 
   return {
@@ -106,6 +117,7 @@ export function useWorkflow() {
     setProjectId,
     setRequirementText,
     setLanguage,
+    syncSourceConnection,
     completeStep1,
     completeStep2,
     completeStep3,

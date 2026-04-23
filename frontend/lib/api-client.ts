@@ -97,6 +97,7 @@ export interface IndexStatusResponse {
 
 export interface StoryDetailResponse {
   story_id: string
+  source_connection_id: string
   requirement_id: string
   impact_analysis_id: string
   project_id: string
@@ -202,9 +203,11 @@ export async function getIndexStatus(): Promise<IndexStatusResponse> {
 export async function understandRequirement(
   requirementText: string,
   projectId: string,
+  sourceConnectionId: string,
   language?: string,
 ): Promise<{
   requirement_id: string
+  source_connection_id: string
   intent: string
   feature_type: string
   estimated_complexity: string
@@ -215,6 +218,7 @@ export async function understandRequirement(
     body: JSON.stringify({
       requirement: requirementText,
       project_id: projectId,
+      source_connection_id: sourceConnectionId,
       language,
     }),
   })
@@ -223,15 +227,21 @@ export async function understandRequirement(
 export async function analyzeImpact(
   requirementText: string,
   projectId: string,
+  sourceConnectionId: string,
 ): Promise<{
   analysis_id: string
+  source_connection_id: string
   files_impacted: number
   modules_impacted: string[]
   risk_level: string
 }> {
   return apiFetch("/api/v1/impact-analysis", {
     method: "POST",
-    body: JSON.stringify({ requirement: requirementText, project_id: projectId }),
+    body: JSON.stringify({
+      requirement: requirementText,
+      project_id: projectId,
+      source_connection_id: sourceConnectionId,
+    }),
   })
 }
 
@@ -239,9 +249,11 @@ export async function generateStory(
   requirementId: string,
   analysisId: string,
   projectId: string,
+  sourceConnectionId: string,
   language?: string,
 ): Promise<{
   story_id: string
+  source_connection_id: string
   title: string
   story_points: number
   risk_level: string
@@ -253,6 +265,7 @@ export async function generateStory(
       requirement_id: requirementId,
       impact_analysis_id: analysisId,
       project_id: projectId,
+      source_connection_id: sourceConnectionId,
       language,
     }),
   })

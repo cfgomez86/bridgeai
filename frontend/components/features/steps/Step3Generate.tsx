@@ -42,6 +42,10 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
 
   async function handleGenerate() {
     if (!state.requirementId || !state.analysisId) return
+    if (!state.sourceConnectionId) {
+      setError("Selecciona un repositorio activo antes de generar.")
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -49,9 +53,16 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
         state.requirementId,
         state.analysisId,
         state.projectId,
-        state.language
+        state.sourceConnectionId,
+        state.language,
       )
       const detail = await getStoryDetail(genResult.story_id)
+      if (detail.source_connection_id !== state.sourceConnectionId) {
+        // El backend devolvió una historia de otra conexión — abortar.
+        throw new Error(
+          "La historia devuelta pertenece a otro repositorio. Reiniciá el flujo.",
+        )
+      }
       setStory(detail)
       completeStep3(genResult.story_id, detail.title, detail.story_points)
     } catch (err) {

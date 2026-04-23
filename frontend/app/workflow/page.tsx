@@ -1,7 +1,9 @@
 "use client"
 
+import { useEffect } from "react"
 import { useWorkflow } from "@/hooks/useWorkflow"
 import { useLanguage } from "@/lib/i18n"
+import { getActiveConnection } from "@/lib/api-client"
 import { WorkflowStepper } from "@/components/features/WorkflowStepper"
 import { Step1Understand } from "@/components/features/steps/Step1Understand"
 import { Step2Impact } from "@/components/features/steps/Step2Impact"
@@ -13,6 +15,25 @@ export default function WorkflowPage() {
   const { state } = workflow
   const { t } = useLanguage()
   const w = t.workflow
+
+  // Resuelve el repo activo al entrar y cada vez que la pestaña vuelve a foco.
+  // Si cambia la conexión, syncSourceConnection resetea el workflow para
+  // evitar mezclar requirement/analysis/historia de repos distintos.
+  useEffect(() => {
+    let cancelled = false
+    async function sync() {
+      const conn = await getActiveConnection()
+      if (!cancelled) workflow.syncSourceConnection(conn?.id ?? null)
+    }
+    sync()
+    const onFocus = () => sync()
+    window.addEventListener("focus", onFocus)
+    return () => {
+      cancelled = true
+      window.removeEventListener("focus", onFocus)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: "900px", display: "flex", flexDirection: "column", gap: "24px" }}>

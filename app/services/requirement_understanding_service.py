@@ -27,7 +27,9 @@ class RequirementUnderstandingService:
         self._settings = settings or get_settings()
         self._logger = get_logger(__name__)
 
-    def understand(self, requirement_text: str, project_id: str) -> RequirementUnderstanding:
+    def understand(
+        self, requirement_text: str, project_id: str, source_connection_id: str
+    ) -> RequirementUnderstanding:
         if not requirement_text or not requirement_text.strip():
             raise ValueError("Requirement text cannot be empty")
         if len(requirement_text) > _MAX_REQUIREMENT_LENGTH:
@@ -35,11 +37,18 @@ class RequirementUnderstandingService:
         for pattern in _INJECTION_PATTERNS:
             if re.search(pattern, requirement_text, re.IGNORECASE):
                 raise ValueError("Requirement contains disallowed patterns")
+        if not source_connection_id:
+            raise ValueError("source_connection_id is required")
 
         text_hash = hashlib.sha256(requirement_text.encode()).hexdigest()
-        cached = self._repo.find_by_text_and_project(text_hash, project_id)
+        cached = self._repo.find_by_text_project_and_connection(
+            text_hash, project_id, source_connection_id
+        )
         if cached:
-            self._logger.info("Cache hit for requirement hash=%s project=%s", text_hash[:8], project_id)
+            self._logger.info(
+                "Cache hit for requirement hash=%s project=%s connection=%s",
+                text_hash[:8], project_id, source_connection_id,
+            )
             return RequirementUnderstanding(
                 requirement_id=cached.id,
                 requirement_text=cached.requirement_text,
@@ -83,7 +92,7 @@ class RequirementUnderstandingService:
             processing_time_seconds=processing_time,
             created_at=created_at,
         )
-        self._repo.save(orm_model)
+        self._repo.save(orm_model, source_connection_id)
         self._logger.info("Requirement persisted with id=%s in %.3fs", requirement_id, processing_time)
 
         return RequirementUnderstanding(

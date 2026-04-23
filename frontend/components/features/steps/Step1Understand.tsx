@@ -71,14 +71,20 @@ export function Step1Understand({
   const { t } = useLanguage()
   const s = t.workflow.step1
 
-  const isValid = state.requirementText.trim().length >= 10
+  const hasConnection = Boolean(state.sourceConnectionId)
+  const isValid = state.requirementText.trim().length >= 10 && hasConnection
 
   async function handleSubmit() {
-    if (!isValid) return
+    if (!isValid || !state.sourceConnectionId) return
     setLoading(true)
     setError(null)
     try {
-      const result = await understandRequirement(state.requirementText, state.projectId)
+      const result = await understandRequirement(
+        state.requirementText,
+        state.projectId,
+        state.sourceConnectionId,
+        state.language,
+      )
       completeStep1({
         requirementId: result.requirement_id,
         intent: result.intent,
@@ -164,6 +170,12 @@ export function Step1Understand({
           </p>
         )}
       </div>
+
+      {!hasConnection && (
+        <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--warn-bg)", color: "var(--warn-fg)", fontSize: "12.5px" }}>
+          Selecciona un repositorio activo en Connections antes de continuar.
+        </div>
+      )}
 
       {error && (
         <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--err-bg)", color: "var(--err-fg)", fontSize: "12.5px" }}>

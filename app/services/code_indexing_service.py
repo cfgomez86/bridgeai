@@ -259,6 +259,7 @@ class CodeIndexingService:
         files_updated = 0
         new_batch: list = []
         update_batch: list = []
+        _CONTENT_CAP = 51_200
 
         def _fetch(entry, existing):
             content = provider.get_file_content(access_token, repo_full_name, entry.path, sha=entry.sha)
@@ -278,6 +279,7 @@ class CodeIndexingService:
                 ext = os.path.splitext(entry.path)[1].lower()
                 lines = sum(1 for line in content.splitlines() if line.strip())
                 now = datetime.now(timezone.utc).replace(tzinfo=None)
+                capped_content = content[:_CONTENT_CAP]
 
                 if existing is None:
                     new_batch.append(CodeFile(
@@ -291,6 +293,7 @@ class CodeIndexingService:
                         lines_of_code=lines,
                         indexed_at=now,
                         source_connection_id=source_connection_id,
+                        content=capped_content,
                     ))
                     files_indexed += 1
                 else:
@@ -299,6 +302,7 @@ class CodeIndexingService:
                     existing.last_modified = now
                     existing.lines_of_code = lines
                     existing.indexed_at = now
+                    existing.content = capped_content
                     update_batch.append(existing)
                     files_updated += 1
 

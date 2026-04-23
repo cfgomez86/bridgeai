@@ -91,7 +91,12 @@ async def index_repository(
             source = "remote"
             repo_full_name = active.repo_full_name
         else:
-            result = service.index_repository(force=body.force)
+            # Local fallback: aún así scopeamos por la conexión activa cuando
+            # existe, para que el análisis posterior encuentre los archivos.
+            result = service.index_repository(
+                force=body.force,
+                source_connection_id=active.id if active else None,
+            )
 
     except Exception as exc:
         logger.error("POST /index failed request_id=%s error=%s", request_id, exc)

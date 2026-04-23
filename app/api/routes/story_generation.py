@@ -9,8 +9,10 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.database.session import get_db
+from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.repositories.requirement_repository import RequirementRepository
+from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.repositories.user_story_repository import UserStoryRepository
 from app.services.ai_story_generator import AIStoryGenerator
 from app.services.story_ai_provider import get_story_ai_provider
@@ -27,11 +29,13 @@ class StoryGenerationRequest(BaseModel):
     requirement_id: str
     impact_analysis_id: str
     project_id: str
+    source_connection_id: str
     language: str = "es"
 
 
 class StoryGenerationResponse(BaseModel):
     story_id: str
+    source_connection_id: str
     title: str
     story_points: int
     risk_level: str
@@ -47,6 +51,7 @@ class SubtasksResponse(BaseModel):
 
 class StoryDetailResponse(BaseModel):
     story_id: str
+    source_connection_id: str
     requirement_id: str
     impact_analysis_id: str
     project_id: str
@@ -72,6 +77,7 @@ def get_story_service(
         impact_repo=ImpactAnalysisRepository(db),
         story_repo=UserStoryRepository(db),
         points_calculator=StoryPointsCalculator(),
+        code_file_repo=CodeFileRepository(db),
         settings=settings,
     )
 
@@ -80,15 +86,31 @@ def get_story_service(
 async def generate_story(
     body: StoryGenerationRequest,
     request: Request,
+    db: Session = Depends(get_db),
     service: StoryGenerationService = Depends(get_story_service),
 ) -> StoryGenerationResponse:
     request_id = str(getattr(request.state, "request_id", uuid.uuid4()))
     logger.info(
-        "POST /generate-story request_id=%s requirement_id=%s analysis_id=%s",
-        request_id, body.requirement_id, body.impact_analysis_id,
+        "POST /generate-story request_id=%s connection=%s requirement_id=%s analysis_id=%s",
+        request_id, body.source_connection_id, body.requirement_id, body.impact_analysis_id,
     )
+
+    conn = SourceConnectionRepository(db).find_by_id(body.source_connection_id)
+    if conn is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Source connection {body.source_connection_id!r} not found",
+        )
+
     try:
-        result = await asyncio.to_thread(service.generate, body.requirement_id, body.impact_analysis_id, body.project_id, body.language)
+        result = await asyncio.to_thread(
+            service.generate,
+            body.requirement_id,
+            body.impact_analysis_id,
+            body.project_id,
+            body.source_connection_id,
+            body.language,
+        )
     except ValueError as exc:
         msg = str(exc)
         if "not found" in msg.lower():
@@ -106,6 +128,7 @@ async def generate_story(
     )
     return StoryGenerationResponse(
         story_id=result.story_id,
+        source_connection_id=body.source_connection_id,
         title=result.title,
         story_points=result.story_points,
         risk_level=result.risk_level,
@@ -132,6 +155,7 @@ async def get_story(
     raw_subtasks = json.loads(story.subtasks) if story.subtasks else {}
     return StoryDetailResponse(
         story_id=story.id,
+        source_connection_id=story.source_connection_id,
         requirement_id=story.requirement_id,
         impact_analysis_id=story.impact_analysis_id,
         project_id=story.project_id,

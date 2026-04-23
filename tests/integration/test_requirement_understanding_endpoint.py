@@ -6,8 +6,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.main import create_app
-from tests.integration.auth_helpers import apply_mock_auth
-from app.database.session import Base
+from tests.integration.auth_helpers import (
+    apply_mock_auth,
+    seed_source_connection,
+    TEST_CONNECTION_ID,
+)
+from app.database.session import Base, get_db
 from app.api.routes.understand_requirement import get_understanding_service
 from app.repositories.requirement_repository import RequirementRepository
 from app.services.ai_provider import StubAIProvider
@@ -24,6 +28,17 @@ def make_client() -> TestClient:
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine)
 
+    seed_db = Session()
+    seed_source_connection(seed_db)
+    seed_db.close()
+
+    def override_get_db():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
     def override() -> RequirementUnderstandingService:
         db = Session()
         repo = RequirementRepository(db)
@@ -31,6 +46,7 @@ def make_client() -> TestClient:
         return RequirementUnderstandingService(parser, repo)
 
     app = apply_mock_auth(create_app())
+    app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_understanding_service] = override
     return TestClient(app)
 
@@ -43,7 +59,11 @@ def client():
 def test_understand_requirement_returns_200(client):
     response = client.post(
         "/api/v1/understand-requirement",
-        json={"requirement": "El usuario debe poder registrarse con email", "project_id": "user-service"},
+        json={
+            "requirement": "El usuario debe poder registrarse con email",
+            "project_id": "user-service",
+            "source_connection_id": TEST_CONNECTION_ID,
+        },
     )
     assert response.status_code == 200
 
@@ -51,10 +71,15 @@ def test_understand_requirement_returns_200(client):
 def test_response_contains_required_fields(client):
     response = client.post(
         "/api/v1/understand-requirement",
-        json={"requirement": "El usuario debe poder registrarse con email", "project_id": "user-service"},
+        json={
+            "requirement": "El usuario debe poder registrarse con email",
+            "project_id": "user-service",
+            "source_connection_id": TEST_CONNECTION_ID,
+        },
     )
     data = response.json()
     assert "requirement_id" in data
+    assert data["source_connection_id"] == TEST_CONNECTION_ID
     assert "intent" in data
     assert "feature_type" in data
     assert "estimated_complexity" in data
@@ -65,7 +90,11 @@ def test_response_contains_required_fields(client):
 def test_response_ids_are_valid_uuids(client):
     response = client.post(
         "/api/v1/understand-requirement",
-        json={"requirement": "Add email validation", "project_id": "test"},
+        json={
+            "requirement": "Add email validation",
+            "project_id": "test",
+            "source_connection_id": TEST_CONNECTION_ID,
+        },
     )
     assert response.status_code == 200
     data = response.json()
@@ -76,7 +105,11 @@ def test_response_ids_are_valid_uuids(client):
 def test_empty_requirement_returns_400(client):
     response = client.post(
         "/api/v1/understand-requirement",
-        json={"requirement": "", "project_id": "test"},
+        json={
+            "requirement": "",
+            "project_id": "test",
+            "source_connection_id": TEST_CONNECTION_ID,
+        },
     )
     assert response.status_code == 400
 
@@ -84,6 +117,31 @@ def test_empty_requirement_returns_400(client):
 def test_requirement_too_long_returns_400(client):
     response = client.post(
         "/api/v1/understand-requirement",
-        json={"requirement": "x" * 2001, "project_id": "test"},
+        json={
+            "requirement": "x" * 2001,
+            "project_id": "test",
+            "source_connection_id": TEST_CONNECTION_ID,
+        },
     )
     assert response.status_code == 400
+
+
+def test_missing_connection_returns_422(client):
+    response = client.post(
+        "/api/v1/understand-requirement",
+        json={"requirement": "add login", "project_id": "test"},
+    )
+    # Pydantic 422 por campo requerido ausente
+    assert response.status_code == 422
+
+
+def test_invalid_connection_returns_404(client):
+    response = client.post(
+        "/api/v1/understand-requirement",
+        json={
+            "requirement": "add login",
+            "project_id": "test",
+            "source_connection_id": "non-existent-connection",
+        },
+    )
+    assert response.status_code == 404

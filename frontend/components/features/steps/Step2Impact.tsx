@@ -36,10 +36,18 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
   const s = t.workflow.step2
 
   async function handleAnalyze() {
+    if (!state.sourceConnectionId) {
+      setError("Selecciona un repositorio activo antes de analizar.")
+      return
+    }
     setLoading(true)
     setError(null)
     try {
-      const result = await analyzeImpact(state.requirementText, state.projectId)
+      const result = await analyzeImpact(
+        state.requirementText,
+        state.projectId,
+        state.sourceConnectionId,
+      )
       completeStep2({
         analysisId: result.analysis_id,
         filesImpacted: result.files_impacted,

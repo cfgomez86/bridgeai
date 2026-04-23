@@ -55,6 +55,12 @@ _STUB_STORY_RESPONSE = {
 _STORY_PROMPT_TEMPLATE = """\
 Eres un analista ágil de software senior. Dado el siguiente contexto técnico, genera una Historia de Usuario profesional y completa.
 
+REGLAS ESTRICTAS — VIOLARLAS INVALIDA LA RESPUESTA:
+1. PROHIBIDO inventar rutas de archivo. Solo puedes citar paths que aparezcan LITERALMENTE en la sección "Archivos disponibles del codebase". Copiar exacto.
+2. Si ningún archivo del whitelist encaja con una subtarea, descríbela SIN mencionar archivo específico. Mejor vago que inventado.
+3. NUNCA uses ejemplos genéricos tipo "app/routes/X.py", "src/Foo.java", "app/components/Bar.tsx". Ese tipo de paths son señal de invención.
+4. El whitelist refleja el lenguaje real del repo. Si el repo es Java, no pongas paths .py ni .tsx. Si es Python, no pongas .java. Respeta las extensiones existentes en el whitelist.
+{hallucination_warning}
 Contexto del requerimiento:
 - Texto: "{requirement_text}"
 - Intención: {intent}
@@ -67,18 +73,21 @@ Contexto del impacto técnico:
 - Archivos impactados: {files_impacted}
 - Módulos impactados: {modules_impacted}
 - Nivel de riesgo: {risk_level}
-- Archivos concretos del codebase que requieren cambios:
+- Archivos concretos del codebase identificados por el análisis como más relevantes:
 {impacted_file_paths_formatted}
+
+Archivos disponibles del codebase (whitelist exhaustiva — NO puedes citar nada fuera de esta lista):
+{available_file_paths_formatted}
 
 Genera ÚNICAMENTE un JSON válido con estos campos exactos:
 - title: string corto y descriptivo (máximo 80 caracteres)
 - story_description: string en formato de historia de usuario estándar: "Como [tipo de usuario], quiero [acción] para que [beneficio]". Usa el mismo idioma que el texto del requerimiento.
 - acceptance_criteria: array de strings (mínimo 3 criterios verificables)
 - subtasks: objeto con tres claves obligatorias, cada una con un array de strings:
-    * "frontend": tareas para la capa de presentación/UI. Cada tarea debe referenciar el archivo o componente específico del codebase. IMPORTANTE: Si la historia implica cambios backend/API/base de datos, proporciona siempre al menos 1-2 tareas frontend (actualizar componente, agregar pantalla, integrar endpoint, etc). Solo devuelve array vacío [] si NO hay interfaz o cambios visuales.
-    * "backend": tareas para la lógica de negocio, servicios, rutas y base de datos. Cada tarea DEBE referenciar el archivo específico del codebase (ej: "Agregar endpoint en app/api/routes/X.py"). Mínimo 2 tareas.
-    * "configuration": tareas de infraestructura, variables de entorno, dependencias, scripts de migración o CI/CD. Si no aplica, devuelve array vacío [].
-    Usa los archivos impactados listados arriba para determinar la categoría correcta de cada tarea.
+    * "frontend": tareas para la capa de presentación/UI. Si hay archivos del whitelist relacionados a UI, referéncialos exactamente; si no hay, describe la tarea sin archivo o deja el array vacío.
+    * "backend": tareas para la lógica de negocio, servicios, rutas y base de datos. Si hay archivos del whitelist aplicables, referéncialos exactamente; si no hay, describe la tarea SIN path. Mínimo 2 tareas, aunque sea sin path.
+    * "configuration": tareas de infraestructura, variables de entorno, dependencias, scripts de migración o CI/CD. Si no aplica, devuelve array vacío.
+    Usa los archivos impactados y el whitelist para decidir categorías. NUNCA inventes paths.
 - definition_of_done: array de strings (mínimo 3 criterios de completitud)
 - risk_notes: array de strings con riesgos técnicos específicos. Considera siempre:
     * Invalidación de caché si el requerimiento afecta parámetros de generación (ej: idioma, configuración)
@@ -100,6 +109,20 @@ class StoryAIProvider(ABC):
     def _build_prompt(self, context: dict) -> str:
         paths = context.get("impacted_file_paths", [])
         formatted_paths = "\n".join(f"  - {p}" for p in paths) if paths else "  (no hay archivos específicos identificados)"
+        available = context.get("available_file_paths", [])
+        formatted_available = (
+            "\n".join(f"  - {p}" for p in available)
+            if available
+            else "  (whitelist vacía — NO cites ningún archivo en las subtareas)"
+        )
+        hallucinated = context.get("hallucinated_last_attempt") or []
+        hallucination_warning = ""
+        if hallucinated:
+            joined = ", ".join(hallucinated[:20])
+            hallucination_warning = (
+                "\nATENCIÓN: tu intento anterior incluyó rutas INVENTADAS que NO existen en el codebase: "
+                f"{joined}. No vuelvas a usarlas; limita los paths estrictamente al whitelist.\n"
+            )
         language_names = {
             "es": "español", "en": "English", "fr": "français",
             "de": "Deutsch", "pt": "português",
@@ -117,6 +140,8 @@ class StoryAIProvider(ABC):
             modules_impacted=context.get("modules_impacted", 0),
             risk_level=context.get("risk_level", ""),
             impacted_file_paths_formatted=formatted_paths,
+            available_file_paths_formatted=formatted_available,
+            hallucination_warning=hallucination_warning,
             language=language_label,
         )
 

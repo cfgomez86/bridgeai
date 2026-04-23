@@ -30,3 +30,4 @@ class CodeFile(Base):
     hash: Mapped[str] = mapped_column(String(64), nullable=False)
     lines_of_code: Mapped[int] = mapped_column(Integer, nullable=False)
     indexed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

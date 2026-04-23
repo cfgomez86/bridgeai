@@ -49,9 +49,11 @@ def make_db():
 
 
 def insert_story(db, story_id: str = "story-harden-1") -> UserStoryModel:
+    from tests.integration.auth_helpers import TEST_CONNECTION_ID
     story = UserStoryModel(
         id=story_id,
         tenant_id=TEST_TENANT_ID,
+        source_connection_id=TEST_CONNECTION_ID,
         requirement_id="req-1",
         impact_analysis_id="ana-1",
         project_id="proj-1",

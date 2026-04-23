@@ -7,6 +7,8 @@ from app.core.context import current_tenant_id, current_user_id
 
 TEST_TENANT_ID = "test-tenant-00000000-0000-0000-0000-000000000001"
 TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001"
+TEST_CONNECTION_ID = "test-conn-00000000-0000-0000-0000-000000000001"
+TEST_CONNECTION_ID_B = "test-conn-00000000-0000-0000-0000-000000000002"
 
 
 @pytest.fixture(autouse=True)
