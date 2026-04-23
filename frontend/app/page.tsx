@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation"
 import { auth0 } from "@/lib/auth0"
+import { DashboardView } from "@/components/features/DashboardView"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
 export default async function Home() {
   const session = await auth0.getSession()
-  if (!session) redirect("/api/auth/login")
+  if (!session) redirect("/login")
 
   try {
     const { token } = await auth0.getAccessToken()
@@ -24,5 +25,5 @@ export default async function Home() {
     // Provisioning failed — workspace will show 403 until resolved
   }
 
-  redirect("/workflow")
+  return <DashboardView />
 }

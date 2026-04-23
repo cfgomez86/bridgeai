@@ -244,6 +244,19 @@ interface Translations {
       }
     }
   }
+  dashboard: {
+    title: string
+    subtitle: string
+    start_story: { title: string; description: string; btn: string }
+    index_code: { title: string; description: string; btn: string }
+    how_it_works: string
+    steps: {
+      understand: { title: string; description: string }
+      impact: { title: string; description: string }
+      generate: { title: string; description: string }
+      ticket: { title: string; description: string }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -501,6 +514,39 @@ const es: Translations = {
       },
     },
   },
+  dashboard: {
+    title: "Dashboard",
+    subtitle: "Automatiza tu flujo de requerimiento a ticket con IA.",
+    start_story: {
+      title: "Iniciar nueva historia",
+      description: "Convierte un requerimiento en una historia de usuario completa con criterios de aceptación, tareas técnicas y story points.",
+      btn: "Iniciar Workflow",
+    },
+    index_code: {
+      title: "Indexar código",
+      description: "Escanea e indexa tu código fuente para que BridgeAI pueda realizar un análisis de impacto preciso.",
+      btn: "Abrir índice",
+    },
+    how_it_works: "Cómo funciona",
+    steps: {
+      understand: {
+        title: "Entender",
+        description: "La IA extrae la intención, tipo de funcionalidad, complejidad y términos clave del requerimiento.",
+      },
+      impact: {
+        title: "Impacto",
+        description: "Cruza el índice de tu codebase para identificar archivos, módulos y nivel de riesgo afectados.",
+      },
+      generate: {
+        title: "Generar",
+        description: "Produce una historia de usuario completa con criterios de aceptación, tareas técnicas y definición de terminado.",
+      },
+      ticket: {
+        title: "Ticket",
+        description: "Crea el ticket directamente en Jira o Azure DevOps con un solo clic, sin copiar ni pegar.",
+      },
+    },
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -755,6 +801,39 @@ const en: Translations = {
       options: {
         light: "Light",
         dark: "Dark",
+      },
+    },
+  },
+  dashboard: {
+    title: "Dashboard",
+    subtitle: "Automate your requirement-to-ticket workflow with AI.",
+    start_story: {
+      title: "Start New Story",
+      description: "Transform a requirement into a fully-formed user story with acceptance criteria, technical tasks, and story points.",
+      btn: "Launch Workflow",
+    },
+    index_code: {
+      title: "Index Codebase",
+      description: "Scan and index your source code so BridgeAI can perform accurate impact analysis when requirements are processed.",
+      btn: "Open Code Index",
+    },
+    how_it_works: "How it works",
+    steps: {
+      understand: {
+        title: "Understand",
+        description: "AI parses your requirement text to extract intent, feature type, complexity, and key domain terms.",
+      },
+      impact: {
+        title: "Impact",
+        description: "Cross-references your codebase index to identify affected files, modules, and overall risk level.",
+      },
+      generate: {
+        title: "Generate",
+        description: "Produces a complete user story with acceptance criteria, technical tasks, definition of done, and story points.",
+      },
+      ticket: {
+        title: "Ticket",
+        description: "Pushes the generated story directly to Jira or Azure DevOps with a single click — no copy-paste needed.",
       },
     },
   },
