@@ -11,6 +11,7 @@ from typing import Optional
 from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
+from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.dependency_analyzer import DependencyAnalyzer, FileAnalysis
 from app.services.semantic_impact_filter import SemanticImpactFilter
 
@@ -34,12 +35,14 @@ class ImpactAnalysisService:
         project_root: str,
         analyzer: DependencyAnalyzer | None = None,
         semantic_filter: SemanticImpactFilter | None = None,
+        source_connection_repo: SourceConnectionRepository | None = None,
     ) -> None:
         self._code_file_repo = code_file_repo
         self._impact_repo = impact_repo
         self._project_root = os.path.abspath(project_root)
         self._analyzer = analyzer if analyzer is not None else DependencyAnalyzer()
         self._semantic_filter = semantic_filter
+        self._source_connection_repo = source_connection_repo
 
     def analyze(self, requirement: str, project_id: str) -> ImpactAnalysisResult:
         if requirement.strip() == "":
@@ -51,12 +54,22 @@ class ImpactAnalysisService:
 
         keywords = self._extract_keywords(requirement)
 
+        # Scope file iteration to the active repository connection when available
+        active_connection_id: Optional[str] = None
+        if self._source_connection_repo is not None:
+            try:
+                active = self._source_connection_repo.get_active()
+                if active is not None:
+                    active_connection_id = active.id
+            except Exception as exc:
+                logger.warning("Could not resolve active connection; falling back to unscoped query: %s", exc)
+
         file_analyses: dict[str, FileAnalysis] = {}
         seed_files: set[str] = set()
         impacted_reasons: dict[str, str] = {}
         files_seen = 0
 
-        for cf in self._code_file_repo.iter_all():
+        for cf in self._code_file_repo.iter_all(source_connection_id=active_connection_id):
             files_seen += 1
             full_path = os.path.join(self._project_root, cf.file_path)
             try:

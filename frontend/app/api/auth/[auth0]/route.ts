@@ -1,11 +1,3 @@
-import { handleAuth } from "@auth0/nextjs-auth0"
-
-const auth0Handler = handleAuth()
-
-export async function GET(
-  request: Request,
-  context: { params: Promise<{ auth0: string | string[] }> },
-) {
-  const params = await context.params
-  return auth0Handler(request, { params })
-}
+// Auth routes (/api/auth/login, /api/auth/logout, /api/auth/callback) are
+// handled by the Auth0 v4 middleware in middleware.ts — this file is unused.
+export {}

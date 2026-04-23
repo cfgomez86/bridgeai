@@ -83,6 +83,7 @@ async def index_repository(
                 repo_full_name=active.repo_full_name,
                 branch=branch,
                 force=body.force,
+                source_connection_id=active.id,
             )
             source = "remote"
             repo_full_name = active.repo_full_name

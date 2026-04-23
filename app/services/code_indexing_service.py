@@ -56,9 +56,15 @@ class CodeIndexingService:
         self._ignore_patterns = DEFAULT_IGNORE_PATTERNS + (ignore_patterns if ignore_patterns is not None else [])
         self._batch_size = batch_size
 
-    def index_repository(self, force: bool = False) -> IndexingResult:
+    def index_repository(
+        self, force: bool = False, source_connection_id: Optional[str] = None
+    ) -> IndexingResult:
         self._validate_project_root()
-        logger.info("Starting indexing of %s", self._project_root)
+        logger.info(
+            "Starting indexing of %s source_connection_id=%s",
+            self._project_root,
+            source_connection_id,
+        )
         start = time.monotonic()
 
         files_scanned = 0
@@ -75,7 +81,7 @@ class CodeIndexingService:
             try:
                 rel_path = os.path.relpath(file_path, self._project_root)
                 scanned_rel_paths.add(rel_path)
-                action, obj = self._prepare_file(file_path, force)
+                action, obj = self._prepare_file(file_path, force, source_connection_id)
                 if action == "new":
                     new_batch.append(obj)
                     files_indexed += 1
@@ -86,7 +92,7 @@ class CodeIndexingService:
                     files_skipped += 1
 
                 if len(new_batch) >= self._batch_size:
-                    self._repository.save_batch(new_batch)
+                    self._repository.save_batch(new_batch, source_connection_id)
                     new_batch = []
                 if len(update_batch) >= self._batch_size:
                     self._repository.update_batch(update_batch)
@@ -95,13 +101,13 @@ class CodeIndexingService:
                 logger.warning("Error processing %s: %s", file_path, e)
 
         if new_batch:
-            self._repository.save_batch(new_batch)
+            self._repository.save_batch(new_batch, source_connection_id)
         if update_batch:
             self._repository.update_batch(update_batch)
 
-        stale_paths = self._repository.get_all_paths() - scanned_rel_paths
+        stale_paths = self._repository.get_all_paths(source_connection_id) - scanned_rel_paths
         if stale_paths:
-            self._repository.delete_by_paths(stale_paths)
+            self._repository.delete_by_paths(stale_paths, source_connection_id)
             logger.info("Removed %d stale entries from index", len(stale_paths))
 
         duration = time.monotonic() - start
@@ -144,11 +150,13 @@ class CodeIndexingService:
                     continue
                 yield full_path
 
-    def _prepare_file(self, full_path: str, force: bool) -> tuple[str, object]:
+    def _prepare_file(
+        self, full_path: str, force: bool, source_connection_id: Optional[str] = None
+    ) -> tuple[str, object]:
         """Returns (action, obj) where action is 'new'|'update'|'skip' and obj is the model."""
         rel_path = os.path.relpath(full_path, self._project_root)
         file_hash = self._calculate_hash(full_path)
-        existing = self._repository.find_by_path(rel_path)
+        existing = self._repository.find_by_path(rel_path, source_connection_id)
 
         if existing is not None and not force and existing.hash == file_hash:
             return "skip", None
@@ -170,6 +178,7 @@ class CodeIndexingService:
                 hash=file_hash,
                 lines_of_code=lines,
                 indexed_at=indexed_at,
+                source_connection_id=source_connection_id,
             )
             logger.debug("Indexing new file: %s", rel_path)
             return "new", code_file
@@ -209,8 +218,12 @@ class CodeIndexingService:
         branch: str,
         force: bool = False,
         max_workers: int = 10,
+        source_connection_id: Optional[str] = None,
     ) -> IndexingResult:
-        logger.info("Starting remote indexing repo=%s branch=%s", repo_full_name, branch)
+        logger.info(
+            "Starting remote indexing repo=%s branch=%s source_connection_id=%s",
+            repo_full_name, branch, source_connection_id,
+        )
         start = time.monotonic()
 
         # 1. Get tree (single API call)
@@ -224,7 +237,7 @@ class CodeIndexingService:
         scanned_paths = {e.path for e in relevant}
 
         # 2. Pre-load all existing records in one DB query instead of N queries
-        existing_map = self._repository.get_all_map()
+        existing_map = self._repository.get_all_map(source_connection_id)
 
         # 3. Determine which files actually need fetching
         to_fetch = []
@@ -277,6 +290,7 @@ class CodeIndexingService:
                         hash=entry.sha,
                         lines_of_code=lines,
                         indexed_at=now,
+                        source_connection_id=source_connection_id,
                     ))
                     files_indexed += 1
                 else:
@@ -289,21 +303,21 @@ class CodeIndexingService:
                     files_updated += 1
 
                 if len(new_batch) >= self._batch_size:
-                    self._repository.save_batch(new_batch)
+                    self._repository.save_batch(new_batch, source_connection_id)
                     new_batch = []
                 if len(update_batch) >= self._batch_size:
                     self._repository.update_batch(update_batch)
                     update_batch = []
 
         if new_batch:
-            self._repository.save_batch(new_batch)
+            self._repository.save_batch(new_batch, source_connection_id)
         if update_batch:
             self._repository.update_batch(update_batch)
 
-        # 5. Remove stale entries (already have the full map, no extra query needed)
+        # 5. Remove stale entries scoped to this connection
         stale_paths = set(existing_map.keys()) - scanned_paths
         if stale_paths:
-            self._repository.delete_by_paths(stale_paths)
+            self._repository.delete_by_paths(stale_paths, source_connection_id)
             logger.info("Removed %d stale entries from remote index", len(stale_paths))
 
         duration = time.monotonic() - start

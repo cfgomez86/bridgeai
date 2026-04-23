@@ -2,7 +2,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.core.context import current_tenant_id, get_tenant_id
+from app.core.context import get_tenant_id
 from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
 
 
@@ -31,7 +31,14 @@ class ImpactAnalysisRepository:
     def find_files_page(
         self, analysis_id: str, offset: int = 0, limit: int = 100
     ) -> tuple[list[ImpactedFile], int]:
-        base = self._db.query(ImpactedFile).filter(ImpactedFile.analysis_id == analysis_id)
+        base = (
+            self._db.query(ImpactedFile)
+            .join(ImpactAnalysis, ImpactAnalysis.id == ImpactedFile.analysis_id)
+            .filter(
+                ImpactedFile.analysis_id == analysis_id,
+                ImpactAnalysis.tenant_id == self._tid(),
+            )
+        )
         total = base.count()
         files = base.offset(offset).limit(limit).all()
         return files, total
@@ -39,7 +46,11 @@ class ImpactAnalysisRepository:
     def find_file_paths(self, analysis_id: str, limit: int = 20) -> list[str]:
         rows = (
             self._db.query(ImpactedFile.file_path)
-            .filter(ImpactedFile.analysis_id == analysis_id)
+            .join(ImpactAnalysis, ImpactAnalysis.id == ImpactedFile.analysis_id)
+            .filter(
+                ImpactedFile.analysis_id == analysis_id,
+                ImpactAnalysis.tenant_id == self._tid(),
+            )
             .limit(limit)
             .all()
         )

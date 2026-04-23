@@ -3,9 +3,11 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
+from app.core.context import get_tenant_id
+
 # Module-level cache: survives across DependencyAnalyzer instances (one per request).
-# Key: (file_path, content_hash) — stale entries evicted when file content changes.
-_analysis_cache: dict[tuple[str, int], "FileAnalysis"] = {}
+# Key: (tenant_id, file_path, content_hash) — stale entries evicted when file content changes.
+_analysis_cache: dict[tuple, "FileAnalysis"] = {}
 
 
 @dataclass(frozen=True)
@@ -23,9 +25,15 @@ class DependencyAnalyzer:
             "Python": self._analyze_python,
             "Java": self._analyze_java,
         }
+        # Resolve tenant once per instance — all analyze() calls for a given request
+        # share the same tenant context, so a single lookup suffices.
+        try:
+            self._tid: str = get_tenant_id()
+        except RuntimeError:
+            self._tid = ""
 
     def analyze(self, file_path: str, content: str, language: str) -> FileAnalysis:
-        key = (file_path, hash(content))
+        key = (self._tid, file_path, hash(content))
         cached = _analysis_cache.get(key)
         if cached is not None:
             return cached

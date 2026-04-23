@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
+import Script from "next/script"
 import "./globals.css"
-import { UserProvider } from "@auth0/nextjs-auth0/client"
+import { Auth0Provider } from "@auth0/nextjs-auth0/client"
 import { LanguageProvider } from "@/lib/i18n"
 import { ThemeProvider } from "@/lib/theme/ThemeContext"
 import { Auth0TokenSync } from "@/components/features/Auth0TokenSync"
@@ -15,14 +16,12 @@ const themeScript = `(function(){try{var t=localStorage.getItem('bridgeai-theme'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <UserProvider>
+    <Auth0Provider>
       {/* suppressHydrationWarning: server renders without .dark; blocking script may add it before hydration */}
       <html lang="es" suppressHydrationWarning>
-        <head>
-          {/* Blocking script — runs before CSS paint to avoid flash of light theme */}
-          <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        </head>
         <body>
+          {/* beforeInteractive: runs before CSS paint to avoid flash of light theme */}
+          <Script id="theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeScript }} />
           <ThemeProvider>
             <LanguageProvider>
               <Auth0TokenSync />
@@ -31,6 +30,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </ThemeProvider>
         </body>
       </html>
-    </UserProvider>
+    </Auth0Provider>
   )
 }
