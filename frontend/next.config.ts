@@ -8,7 +8,6 @@ import * as path from "path"
 //
 // Usage:
 //   APP_ENV=local   (default) → loads frontend/.env.local
-//   APP_ENV=tunnel            → loads frontend/.env.tunnel
 //   APP_ENV=prod              → loads frontend/.env.prod
 
 function loadEnvOverlay(appEnv: string): void {
@@ -46,9 +45,6 @@ if (process.env.APP_URL) {
 // ── Next.js config ────────────────────────────────────────────────────────────
 
 const nextConfig: NextConfig = {
-  turbopack: {
-    resolveExtensions: [".ts", ".tsx", ".js", ".jsx"],
-  },
   experimental: {
     serverActions: {
       allowedOrigins: ["localhost:3000", ...extraOrigins],

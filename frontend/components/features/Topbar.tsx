@@ -2,11 +2,13 @@
 
 import { usePathname } from "next/navigation"
 import { useLanguage } from "@/lib/i18n"
-import { UserButton } from "@clerk/nextjs"
+import { useUser } from "@auth0/nextjs-auth0/client"
 
 export function Topbar() {
   const pathname = usePathname()
   const { t } = useLanguage()
+  const { user } = useUser()
+
   const segments = pathname.split("/").filter(Boolean)
 
   const ROUTE_LABELS: Record<string, string> = {
@@ -57,7 +59,28 @@ export function Topbar() {
         ))}
       </nav>
 
-      <UserButton afterSignOutUrl="/sign-in" />
+      {/* User menu */}
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        {user && (
+          <span style={{ fontSize: "13px", color: "var(--muted)" }}>
+            {user.email}
+          </span>
+        )}
+        <a
+          href="/api/auth/logout"
+          style={{
+            fontSize: "13px",
+            color: "var(--muted)",
+            textDecoration: "none",
+            padding: "4px 10px",
+            borderRadius: "6px",
+            border: "1px solid var(--border)",
+            cursor: "pointer",
+          }}
+        >
+          Salir
+        </a>
+      </div>
     </header>
   )
 }

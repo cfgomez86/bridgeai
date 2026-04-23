@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useParams } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { useLanguage } from "@/lib/i18n"
 
 interface NavItem {
@@ -57,11 +57,9 @@ function IconSettings() {
 
 export function Sidebar() {
   const pathname = usePathname()
-  const params = useParams()
   const { t } = useLanguage()
 
-  const tenant = params?.tenant as string | undefined
-  const prefix = tenant ? `/app/${tenant}` : ""
+  const prefix = ""
 
   const NAV_ITEMS: NavItem[] = [
     { href: `${prefix}/workflow`, label: t.nav.workflow, shortcut: "G W", icon: <IconWand /> },

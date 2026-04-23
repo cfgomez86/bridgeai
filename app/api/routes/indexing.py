@@ -1,7 +1,9 @@
 import logging
 import uuid
+from datetime import datetime
+from typing import Optional
 
-from app.core.clerk_auth import get_current_user
+from app.core.auth0_auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -34,12 +36,25 @@ class IndexResponse(BaseModel):
     repo_full_name: str | None = None
 
 
+class IndexStatusResponse(BaseModel):
+    total_files: int
+    last_indexed_at: Optional[datetime] = None
+
+
 def get_indexing_service(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> CodeIndexingService:
     repo = CodeFileRepository(db)
     return CodeIndexingService(repo, settings.PROJECT_ROOT)
+
+
+@router.get("/index/status", response_model=IndexStatusResponse)
+async def get_index_status(
+    service: CodeIndexingService = Depends(get_indexing_service),
+) -> IndexStatusResponse:
+    total_files, last_indexed_at = service.get_status()
+    return IndexStatusResponse(total_files=total_files, last_indexed_at=last_indexed_at)
 
 
 @router.post("/index", response_model=IndexResponse)

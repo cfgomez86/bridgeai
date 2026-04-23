@@ -41,9 +41,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         for header, value in SECURITY_HEADERS.items():
             response.headers[header] = value
 
-        # HSTS only over HTTPS — avoids poisoning browsers on HTTP local dev,
-        # and omits includeSubDomains since devtunnel subdomains are not ours.
-        if request.url.scheme == "https":
+        # HSTS only over HTTPS on non-local hosts.
+        host = request.url.hostname or ""
+        is_local = host in {"localhost", "127.0.0.1", "::1"}
+        if request.url.scheme == "https" and not is_local:
             response.headers["Strict-Transport-Security"] = "max-age=31536000"
 
         return response
@@ -62,9 +63,12 @@ def add_cors(app) -> None:  # type: ignore[no-untyped-def]
             "CORS_ORIGINS='*' is incompatible with allow_credentials=True. List explicit origins."
         )
 
+    origin_regex = settings.CORS_ORIGIN_REGEX.strip() or None
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
+        allow_origin_regex=origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -12,7 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.clerk_auth import get_current_user
+from app.core.auth0_auth import get_current_user
 from app.database.session import Base, get_db
 from app.main import create_app
 from tests.integration.auth_helpers import mock_auth as _mock_auth, apply_mock_auth, TEST_TENANT_ID, TEST_USER_ID

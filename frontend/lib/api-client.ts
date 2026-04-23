@@ -5,9 +5,8 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ""
 
 // ---------------------------------------------------------------------------
 // Auth token injection
-// Primary:  window.Clerk.session.getToken() — available as soon as Clerk.js
-//           loads, before any React effect runs. No race condition.
-// Fallback: _getToken set by ClerkTokenSync via setTokenGetter().
+// Token getter is set by Auth0TokenSync (useEffect on session change).
+// On the server side tokens are obtained directly via getAccessToken().
 // ---------------------------------------------------------------------------
 let _getToken: (() => Promise<string | null>) | null = null
 
@@ -16,24 +15,10 @@ export function setTokenGetter(fn: (() => Promise<string | null>) | null) {
 }
 
 async function resolveToken(): Promise<string | null> {
-  // Server-side: no window, no token
   if (typeof window === "undefined") return null
-
-  try {
-    // Clerk's global is populated before React hydrates
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const clerk = (window as any).Clerk
-    if (clerk?.session?.getToken) {
-      const token = await clerk.session.getToken()
-      if (token) return token
-    }
-  } catch {}
-
-  // Fallback: token getter set by ClerkTokenSync useEffect
   try {
     if (_getToken) return await _getToken()
   } catch {}
-
   return null
 }
 
@@ -103,6 +88,11 @@ export interface IndexResponse {
   duration_seconds: number
   source?: string | null
   repo_full_name?: string | null
+}
+
+export interface IndexStatusResponse {
+  total_files: number
+  last_indexed_at: string | null
 }
 
 export interface StoryDetailResponse {
@@ -201,6 +191,10 @@ export async function indexCode(force = false): Promise<IndexResponse> {
   })
 }
 
+export async function getIndexStatus(): Promise<IndexStatusResponse> {
+  return apiFetch<IndexStatusResponse>("/api/v1/index/status")
+}
+
 // ---------------------------------------------------------------------------
 // Workflow
 // ---------------------------------------------------------------------------
@@ -297,19 +291,14 @@ export async function checkIntegrationHealth(): Promise<IntegrationHealthRespons
 
 export interface UserResponse {
   user_id: string
-  clerk_user_id: string
   email: string
   name: string | null
   role: string
   tenant_id: string
-  tenant_slug: string
   tenant_name: string
 }
 
 export async function provision(body: {
-  tenant_name: string
-  tenant_slug: string
-  clerk_org_id: string
   user_email: string
   user_name?: string | null
 }): Promise<UserResponse> {

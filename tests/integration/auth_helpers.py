@@ -3,7 +3,7 @@ from datetime import datetime
 
 from fastapi import FastAPI
 
-from app.core.clerk_auth import get_current_user
+from app.core.auth0_auth import get_current_user
 from app.core.context import current_tenant_id, current_user_id
 from app.models.user import User
 
@@ -16,7 +16,7 @@ async def mock_auth() -> User:
     current_user_id.set(TEST_USER_ID)
     return User(
         id=TEST_USER_ID,
-        clerk_user_id="clerk_test_user",
+        auth0_user_id="auth0|test_user",
         tenant_id=TEST_TENANT_ID,
         email="test@bridgeai.test",
         name="Test User",
@@ -26,6 +26,6 @@ async def mock_auth() -> User:
 
 
 def apply_mock_auth(app: FastAPI) -> FastAPI:
-    """Override Clerk auth with a test user — call before TestClient(app)."""
+    """Override Auth0 auth with a test user — call before TestClient(app)."""
     app.dependency_overrides[get_current_user] = mock_auth
     return app

@@ -2,9 +2,17 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { indexCode, getActiveConnection, type IndexResponse, type ConnectionResponse } from "@/lib/api-client"
+import { indexCode, getActiveConnection, getIndexStatus, type IndexResponse, type ConnectionResponse, type IndexStatusResponse } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import { Loader2, Database, Zap, RefreshCw, GitBranch } from "lucide-react"
+
+function timeAgo(isoDate: string): string {
+  const diff = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000)
+  if (diff < 60) return `${diff}s`
+  if (diff < 3600) return `${Math.floor(diff / 60)}min`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`
+  return `${Math.floor(diff / 86400)}d`
+}
 
 interface StatItem {
   label: string
@@ -38,11 +46,13 @@ export default function IndexingPage() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<IndexResponse | null>(null)
   const [activeConn, setActiveConn] = useState<ConnectionResponse | null | undefined>(undefined)
+  const [indexStatus, setIndexStatus] = useState<IndexStatusResponse | null | undefined>(undefined)
   const { t } = useLanguage()
   const s = t.indexing
 
   useEffect(() => {
     getActiveConnection().then(setActiveConn).catch(() => setActiveConn(null))
+    getIndexStatus().then(setIndexStatus).catch(() => setIndexStatus(null))
   }, [])
 
   async function handleIndex(force: boolean) {
@@ -51,6 +61,8 @@ export default function IndexingPage() {
     try {
       const data = await indexCode(force)
       setResult(data)
+      // refresh status after indexing
+      getIndexStatus().then(setIndexStatus).catch(() => {})
     } catch (err) {
       setError(err instanceof Error ? err.message : s.error_unexpected)
     } finally {
@@ -79,50 +91,80 @@ export default function IndexingPage() {
         </p>
       </div>
 
-      {/* Active repo info */}
+      {/* Active repo info + index status */}
       <div style={{
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: "var(--radius-lg)",
         padding: "14px 18px",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: "16px",
+        flexDirection: "column",
+        gap: "10px",
       }}>
+        {/* Row 1: active connection */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <GitBranch size={14} style={{ color: "var(--muted)", flexShrink: 0 }} />
+            <div>
+              <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "2px" }}>{s.active_repo}</div>
+              {activeConn === undefined ? (
+                <div style={{ fontSize: "13px", color: "var(--muted)" }}>{s.loading}</div>
+              ) : hasActiveRepo ? (
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 500, color: "var(--fg)" }}>
+                  {activeConn.repo_full_name}
+                  {activeConn.default_branch && (
+                    <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {activeConn.default_branch}</span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: "13px", color: "var(--warn-fg)", fontStyle: "italic" }}>
+                  {s.no_repo}
+                </div>
+              )}
+            </div>
+          </div>
+          <Link href="/connections" style={{
+            padding: "5px 12px",
+            borderRadius: "var(--radius)",
+            border: "1px solid var(--border)",
+            background: "var(--surface-2)",
+            color: "var(--fg-2)",
+            fontSize: "12.5px",
+            fontWeight: 500,
+            textDecoration: "none",
+            flexShrink: 0,
+          }}>
+            {s.change_repo}
+          </Link>
+        </div>
+
+        {/* Divider */}
+        <div style={{ borderTop: "1px solid var(--border)" }} />
+
+        {/* Row 2: index status */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <GitBranch size={14} style={{ color: "var(--muted)", flexShrink: 0 }} />
+          <Database size={14} style={{ color: "var(--muted)", flexShrink: 0 }} />
           <div>
-            <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "2px" }}>{s.active_repo}</div>
-            {activeConn === undefined ? (
+            <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "2px" }}>{s.index_status}</div>
+            {indexStatus === undefined ? (
               <div style={{ fontSize: "13px", color: "var(--muted)" }}>{s.loading}</div>
-            ) : hasActiveRepo ? (
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 500, color: "var(--fg)" }}>
-                {activeConn.repo_full_name}
-                {activeConn.default_branch && (
-                  <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {activeConn.default_branch}</span>
+            ) : indexStatus && indexStatus.total_files > 0 ? (
+              <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--fg)" }}>
+                <span style={{ fontFamily: "var(--font-mono)" }}>{indexStatus.total_files.toLocaleString()}</span>
+                {" "}<span style={{ color: "var(--muted)", fontWeight: 400 }}>{s.indexed_files}</span>
+                {indexStatus.last_indexed_at && (
+                  <span style={{ color: "var(--muted)", fontWeight: 400 }}>
+                    {" · "}{s.last_indexed} {timeAgo(indexStatus.last_indexed_at)}
+                  </span>
                 )}
               </div>
             ) : (
               <div style={{ fontSize: "13px", color: "var(--warn-fg)", fontStyle: "italic" }}>
-                {s.no_repo}
+                {s.not_indexed_yet}
               </div>
             )}
           </div>
         </div>
-        <Link href="/connections" style={{
-          padding: "5px 12px",
-          borderRadius: "var(--radius)",
-          border: "1px solid var(--border)",
-          background: "var(--surface-2)",
-          color: "var(--fg-2)",
-          fontSize: "12.5px",
-          fontWeight: 500,
-          textDecoration: "none",
-          flexShrink: 0,
-        }}>
-          {s.change_repo}
-        </Link>
       </div>
 
       {/* Action buttons */}

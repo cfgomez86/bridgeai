@@ -6,9 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # APP_ENV selects the environment overlay file:
 #   local   → .env + .env.local   (default)
-#   tunnel  → .env + .env.tunnel
 #   prod    → .env + .env.prod
-_APP_ENV = os.getenv("APP_ENV", "tunnel")
+_APP_ENV = os.getenv("APP_ENV", "local")
 
 
 class Settings(BaseSettings):
@@ -59,14 +58,19 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     API_BASE_URL: str = "http://localhost:8000"
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    # Regex pattern for additional allowed CORS origins. Empty = disabled.
+    # Example: https://.*\.devtunnels\.ms — matches any VS Code devtunnel URL.
+    # Override with an empty string in production to disable.
+    CORS_ORIGIN_REGEX: str = ""
 
     # IPs allowed to set X-Forwarded-* headers (Next.js rewrite proxy, nginx, etc.)
     # Restrict to loopback in all environments; extend only if your proxy runs on a
     # different host.
     TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
 
-    # Clerk auth
-    CLERK_SECRET_KEY: str = ""
+    # Auth0
+    AUTH0_DOMAIN: str = ""      # e.g. "my-tenant.eu.auth0.com"
+    AUTH0_AUDIENCE: str = ""    # e.g. "https://api.bridgeai.com"
 
     # First-party OAuth credentials — overridden per environment
     GITHUB_CLIENT_ID: str = ""

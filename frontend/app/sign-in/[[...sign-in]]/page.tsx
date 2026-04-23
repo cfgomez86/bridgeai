@@ -1,5 +1,3 @@
-import { SignIn } from "@clerk/nextjs"
-
 const FEATURES = [
   "Análisis de impacto automático en tu codebase",
   "Historias de usuario con criterios Gherkin",
@@ -15,7 +13,7 @@ export default function SignInPage() {
       gridTemplateColumns: "1fr 1fr",
       background: "var(--bg)",
     }}>
-      {/* Brand panel — dark neutral, matches the workflow's fg color family */}
+      {/* Brand panel */}
       <div style={{
         background: "oklch(0.17 0.013 260)",
         display: "flex",
@@ -24,7 +22,6 @@ export default function SignInPage() {
         padding: "48px",
         color: "white",
       }}>
-        {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <div style={{
             width: "36px", height: "36px",
@@ -40,7 +37,6 @@ export default function SignInPage() {
           </span>
         </div>
 
-        {/* Hero copy */}
         <div>
           <h1 style={{
             fontSize: "36px",
@@ -64,7 +60,6 @@ export default function SignInPage() {
           </p>
         </div>
 
-        {/* Feature list */}
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {FEATURES.map((f) => (
             <div key={f} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -83,7 +78,7 @@ export default function SignInPage() {
         </div>
       </div>
 
-      {/* Form panel */}
+      {/* Login panel */}
       <div style={{
         display: "flex",
         flexDirection: "column",
@@ -100,7 +95,6 @@ export default function SignInPage() {
             color: "var(--fg)",
             margin: "0 0 6px 0",
             letterSpacing: "-0.01em",
-            fontFamily: "var(--font-display)",
           }}>
             Bienvenido de vuelta
           </h2>
@@ -109,16 +103,26 @@ export default function SignInPage() {
           </p>
         </div>
 
-        <SignIn
-          fallbackRedirectUrl="/"
-          appearance={{
-            variables: {
-              colorPrimary: "#6C5CE7",
-              borderRadius: "6px",
-              fontFamily: "Inter, system-ui, sans-serif",
-            },
+        <a
+          href="/api/auth/login"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+            maxWidth: "360px",
+            padding: "12px 24px",
+            borderRadius: "8px",
+            background: "#6C5CE7",
+            color: "white",
+            fontWeight: 600,
+            fontSize: "15px",
+            textDecoration: "none",
+            cursor: "pointer",
           }}
-        />
+        >
+          Continuar con Auth0
+        </a>
       </div>
     </div>
   )

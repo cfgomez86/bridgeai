@@ -1,5 +1,7 @@
+from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.context import current_tenant_id, get_tenant_id
@@ -77,3 +79,11 @@ class CodeFileRepository:
             cf.file_path: cf
             for cf in self._db.query(CodeFile).filter(CodeFile.tenant_id == self._tid()).all()
         }
+
+    def get_status(self) -> tuple[int, Optional[datetime]]:
+        total, last = (
+            self._db.query(func.count(CodeFile.id), func.max(CodeFile.indexed_at))
+            .filter(CodeFile.tenant_id == self._tid())
+            .one()
+        )
+        return total or 0, last

@@ -15,7 +15,7 @@ from app.api.routes import story_generation as story_generation_router
 from app.api.routes import ticket_integration as ticket_integration_router
 from app.api.routes import connections as connections_router
 from app.api.routes import auth as auth_router
-from app.core.clerk_auth import get_current_user
+from app.core.auth0_auth import get_current_user
 from app.core.config import get_settings
 from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.core.security import SecurityMiddleware, add_cors
@@ -59,7 +59,7 @@ def create_app() -> FastAPI:
 
     _auth = [Depends(get_current_user)]
 
-    # Routers — health y auth son públicos; el resto requiere JWT de Clerk
+    # Routers — health y auth son públicos; el resto requiere JWT de Auth0
     app.include_router(health_router.router)
     app.include_router(auth_router.router, prefix="/api/v1")
     app.include_router(indexing_router.router, prefix="/api/v1", tags=["indexing"], dependencies=_auth)

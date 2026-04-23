@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
 import "./globals.css"
-import { ClerkProvider } from "@clerk/nextjs"
+import { UserProvider } from "@auth0/nextjs-auth0/client"
 import { LanguageProvider } from "@/lib/i18n"
 import { ThemeProvider } from "@/lib/theme/ThemeContext"
-import { ClerkTokenSync } from "@/components/features/ClerkTokenSync"
+import { Auth0TokenSync } from "@/components/features/Auth0TokenSync"
 import { AppShell } from "@/components/features/AppShell"
 
 export const metadata: Metadata = {
@@ -15,7 +15,7 @@ const themeScript = `(function(){try{var t=localStorage.getItem('bridgeai-theme'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
+    <UserProvider>
       {/* suppressHydrationWarning: server renders without .dark; blocking script may add it before hydration */}
       <html lang="es" suppressHydrationWarning>
         <head>
@@ -25,12 +25,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <body>
           <ThemeProvider>
             <LanguageProvider>
-              <ClerkTokenSync />
+              <Auth0TokenSync />
               <AppShell>{children}</AppShell>
             </LanguageProvider>
           </ThemeProvider>
         </body>
       </html>
-    </ClerkProvider>
+    </UserProvider>
   )
 }

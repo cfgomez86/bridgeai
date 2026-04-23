@@ -68,7 +68,7 @@ fs.mkdirSync(SCREENSHOTS, { recursive: true });
   await context.storageState({ path: SESSION_FILE });
   console.log('[1/3] ✅ Sesión guardada');
 
-  // Let ClerkTokenSync set the token
+  // Let Auth0TokenSync set the token
   await page.waitForTimeout(2500);
   await page.screenshot({ path: path.join(SCREENSHOTS, '01-workflow.png'), fullPage: true });
   console.log('URL actual:', page.url());

@@ -5,6 +5,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Optional
 
 from app.models.code_file import CodeFile
 from app.repositories.code_file_repository import CodeFileRepository
@@ -196,6 +197,9 @@ class CodeIndexingService:
                 return sum(1 for line in f if line.strip())
         except OSError:
             return 0
+
+    def get_status(self) -> tuple[int, Optional[datetime]]:
+        return self._repository.get_status()
 
     def index_remote(
         self,

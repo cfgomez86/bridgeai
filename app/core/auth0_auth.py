@@ -1,13 +1,28 @@
-from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
+import time
 
-from clerk_backend_api.security.verifytoken import verify_token
-from clerk_backend_api.security.types import VerifyTokenOptions
+import httpx
+from fastapi import Depends, HTTPException, Request, status
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.context import current_tenant_id, current_user_id
 from app.database.session import get_db
 from app.models.user import User
+
+_jwks_cache: dict = {}
+_jwks_fetched_at: float = 0.0
+_JWKS_TTL_SECONDS = 3600
+
+
+def _get_jwks(domain: str) -> dict:
+    global _jwks_cache, _jwks_fetched_at
+    if time.time() - _jwks_fetched_at > _JWKS_TTL_SECONDS:
+        resp = httpx.get(f"https://{domain}/.well-known/jwks.json", timeout=10)
+        resp.raise_for_status()
+        _jwks_cache = resp.json()
+        _jwks_fetched_at = time.time()
+    return _jwks_cache
 
 
 def _extract_bearer_token(request: Request) -> str:
@@ -20,14 +35,27 @@ def _extract_bearer_token(request: Request) -> str:
     return auth.removeprefix("Bearer ")
 
 
-def verify_clerk_jwt(token: str) -> dict:
+def verify_auth0_jwt(token: str) -> dict:
     settings = get_settings()
     try:
-        return verify_token(token, VerifyTokenOptions(secret_key=settings.CLERK_SECRET_KEY))
-    except Exception as exc:
+        jwks = _get_jwks(settings.AUTH0_DOMAIN)
+        payload = jwt.decode(
+            token,
+            jwks,
+            algorithms=["RS256"],
+            audience=settings.AUTH0_AUDIENCE,
+            issuer=f"https://{settings.AUTH0_DOMAIN}/",
+        )
+        return payload
+    except JWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid or expired token: {exc}",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Token verification failed: {exc}",
         )
 
 
@@ -36,13 +64,13 @@ async def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     token = _extract_bearer_token(request)
-    payload = verify_clerk_jwt(token)
+    payload = verify_auth0_jwt(token)
 
-    clerk_user_id = payload.get("sub")
-    if not clerk_user_id:
+    auth0_user_id = payload.get("sub")
+    if not auth0_user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
 
-    user = db.query(User).filter_by(clerk_user_id=clerk_user_id).first()
+    user = db.query(User).filter_by(auth0_user_id=auth0_user_id).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

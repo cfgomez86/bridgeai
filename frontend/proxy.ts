@@ -1,19 +1,13 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
+import { withMiddlewareAuthRequired } from "@auth0/nextjs-auth0/edge"
 
-const isProtected = createRouteMatcher([
-  "/",
-  "/app(.*)",
-  "/select-org(.*)",
-  "/workflow(.*)",
-  "/indexing(.*)",
-  "/connections(.*)",
-  "/settings(.*)",
-])
-
-export default clerkMiddleware(async (auth, req) => {
-  if (isProtected(req)) await auth.protect()
-})
+export default withMiddlewareAuthRequired()
 
 export const config = {
-  matcher: ["/((?!_next|.*\\..*).*)"],
+  matcher: [
+    "/",
+    "/workflow/:path*",
+    "/indexing/:path*",
+    "/connections/:path*",
+    "/settings/:path*",
+  ],
 }

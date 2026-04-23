@@ -100,7 +100,7 @@ class SourceConnectionService:
                     return _to_domain_connection(existing)
             raise ValueError("Invalid or expired OAuth state. Please start the connection flow again.")
 
-        # The callback arrives from GitHub without Clerk auth, so current_tenant_id is not set.
+        # The callback arrives from GitHub without Auth0 auth, so current_tenant_id is not set.
         # Restore it from the OAuth state record, which was written during the authenticated authorize step.
         from app.core.context import current_tenant_id
         current_tenant_id.set(oauth_state.tenant_id)

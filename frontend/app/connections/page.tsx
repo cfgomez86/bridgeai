@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { useAuth } from "@clerk/nextjs"
+import { useUser } from "@auth0/nextjs-auth0/client"
 import {
   listPlatforms, listConnections,
   getOAuthAuthorizeUrl, deleteConnection,
@@ -189,7 +189,9 @@ function PlatformCardDesign({
 function ConnectionsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { isLoaded, isSignedIn } = useAuth()
+  const { user, isLoading } = useUser()
+  const isLoaded = !isLoading
+  const isSignedIn = !!user
   const [platforms, setPlatforms] = useState<PlatformResponse[]>(STATIC_PLATFORMS)
   const [connections, setConnections] = useState<ConnectionResponse[]>([])
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "err" } | null>(null)
@@ -228,8 +230,8 @@ function ConnectionsContent() {
 
     if (connected) {
       setToast({ msg: `${s.toast_connected} ${PLATFORM_LABELS[connected] ?? connected}`, tone: "ok" })
-      // Only refresh now if Clerk is already loaded — otherwise the isLoaded/isSignedIn
-      // effect will fire refresh() once Clerk finishes initializing after the OAuth redirect.
+      // Only refresh now if Auth0 is already loaded — otherwise the isLoaded/isSignedIn
+      // effect will fire refresh() once Auth0 finishes initializing after the OAuth redirect.
       if (isLoaded && isSignedIn) refresh()
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
       toastTimerRef.current = setTimeout(() => setToast(null), 5000)

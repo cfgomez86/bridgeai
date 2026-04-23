@@ -176,6 +176,10 @@ interface Translations {
     loading: string
     no_repo: string
     change_repo: string
+    index_status: string
+    indexed_files: string
+    last_indexed: string
+    not_indexed_yet: string
     indexing_progress: string
     index_btn: string
     force_reindex: string
@@ -414,6 +418,10 @@ const es: Translations = {
     loading: "Cargando...",
     no_repo: "Sin repositorio activo",
     change_repo: "Cambiar repositorio",
+    index_status: "Estado del indice",
+    indexed_files: "archivos indexados",
+    last_indexed: "actualizado hace",
+    not_indexed_yet: "Sin datos en el indice",
     indexing_progress: "Indexando...",
     index_btn: "Indexar codigo",
     force_reindex: "Forzar re-indexacion",
@@ -667,6 +675,10 @@ const en: Translations = {
     loading: "Loading...",
     no_repo: "No active repository",
     change_repo: "Change repository",
+    index_status: "Index status",
+    indexed_files: "files indexed",
+    last_indexed: "updated",
+    not_indexed_yet: "No data in index",
     indexing_progress: "Indexing...",
     index_btn: "Index code",
     force_reindex: "Force re-indexing",
