@@ -40,6 +40,22 @@ def make_db_session():
     return Session()
 
 
+def insert_jira_connection(db) -> None:
+    from app.models.source_connection import SourceConnection
+    conn = SourceConnection(
+        id="jira-conn-00000000-0000-0000-0000-000000000001",
+        tenant_id=TEST_TENANT_ID,
+        platform="jira",
+        display_name="Jira Test",
+        access_token="test-access-token",
+        base_url="https://test.atlassian.net",
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(conn)
+    db.commit()
+
+
 def insert_story(db, story_id: str = "story-1") -> UserStoryModel:
     from tests.unit.conftest import TEST_CONNECTION_ID
     story = UserStoryModel(
@@ -175,6 +191,7 @@ class TestHealthCheck:
     async def test_health_check_jira_healthy(self):
         db = make_db_session()
         settings = make_settings()
+        insert_jira_connection(db)
         service = TicketIntegrationService(db, settings)
 
         with patch(

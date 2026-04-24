@@ -24,6 +24,7 @@ from app.services.ai_story_generator import AIStoryGenerator
 from app.services.story_ai_provider import StubStoryProvider
 from app.services.story_generation_service import StoryGenerationService
 from app.services.story_points_calculator import StoryPointsCalculator
+from app.repositories.code_file_repository import CodeFileRepository
 from app.models.requirement import Requirement
 from app.models.impact_analysis import ImpactAnalysis
 from app.models.user_story import UserStory
@@ -95,6 +96,7 @@ def make_client_with_data():
             impact_repo=ImpactAnalysisRepository(db2),
             story_repo=UserStoryRepository(db2),
             points_calculator=StoryPointsCalculator(),
+            code_file_repo=CodeFileRepository(db2),
             settings=settings,
         )
 
