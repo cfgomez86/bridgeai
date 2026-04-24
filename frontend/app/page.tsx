@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { auth0 } from "@/lib/auth0"
 import { DashboardView } from "@/components/features/DashboardView"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+const API_URL = process.env.API_URL ?? "http://localhost:8000"
 
 export default async function Home() {
   const session = await auth0.getSession()
