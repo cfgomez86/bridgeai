@@ -101,7 +101,7 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
               }}
             >
               {isTicket ? <Globe size={13} /> : <FolderGit2 size={13} />}
-              {isTicket ? "Seleccionar site" : s.card.select_repo}
+              {isTicket ? s.card.select_site : s.card.select_repo}
             </button>
             <button
               onClick={handleDelete}

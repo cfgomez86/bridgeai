@@ -23,7 +23,7 @@ export default function WorkflowPage() {
     let cancelled = false
     async function sync() {
       const conn = await getActiveConnection()
-      if (!cancelled) workflow.syncSourceConnection(conn?.id ?? null)
+      if (!cancelled) workflow.syncSourceConnection(conn?.id ?? null, conn?.repo_full_name ?? null)
     }
     sync()
     const onFocus = () => sync()
@@ -85,6 +85,7 @@ export default function WorkflowPage() {
         {state.currentStep >= 4 && (
           <Step4Ticket
             state={state}
+            setTicketProjectKey={workflow.setTicketProjectKey}
             completeStep4={workflow.completeStep4}
             reset={workflow.reset}
           />

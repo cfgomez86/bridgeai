@@ -10,6 +10,7 @@ from app.models.user import User
 
 SUPPORTED_PLATFORMS_SET = {"github", "gitlab", "azure_devops", "jira"}
 from app.database.session import get_db
+from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.source_connection_service import SourceConnectionService
 
@@ -125,18 +126,23 @@ def authorize(
 @router.get("/oauth/callback/{platform}")
 def oauth_callback(
     platform: str,
-    code: str,
-    state: str,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
     service: SourceConnectionService = Depends(get_service),
     settings: Settings = Depends(get_settings),
 ):
+    frontend_url = settings.FRONTEND_URL.rstrip("/")
+    if error or not code or not state:
+        desc = error_description or error or "OAuth flow cancelled or failed."
+        logger.error("OAuth callback error platform=%s error=%s", platform, desc)
+        return RedirectResponse(url=f"{frontend_url}/connections?error={platform}")
     try:
         service.handle_callback(platform, code, state)
-        frontend_url = settings.FRONTEND_URL.rstrip("/")
         return RedirectResponse(url=f"{frontend_url}/connections?connected={platform}")
     except ValueError as exc:
         logger.error("OAuth callback failed platform=%s error=%s", platform, exc)
-        frontend_url = settings.FRONTEND_URL.rstrip("/")
         return RedirectResponse(url=f"{frontend_url}/connections?error={platform}")
 
 
@@ -224,10 +230,29 @@ def activate_repo(
     connection_id: str,
     body: ActivateRequest,
     service: SourceConnectionService = Depends(get_service),
+    db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
     try:
+        old = SourceConnectionRepository(db).find_by_id(connection_id)
+        old_repo = old.repo_full_name if old else None
+        # Expunge so service.activate() gets a fresh DB read after the bulk
+        # UPDATE (synchronize_session=False wouldn't expire it otherwise, and
+        # SQLAlchemy wouldn't detect is_active True→True as a dirty change).
+        if old is not None:
+            db.expunge(old)
+
         conn = service.activate_repo(connection_id, body.repo_full_name, body.default_branch)
+
+        # Repo changed → stale index belongs to the old repo; clear it so the user
+        # is forced to re-index before running analysis on the new codebase.
+        if old_repo and old_repo != body.repo_full_name:
+            deleted = CodeFileRepository(db).delete_by_connection(connection_id)
+            logger.info(
+                "Repo changed connection=%s old=%s new=%s cleared_files=%d",
+                connection_id, old_repo, body.repo_full_name, deleted,
+            )
+
         return ConnectionResponse(
             id=conn.id,
             platform=conn.platform,
@@ -249,6 +274,27 @@ class JiraSiteResponse(BaseModel):
     name: str
     url: str
     api_base_url: str
+
+
+class JiraProjectResponse(BaseModel):
+    key: str
+    name: str
+
+
+@router.get("/{connection_id}/jira-projects", response_model=list[JiraProjectResponse])
+def list_jira_projects(
+    connection_id: str,
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
+    try:
+        projects = service.list_jira_projects(connection_id)
+        return [JiraProjectResponse(**p) for p in projects]
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to list Jira projects connection=%s error=%s", connection_id, exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to fetch Jira projects.")
 
 
 class ActivateSiteRequest(BaseModel):

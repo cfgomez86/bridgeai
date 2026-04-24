@@ -4,7 +4,9 @@ import { useState } from "react"
 
 export type WorkflowState = {
   sourceConnectionId: string | null
+  repoFullName: string | null
   projectId: string
+  ticketProjectKey: string
   requirementText: string
   language: string
   requirementId: string | null
@@ -24,7 +26,9 @@ export type WorkflowState = {
 
 const initialState: WorkflowState = {
   sourceConnectionId: null,
+  repoFullName: null,
   projectId: "my-project",
+  ticketProjectKey: "",
   requirementText: "",
   language: "es",
   requirementId: null,
@@ -49,6 +53,10 @@ export function useWorkflow() {
     setState((prev) => ({ ...prev, projectId }))
   }
 
+  function setTicketProjectKey(ticketProjectKey: string) {
+    setState((prev) => ({ ...prev, ticketProjectKey }))
+  }
+
   function setRequirementText(requirementText: string) {
     setState((prev) => ({ ...prev, requirementText }))
   }
@@ -57,12 +65,12 @@ export function useWorkflow() {
     setState((prev) => ({ ...prev, language }))
   }
 
-  function syncSourceConnection(nextId: string | null) {
+  function syncSourceConnection(nextId: string | null, nextRepo: string | null = null) {
     setState((prev) => {
-      if (prev.sourceConnectionId === nextId) return prev
-      // Si cambia la conexión, reseteamos todo lo generado para no mezclar
-      // requirement/analysis/historia de repos distintos en la misma UI.
-      return { ...initialState, sourceConnectionId: nextId, language: prev.language }
+      if (prev.sourceConnectionId === nextId && prev.repoFullName === nextRepo) return prev
+      // Reset everything when the connection OR the selected repo changes to avoid
+      // mixing requirement/analysis/story data from different codebases.
+      return { ...initialState, sourceConnectionId: nextId, repoFullName: nextRepo, language: prev.language }
     })
   }
 
@@ -109,12 +117,13 @@ export function useWorkflow() {
   }
 
   function reset() {
-    setState((prev) => ({ ...initialState, sourceConnectionId: prev.sourceConnectionId }))
+    setState((prev) => ({ ...initialState, sourceConnectionId: prev.sourceConnectionId, repoFullName: prev.repoFullName }))
   }
 
   return {
     state,
     setProjectId,
+    setTicketProjectKey,
     setRequirementText,
     setLanguage,
     syncSourceConnection,

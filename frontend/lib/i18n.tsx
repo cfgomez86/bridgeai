@@ -61,6 +61,7 @@ interface Translations {
     card: {
       active_badge: string
       select_repo: string
+      select_site: string
       disconnect_title: string
     }
     repo_selector: {
@@ -105,6 +106,19 @@ interface Translations {
       story_language: string
       analyzing: string
       analyze_btn: string
+      config_title: string
+      ticket_provider_label: string
+      ticket_provider_not_configured: string
+      ticket_site_not_selected: string
+      ticket_project_label: string
+      ticket_project_input_label: string
+      ticket_project_not_set: string
+      repo_label: string
+      index_label: string
+      not_configured: string
+      not_indexed: string
+      files_indexed: string
+      blocked_hint: string
     }
     step2: {
       title: string
@@ -164,12 +178,17 @@ interface Translations {
       provider_label: string
       provider_select: string
       project_key_label: string
+      project_key_hint: string
+      project_key_loading: string
       issue_type_label: string
       create_subtasks_label: string
       creating: string
       create_btn: string
       new_story: string
       integration_status: string
+      connected_provider: string
+      connected_repo: string
+      no_ticket_provider: string
       subtasks_created: string
       subtasks_failed: string
     }
@@ -278,7 +297,7 @@ const es: Translations = {
   },
   connections: {
     title: "Conexiones",
-    description: "Conecta tus plataformas de codigo fuente para analizar impacto y generar historias.",
+    description: "Integra las plataformas de codigo fuente para analizar impacto y generar historias.",
     connected_accounts: "Cuentas conectadas",
     coming_soon: "Proximamente",
     sections: {
@@ -321,6 +340,7 @@ const es: Translations = {
     card: {
       active_badge: "activo",
       select_repo: "Seleccionar repo",
+      select_site: "Seleccionar organización",
       disconnect_title: "Desconectar cuenta",
     },
     repo_selector: {
@@ -334,11 +354,11 @@ const es: Translations = {
     },
     platform_desc: {
       github: "Conecta repositorios de GitHub para analizar codigo y estimar impacto.",
-      gitlab: "Conecta proyectos de GitLab y analiza cambios con IA.",
-      azure_devops: "Integra repositorios de Azure Repos y crea tickets directamente.",
-      bitbucket: "Soporte para repositorios Bitbucket en desarrollo.",
+      gitlab: "Conecta repositorios de GitLab para analizar codigo y estimar impacto.",
+      azure_devops: "Conecta repositorios de Azure Repos para analizar codigo y estimar impacto.",
+      bitbucket: "Conecta repositorios de Bitbucket para analizar codigo y estimar impacto.",
     },
-    default_platform_desc: "Conecta esta plataforma para empezar.",
+    default_platform_desc: "Conecta gestor de tickets para registrar historias.",
     toast_connected: "Conectado con exito a",
     toast_error: "Error al conectar con",
   },
@@ -365,6 +385,19 @@ const es: Translations = {
       story_language: "Idioma de la historia",
       analyzing: "Analizando...",
       analyze_btn: "Analizar requerimiento",
+      config_title: "Configuracion requerida",
+      ticket_provider_label: "Proveedor de tickets",
+      ticket_provider_not_configured: "Sin configurar — conecta y selecciona la organizacion en Conexiones",
+      ticket_site_not_selected: "Sin organizacion seleccionada — selecciona el sitio en Conexiones",
+      ticket_project_label: "Proyecto de tickets",
+      ticket_project_input_label: "Clave del proyecto",
+      ticket_project_not_set: "Sin configurar — selecciona el proyecto en tu herramienta de gestion",
+      repo_label: "Repositorio de codigo",
+      index_label: "Indice del repositorio",
+      not_configured: "Sin configurar — ve al modulo de Conexiones",
+      not_indexed: "Sin datos — ejecuta el indice en el modulo de Indexacion",
+      files_indexed: "archivos indexados",
+      blocked_hint: "Completa la configuracion anterior para continuar.",
     },
     step2: {
       title: "Analisis de impacto",
@@ -418,18 +451,23 @@ const es: Translations = {
       points: "puntos",
       loading_story: "Cargando historia...",
       ticket_title: "Crear ticket",
-      ticket_description: "Selecciona el proveedor y el proyecto donde crear el ticket.",
+      ticket_description: "El ticket se creará con el proveedor de tickets conectado.",
       ticket_success: "Ticket creado con exito",
       open_in: "Abrir en",
       provider_label: "Proveedor:",
       provider_select: "Proveedor",
       project_key_label: "Clave del proyecto",
+      project_key_hint: "Selecciona un proyecto...",
+      project_key_loading: "Cargando proyectos...",
       issue_type_label: "Tipo de issue",
       create_subtasks_label: "Crear subtareas automaticamente",
       creating: "Creando ticket...",
       create_btn: "Crear ticket",
       new_story: "Nueva historia",
       integration_status: "Estado de integraciones",
+      connected_provider: "Proveedor conectado",
+      connected_repo: "Repositorio activo",
+      no_ticket_provider: "No hay proveedor de tickets conectado. Ve a Conexiones para configurarlo.",
       subtasks_created: "Subtareas creadas",
       subtasks_failed: "Subtareas con error",
     },
@@ -616,6 +654,7 @@ const en: Translations = {
     card: {
       active_badge: "active",
       select_repo: "Select repo",
+      select_site: "Select organization",
       disconnect_title: "Disconnect account",
     },
     repo_selector: {
@@ -660,6 +699,19 @@ const en: Translations = {
       story_language: "Story language",
       analyzing: "Analyzing...",
       analyze_btn: "Analyze requirement",
+      config_title: "Required setup",
+      ticket_provider_label: "Ticket provider",
+      ticket_provider_not_configured: "Not set up — connect and select the organization in Connections",
+      ticket_site_not_selected: "No site selected — choose a site in Connections",
+      ticket_project_label: "Ticket project",
+      ticket_project_input_label: "Project key",
+      ticket_project_not_set: "Not set — select the project in your management tool",
+      repo_label: "Code repository",
+      index_label: "Repository index",
+      not_configured: "Not set up — go to the Connections module",
+      not_indexed: "No data — run the index in the Indexing module",
+      files_indexed: "files indexed",
+      blocked_hint: "Complete the setup above to continue.",
     },
     step2: {
       title: "Impact analysis",
@@ -713,18 +765,23 @@ const en: Translations = {
       points: "points",
       loading_story: "Loading story...",
       ticket_title: "Create ticket",
-      ticket_description: "Select the provider and project where to create the ticket.",
+      ticket_description: "The ticket will be created with the connected ticket provider.",
       ticket_success: "Ticket created successfully",
       open_in: "Open in",
       provider_label: "Provider:",
       provider_select: "Provider",
       project_key_label: "Project key",
+      project_key_hint: "Select a project...",
+      project_key_loading: "Loading projects...",
       issue_type_label: "Issue type",
       create_subtasks_label: "Create subtasks automatically",
       creating: "Creating ticket...",
       create_btn: "Create ticket",
       new_story: "New story",
       integration_status: "Integration status",
+      connected_provider: "Connected provider",
+      connected_repo: "Active repository",
+      no_ticket_provider: "No ticket provider connected. Go to Connections to set it up.",
       subtasks_created: "Subtasks created",
       subtasks_failed: "Failed subtasks",
     },

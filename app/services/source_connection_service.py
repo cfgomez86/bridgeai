@@ -176,6 +176,15 @@ class SourceConnectionService:
         provider = get_provider("jira")
         return provider.list_sites(conn.access_token)  # type: ignore[attr-defined]
 
+    def list_jira_projects(self, connection_id: str) -> list[dict]:
+        conn = self._repo.find_by_id(connection_id)
+        if not conn or conn.platform != "jira":
+            raise ValueError(f"Jira connection {connection_id!r} not found.")
+        if not conn.base_url:
+            raise ValueError("No Jira site selected for this connection.")
+        provider = get_provider("jira")
+        return provider.list_projects(conn.access_token, conn.base_url)  # type: ignore[attr-defined]
+
     def activate_site(
         self, connection_id: str, cloud_id: str, api_base_url: str, site_url: str, site_name: str
     ) -> SourceConnection:

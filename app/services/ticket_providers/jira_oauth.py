@@ -60,6 +60,17 @@ class JiraOAuthProvider:
         login = data.get("email") or data.get("account_id", "jira-user")
         return {"login": login, "name": data.get("name") or login}
 
+    def list_projects(self, access_token: str, api_base_url: str) -> list[dict]:
+        """Return Jira projects the user has access to in the selected site."""
+        url = f"{api_base_url.rstrip('/')}/rest/api/3/project?maxResults=100&orderBy=name"
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            projects = json.loads(resp.read())
+        return [{"key": p["key"], "name": p["name"]} for p in projects]
+
     def list_sites(self, access_token: str) -> list[dict]:
         """Return Jira Cloud sites the user has access to.
 

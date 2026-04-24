@@ -3,15 +3,16 @@
 import { useState, useEffect } from "react"
 import {
   createTicket,
-  checkIntegrationHealth,
   getStoryDetail,
+  listConnections,
+  listJiraProjects,
   type CreateTicketResponse,
-  type IntegrationHealthResponse,
   type StoryDetailResponse,
+  type ConnectionResponse,
+  type JiraProjectResponse,
 } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import type { WorkflowState } from "@/hooks/useWorkflow"
-import { HealthStatus } from "@/components/features/HealthStatus"
 import { RiskBadge } from "@/components/features/RiskBadge"
 import { StepSummaryCard } from "@/components/features/StepSummaryCard"
 import {
@@ -51,32 +52,44 @@ const labelStyle: React.CSSProperties = {
   display: "block", marginBottom: "5px",
 }
 
-const PROVIDERS: Record<string, string> = {
-  jira: "Jira",
-  azure_devops: "Azure DevOps",
-}
+const SCM_PLATFORMS = new Set(["github", "gitlab", "azure_devops", "bitbucket"])
 
 interface Step4Props {
   state: WorkflowState
+  setTicketProjectKey: (key: string) => void
   completeStep4: () => void
   reset: () => void
 }
 
-export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
+export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }: Step4Props) {
   const [provider, setProvider] = useState<string>("jira")
-  const [projectKey, setProjectKey] = useState("SCRUM")
   const [issueType, setIssueType] = useState("Story")
   const [createSubtasks, setCreateSubtasks] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ticket, setTicket] = useState<CreateTicketResponse | null>(null)
-  const [health, setHealth] = useState<IntegrationHealthResponse | null>(null)
   const [story, setStory] = useState<StoryDetailResponse | null>(null)
+  const [ticketConn, setTicketConn] = useState<ConnectionResponse | null>(null)
+  const [projects, setProjects] = useState<JiraProjectResponse[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(false)
   const { t } = useLanguage()
   const s = t.workflow.step4
 
   useEffect(() => {
-    checkIntegrationHealth().then(setHealth).catch(() => {})
+    listConnections().then((conns) => {
+      const conn =
+        conns.find((c) => c.platform === "jira") ??
+        conns.find((c) => c.platform === "azure_devops" && !SCM_PLATFORMS.has(c.platform))
+      setTicketConn(conn ?? null)
+      if (conn) setProvider(conn.platform)
+      if (conn?.platform === "jira") {
+        setProjectsLoading(true)
+        listJiraProjects(conn.id)
+          .then(setProjects)
+          .catch(() => {})
+          .finally(() => setProjectsLoading(false))
+      }
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -90,7 +103,7 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
     setLoading(true)
     setError(null)
     try {
-      const result = await createTicket(state.storyId, provider, projectKey, issueType, createSubtasks)
+      const result = await createTicket(state.storyId, provider, state.ticketProjectKey, issueType, createSubtasks)
       setTicket(result)
       completeStep4()
     } catch (err) {
@@ -252,19 +265,6 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
         )}
       </StepSummaryCard>
 
-      {/* Integration health */}
-      {health && (
-        <div style={{
-          background: "var(--surface)", border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)", padding: "14px 16px",
-        }}>
-          <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--fg-2)", margin: "0 0 10px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {s.integration_status}
-          </p>
-          <HealthStatus jira={health.jira} azureDevops={health.azure_devops} />
-        </div>
-      )}
-
       {/* Ticket creation */}
       <div style={{
         background: "var(--surface)", border: "1px solid var(--border)",
@@ -364,52 +364,51 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
           </div>
         ) : (
           <>
-            {/* Provider select */}
             <div>
-              <label style={labelStyle}>{s.provider_select}</label>
-              <div style={{ display: "flex", gap: "8px" }}>
-                {Object.entries(PROVIDERS).map(([val, label]) => (
-                  <button
-                    key={val}
-                    type="button"
-                    onClick={() => setProvider(val)}
-                    style={{
-                      flex: 1, padding: "7px 12px", borderRadius: "var(--radius)",
-                      border: "1px solid",
-                      fontSize: "12.5px", fontWeight: 500, cursor: "pointer",
-                      transition: "all .12s",
-                      background: provider === val ? "var(--accent)" : "var(--surface)",
-                      borderColor: provider === val ? "transparent" : "var(--border)",
-                      color: provider === val ? "var(--accent-fg)" : "var(--fg-2)",
-                      fontFamily: "var(--font-display)",
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <label style={labelStyle} htmlFor="project-key">
+                {s.project_key_label}
+                <span style={{ color: "var(--err-fg)", marginLeft: "3px" }}>*</span>
+              </label>
+              {projects.length > 0 ? (
+                <select
+                  id="project-key"
+                  style={{ ...inputStyle, cursor: "pointer" }}
+                  value={state.ticketProjectKey}
+                  onChange={(e) => setTicketProjectKey(e.target.value)}
+                >
+                  <option value="">{s.project_key_hint}</option>
+                  {projects.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.name} ({p.key})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="project-key"
+                  style={{
+                    ...inputStyle,
+                    borderColor: state.ticketProjectKey.trim() ? "var(--border)" : "color-mix(in oklch, var(--err-fg) 50%, var(--border))",
+                  }}
+                  value={state.ticketProjectKey}
+                  onChange={(e) => setTicketProjectKey(e.target.value.toUpperCase())}
+                  placeholder={projectsLoading ? s.project_key_loading : "SCRUM"}
+                  disabled={projectsLoading}
+                />
+              )}
             </div>
 
             <div>
-              <label style={labelStyle} htmlFor="project-key">Project Key</label>
-              <input
-                id="project-key"
-                style={inputStyle}
-                value={projectKey}
-                onChange={(e) => setProjectKey(e.target.value)}
-                placeholder="SCRUM"
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle} htmlFor="issue-type">Issue Type</label>
-              <input
+              <label style={labelStyle} htmlFor="issue-type">{s.issue_type_label}</label>
+              <select
                 id="issue-type"
-                style={inputStyle}
+                style={{ ...inputStyle, cursor: "pointer" }}
                 value={issueType}
                 onChange={(e) => setIssueType(e.target.value)}
-                placeholder="Story"
-              />
+              >
+                <option value="Story">Story</option>
+                <option value="Bug">Bug</option>
+              </select>
             </div>
 
             <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
@@ -424,14 +423,14 @@ export function Step4Ticket({ state, completeStep4, reset }: Step4Props) {
 
             <button
               onClick={handleCreate}
-              disabled={loading || !state.storyId || !projectKey.trim()}
+              disabled={loading || !state.storyId || !state.ticketProjectKey.trim()}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
                 padding: "9px 18px", borderRadius: "var(--radius)", border: "none",
-                background: loading || !state.storyId || !projectKey.trim() ? "var(--surface-3)" : "var(--accent)",
-                color: loading || !state.storyId || !projectKey.trim() ? "var(--muted)" : "var(--accent-fg)",
+                background: loading || !state.storyId || !state.ticketProjectKey.trim() ? "var(--surface-3)" : "var(--accent)",
+                color: loading || !state.storyId || !state.ticketProjectKey.trim() ? "var(--muted)" : "var(--accent-fg)",
                 fontSize: "13px", fontWeight: 600,
-                cursor: loading || !state.storyId || !projectKey.trim() ? "not-allowed" : "pointer",
+                cursor: loading || !state.storyId || !state.ticketProjectKey.trim() ? "not-allowed" : "pointer",
                 fontFamily: "var(--font-display)",
               }}
             >

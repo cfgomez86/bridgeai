@@ -52,8 +52,13 @@ export default function IndexingPage() {
   const s = t.indexing
 
   useEffect(() => {
-    getActiveConnection().then(setActiveConn).catch(() => setActiveConn(null))
-    getIndexStatus().then(setIndexStatus).catch(() => setIndexStatus(null))
+    function reload() {
+      getActiveConnection().then(setActiveConn).catch(() => setActiveConn(null))
+      getIndexStatus().then(setIndexStatus).catch(() => setIndexStatus(null))
+    }
+    reload()
+    window.addEventListener("focus", reload)
+    return () => window.removeEventListener("focus", reload)
   }, [])
 
   async function handleIndex(force: boolean) {

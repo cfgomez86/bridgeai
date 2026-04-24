@@ -100,6 +100,14 @@ class CodeFileRepository:
             for cf in self._base_query(source_connection_id).all()
         }
 
+    def delete_by_connection(self, source_connection_id: str) -> int:
+        deleted = (
+            self._base_query(source_connection_id)
+            .delete(synchronize_session=False)
+        )
+        self._db.commit()
+        return deleted
+
     def get_status(self, source_connection_id: Optional[str] = None) -> tuple[int, Optional[datetime]]:
         total, last = (
             self._base_query(source_connection_id)

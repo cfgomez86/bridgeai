@@ -16,7 +16,7 @@ class GitLabProvider(ScmProvider):
             "client_id": client_id,
             "redirect_uri": redirect_uri,
             "response_type": "code",
-            "scope": "read_user read_api",
+            "scope": "read_user api",
             "state": state,
         })
         return f"{self._AUTHORIZE_URL}?{params}"

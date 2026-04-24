@@ -87,6 +87,11 @@ export interface JiraSiteResponse {
   api_base_url: string
 }
 
+export interface JiraProjectResponse {
+  key: string
+  name: string
+}
+
 export interface IndexResponse {
   files_indexed: number
   files_scanned: number
@@ -180,6 +185,10 @@ export async function activateRepo(
 
 export async function listSites(connectionId: string): Promise<JiraSiteResponse[]> {
   return apiFetch<JiraSiteResponse[]>(`/api/v1/connections/${connectionId}/sites`)
+}
+
+export async function listJiraProjects(connectionId: string): Promise<JiraProjectResponse[]> {
+  return apiFetch<JiraProjectResponse[]>(`/api/v1/connections/${connectionId}/jira-projects`)
 }
 
 export async function activateSite(
