@@ -668,9 +668,9 @@ const en: Translations = {
     },
     platform_desc: {
       github: "Connect GitHub repositories to analyze code and estimate impact.",
-      gitlab: "Connect GitLab projects and analyze changes with AI.",
-      azure_devops: "Integrate Azure Repos repositories and create tickets directly.",
-      bitbucket: "Bitbucket repository support coming soon.",
+      gitlab: "Connect GitLab repositories to analyze code and estimate impact.",
+      azure_devops: "Connect Azure Repos repositories to analyze code and estimate impact.",
+      bitbucket: "Connect Bitbucket repositories to analyze code and estimate impact.",
     },
     default_platform_desc: "Connect this platform to get started.",
     toast_connected: "Successfully connected to",
