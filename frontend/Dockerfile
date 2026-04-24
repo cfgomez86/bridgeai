@@ -15,6 +15,8 @@ ENV AUTH0_CLIENT_ID=placeholder
 ENV AUTH0_CLIENT_SECRET=placeholder
 ENV AUTH0_BASE_URL=http://localhost:3000
 ENV AUTH0_AUDIENCE=https://placeholder.api
+ENV API_URL=https://bridgeai-production-cf60.up.railway.app
+ENV APP_URL=https://bridgeia-production.up.railway.app
 
 RUN npm run build
 
