@@ -1,16 +1,19 @@
-"""E2E test: full BridgeAI workflow via Chromium (Playwright).
+"""E2E happy-path test: full BridgeAI workflow via Chromium (Playwright).
+
+All /api/v1/* calls are intercepted with page.route() so the test runs
+without real auth tokens, Jira credentials, or AI providers.
 
 REQUIREMENTS:
-1. Frontend running: cd frontend && npm run dev
-2. API running: python -m uvicorn app.main:app --reload
-3. Playwright browser: npm install -D @playwright/test
+  Terminal 1: python -m uvicorn app.main:app --reload
+  Terminal 2: cd frontend && npm run dev
 
 RUN:
-    pytest tests/e2e/ -v -s
+  pytest tests/e2e/test_workflow.py -v -s -m e2e
 """
+import json
 import pytest
 from pathlib import Path
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, Route, expect
 
 FRONTEND = "http://localhost:3000"
 SCREENSHOTS_DIR = Path(__file__).parent / "screenshots"
@@ -20,12 +23,151 @@ REQ = (
     "so that I can recover my account if I forget my credentials."
 )
 
+# ---------------------------------------------------------------------------
+# Mock data
+# ---------------------------------------------------------------------------
 
-def shot(page, name: str) -> None:
+_CONN_GITHUB = {
+    "id": "conn-gh-test",
+    "platform": "github",
+    "display_name": "Test GitHub",
+    "repo_full_name": "test-org/test-repo",
+    "default_branch": "main",
+    "is_active": True,
+    "created_at": "2024-01-01T00:00:00Z",
+}
+
+_CONN_JIRA = {
+    "id": "conn-jira-test",
+    "platform": "jira",
+    "display_name": "Test Jira",
+    # repo_full_name stores the Jira site URL — required for hasSite=true in Step1
+    "repo_full_name": "https://test.atlassian.net",
+    "is_active": True,
+    "created_at": "2024-01-01T00:00:00Z",
+}
+
+_STORY_DETAIL = {
+    "story_id": "story-test",
+    "source_connection_id": "conn-gh-test",
+    "requirement_id": "req-test",
+    "impact_analysis_id": "analysis-test",
+    "project_id": "test-org/test-repo",
+    "title": "Password Reset via Email",
+    "story_description": "As a registered user I can reset my password via email.",
+    "acceptance_criteria": [
+        "Given I am on the login page, when I click 'Forgot password', then I see an email form.",
+        "Given I submit a valid email, then I receive a reset link within 5 minutes.",
+    ],
+    "subtasks": {
+        "frontend": ["Add forgot-password link", "Build reset-password form"],
+        "backend": ["Implement reset token generation", "Send reset email"],
+        "configuration": [],
+    },
+    "definition_of_done": ["Unit tests pass", "E2E test covers happy path"],
+    "risk_notes": ["Token expiry must be validated server-side"],
+    "story_points": 5,
+    "risk_level": "medium",
+    "created_at": "2024-01-01T00:00:00Z",
+    "generation_time_seconds": 1.0,
+}
+
+
+def _setup_routes(page) -> None:
+    """Intercept all /api/v1/* requests and return deterministic stub data."""
+
+    def handle(route: Route) -> None:
+        url = route.request.url
+        method = route.request.method
+
+        def ok(body: object) -> None:
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(body),
+            )
+
+        # Order matters: more-specific patterns first.
+        if "/api/v1/connections/active" in url:
+            ok(_CONN_GITHUB)
+
+        elif "/jira-projects" in url:
+            # Return empty list → Step4 shows a text input instead of a select
+            ok([])
+
+        elif "/api/v1/connections" in url and method == "GET":
+            ok([_CONN_JIRA, _CONN_GITHUB])
+
+        elif "/api/v1/index/status" in url:
+            ok({"total_files": 150, "last_indexed_at": "2024-01-01T00:00:00Z"})
+
+        elif "/api/v1/index" in url and method == "POST":
+            ok({
+                "files_indexed": 150,
+                "files_scanned": 150,
+                "files_updated": 0,
+                "files_skipped": 0,
+                "duration_seconds": 1.2,
+                "source": "github",
+                "repo_full_name": "test-org/test-repo",
+            })
+
+        elif "/api/v1/understand-requirement" in url:
+            ok({
+                "requirement_id": "req-test",
+                "source_connection_id": "conn-gh-test",
+                "intent": "account_recovery",
+                "feature_type": "authentication",
+                "estimated_complexity": "medium",
+                "keywords": ["password", "email", "reset"],
+            })
+
+        elif "/api/v1/impact-analysis" in url:
+            ok({
+                "analysis_id": "analysis-test",
+                "source_connection_id": "conn-gh-test",
+                "files_impacted": 5,
+                "modules_impacted": ["auth", "email"],
+                "risk_level": "medium",
+            })
+
+        elif "/api/v1/generate-story" in url:
+            ok({
+                "story_id": "story-test",
+                "source_connection_id": "conn-gh-test",
+                "title": "Password Reset via Email",
+                "story_points": 5,
+                "risk_level": "medium",
+                "generation_time_seconds": 1.0,
+            })
+
+        elif "/api/v1/stories/" in url:
+            ok(_STORY_DETAIL)
+
+        elif "/api/v1/tickets" in url and method == "POST":
+            ok({
+                "ticket_id": "TEST-123",
+                "url": "https://test.atlassian.net/browse/TEST-123",
+                "provider": "jira",
+                "status": "created",
+                "message": "Ticket created successfully",
+            })
+
+        else:
+            route.continue_()
+
+    page.route("**/api/v1/**", handle)
+
+
+def _shot(page, name: str) -> None:
     path = SCREENSHOTS_DIR / f"{name}.png"
     page.screenshot(path=str(path), full_page=True)
     print(f"  [SCREENSHOT] {name}.png")
 
+
+# ---------------------------------------------------------------------------
+# Test
+# ---------------------------------------------------------------------------
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -33,277 +175,83 @@ def test_full_workflow():
     SCREENSHOTS_DIR.mkdir(exist_ok=True)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False, slow_mo=300)
+        browser = p.chromium.launch(headless=False, slow_mo=200)
         ctx = browser.new_context(viewport={"width": 1280, "height": 900})
         page = ctx.new_page()
 
-        # ── Check Frontend Available ──────────────────────────────────────
-        print(f"\n[0] Checking frontend at {FRONTEND}…")
-        try:
-            page.goto(FRONTEND, timeout=8000)
-            page.wait_for_load_state("networkidle", timeout=10000)
-            print(f"  [OK] Frontend is available")
-        except Exception as e:
-            print(f"  [ERROR] Frontend not available at {FRONTEND}")
-            print(f"     Make sure to run: cd frontend && npm run dev")
-            print(f"     Error: {e}")
-            raise
+        # Route mocks must be registered before the first navigation.
+        _setup_routes(page)
 
-        # ── Indexing ──────────────────────────────────────────────────────
-        print("\n[2] Indexing")
+        # ── [1] Indexing page ─────────────────────────────────────────────
+        print("\n[1] Indexing page")
         page.goto(f"{FRONTEND}/indexing")
         page.wait_for_load_state("networkidle")
-        shot(page, "02_indexing")
+        _shot(page, "01_indexing")
 
-        # Look for Index button in any language
-        idx_btn = None
-        buttons = page.locator("button")
-        for i in range(buttons.count()):
-            btn = buttons.nth(i)
-            text = btn.text_content() or ""
-            if "index" in text.lower():
-                idx_btn = btn
-                break
-        
-        if idx_btn:
-            print("  clicking index button...")
-            idx_btn.click()
-            page.wait_for_timeout(500)
-            shot(page, "03_indexing_done")
-        else:
-            print("  index button not found, skipping")
+        # Button is enabled only when hasActiveRepo (from mocked /connections/active)
+        index_btn = page.locator("button", has_text="Indexar codigo").first
+        expect(index_btn).to_be_enabled(timeout=8000)
+        index_btn.click()
 
-        # ── Step 1: Understand Requirement ────────────────────────────────
-        print("\n[3] Workflow — Step 1: Understand Requirement")
+        # Wait for the success banner (shows duration after indexing)
+        page.wait_for_selector("text=Indexacion completada", timeout=10000)
+        _shot(page, "02_indexing_done")
+        print("  [OK] Indexing successful")
+
+        # ── [2] Workflow — Step 1: Understand Requirement ─────────────────
+        print("\n[2] Workflow — Step 1")
         page.goto(f"{FRONTEND}/workflow")
         page.wait_for_load_state("networkidle")
-        shot(page, "04_step1_empty")
+        _shot(page, "03_step1_empty")
 
-        print("  filling form...")
-        page.locator("input#project-id").fill("browser-test")
-        page.locator("textarea").fill(REQ)
-        page.wait_for_timeout(300)
-        shot(page, "05_step1_filled")
+        # Fill requirement text
+        textarea = page.locator("#requirement-text")
+        expect(textarea).to_be_visible(timeout=8000)
+        textarea.fill(REQ)
+        _shot(page, "04_step1_filled")
 
-        print("  looking for Analyze Requirement button...")
-        try:
-            # The button text might be in different languages
-            # Spanish: "Analizar requerimiento"
-            # English: "Analyze Requirement"
-            # Look for any button containing either word
-            
-            analyze_btn = None
-            all_buttons = page.locator("button")
-            print(f"  Total buttons on page: {all_buttons.count()}")
-            
-            # Try to find button with text containing "Analizar", "Analyze", or "requerimiento"
-            for i in range(all_buttons.count()):
-                btn = all_buttons.nth(i)
-                text = btn.text_content() or ""
-                if any(keyword in text.lower() for keyword in ["analizar", "analyze", "requerimiento", "requirement"]):
-                    if text.strip():  # Make sure it has actual text
-                        analyze_btn = btn
-                        print(f"  [OK] Found button: '{text}'")
-                        break
-            
-            if analyze_btn:
-                analyze_btn.scroll_into_view_if_needed()
-                page.wait_for_timeout(300)
-                print("  [OK] clicking button...")
-                analyze_btn.click()
-                print("  [OK] button clicked successfully")
-            else:
-                print(f"  [ERROR] Could not find Analyze/Analizar button")
-                shot(page, "ERROR_button_not_found")
-                raise RuntimeError("Analyze Requirement button not found")
-                
-        except Exception as e:
-            print(f"  [ERROR] {e}")
-            shot(page, "ERROR_button_analyzing")
-            raise
-        
-        print("  waiting for API response (dynamic wait)...")
-        # Wait dynamically for Impact Analysis button to appear
-        try:
-            page.wait_for_selector("button:has-text(/[Ii]mpacto|[Ii]mpact/)", timeout=12000)
-            print("  [OK] Impact Analysis button loaded")
-        except:
-            print("  [WARN] Impact Analysis button not detected, using fallback...")
-            page.wait_for_timeout(2000)
-        
-        shot(page, "06_step1_done")
+        # Wait for button to become enabled (isReady requires: ticketConn + hasSite + hasRepo + isIndexed)
+        analyze_btn = page.locator("button", has_text="Analizar requerimiento").first
+        expect(analyze_btn).to_be_enabled(timeout=8000)
+        analyze_btn.click()
+        print("  [OK] Clicked 'Analizar requerimiento'")
 
-        # ── Step 2: Impact Analysis ───────────────────────────────────────
-        print("\n[4] Workflow — Step 2: Impact Analysis")
-        page.wait_for_timeout(300)  # Minimal wait before search
-        
-        try:
-            # Look for Impact button (Spanish: Analizar impacto, English: Analyze Impact)
-            impact_btn = None
-            all_buttons = page.locator("button")
-            print(f"  Total buttons visible: {all_buttons.count()}")
-            
-            for i in range(all_buttons.count()):
-                btn = all_buttons.nth(i)
-                text = btn.text_content() or ""
-                print(f"    Button {i}: '{text}'")
-                if any(keyword in text.lower() for keyword in ["impacto", "impact"]):
-                    if text.strip() and len(text) > 3:
-                        impact_btn = btn
-                        print(f"  [OK] Found Impact button: '{text}'")
-                        break
-            
-            if impact_btn:
-                print("  [OK] clicking button...")
-                impact_btn.scroll_into_view_if_needed()
-                page.wait_for_timeout(200)
-                impact_btn.click()
-                print("  [OK] waiting for API response (dynamic wait)...")
-                
-                # Instead of fixed wait, wait for the "Generate Story" button to appear
-                try:
-                    page.wait_for_selector("button:has-text(/[Gg]enerar|[Gg]enerate/)", timeout=15000)
-                    print("  [OK] Generate button appeared, Impact Analysis complete")
-                except:
-                    # Fallback to shorter fixed wait if selector fails
-                    print("  [WARN] Generate button not detected, using fallback wait...")
-                    page.wait_for_timeout(5000)
-                
-                shot(page, "07_step2_done")
-            else:
-                print("  [WARN] Impact Analysis button not found")
-                print("  Taking debug screenshot...")
-                shot(page, "DEBUG_step2_buttons")
-        except Exception as e:
-            print(f"  [ERROR] {e}")
-            shot(page, "ERROR_impact_button_not_found")
+        # ── [3] Workflow — Step 2: Impact Analysis ────────────────────────
+        print("\n[3] Workflow — Step 2")
+        impact_btn = page.locator("button", has_text="Analizar impacto").first
+        expect(impact_btn).to_be_visible(timeout=8000)
+        _shot(page, "05_step2")
+        impact_btn.click()
+        print("  [OK] Clicked 'Analizar impacto'")
 
-        # ── Step 3: Generate Story ────────────────────────────────────────
-        print("\n[5] Workflow — Step 3: Generate Story")
-        page.wait_for_timeout(300)  # Minimal wait before search
-        
-        try:
-            # Look for Generate Story button (Spanish: Generar historia, English: Generate Story)
-            generate_btn = None
-            all_buttons = page.locator("button")
-            print(f"  Total buttons visible: {all_buttons.count()}")
-            
-            for i in range(all_buttons.count()):
-                btn = all_buttons.nth(i)
-                text = btn.text_content() or ""
-                print(f"    Button {i}: '{text}'")
-                if any(keyword in text.lower() for keyword in ["generar", "generate", "historia", "story"]):
-                    if text.strip() and len(text) > 3:
-                        generate_btn = btn
-                        print(f"  [OK] Found Generate button: '{text}'")
-                        break
-            
-            if generate_btn:
-                print("  [OK] clicking button...")
-                print("  (Waiting for LLM response, up to 90s)...")
-                generate_btn.scroll_into_view_if_needed()
-                page.wait_for_timeout(200)
-                
-                try:
-                    with page.expect_response(
-                        lambda r: "/api/v1/generate-story" in r.url and r.request.method == "POST",
-                        timeout=90000,  # 90s for LLM (more realistic)
-                    ) as resp_info:
-                        generate_btn.click()
-                    resp = resp_info.value
-                    print(f"  [OK] generate-story response: {resp.status}")
-                except:
-                    print("  [WARN] no response captured, waiting...")
-                    page.wait_for_timeout(5000)
-                
-                # Wait dynamically for Create Ticket button to appear
-                try:
-                    page.wait_for_selector("button:has-text(/[Cc]rear|[Cc]reate/)", timeout=10000)
-                    print("  [OK] Create Ticket button loaded")
-                except:
-                    print("  [WARN] Create Ticket button not detected yet")
-                
-                shot(page, "08_step3_done")
-            else:
-                print("  [WARN] Generate Story button not found")
-                print("  Taking debug screenshot...")
-                shot(page, "DEBUG_step3_buttons")
-        except Exception as e:
-            print(f"  [ERROR] {e}")
-            shot(page, "ERROR_generate_button_not_found")
+        # ── [4] Workflow — Step 3: Generate Story ─────────────────────────
+        print("\n[4] Workflow — Step 3")
+        generate_btn = page.locator("button", has_text="Generar historia").first
+        expect(generate_btn).to_be_visible(timeout=8000)
+        _shot(page, "06_step3")
+        generate_btn.click()
+        print("  [OK] Clicked 'Generar historia'")
 
-        # ── Step 4: Create Ticket ─────────────────────────────────────────
-        print("\n[6] Workflow — Step 4: Create Ticket")
-        page.wait_for_timeout(300)  # Minimal wait before search
-        
-        try:
-            shot(page, "09_step4_loaded")
-            
-            # Look for Create Ticket button
-            create_ticket_btn = None
-            all_buttons = page.locator("button")
-            print(f"  Total buttons visible: {all_buttons.count()}")
-            
-            for i in range(all_buttons.count()):
-                btn = all_buttons.nth(i)
-                text = btn.text_content() or ""
-                if any(keyword in text.lower() for keyword in ["crear", "create", "ticket", "entidad"]):
-                    if text.strip() and len(text) > 3:
-                        create_ticket_btn = btn
-                        print(f"  [OK] Found Create Ticket button: '{text}'")
-                        break
-            
-            # Also look for project key input field
-            project_key_input = page.locator(
-                "input[placeholder*='project' i], input[placeholder*='key' i], input[placeholder*='JIRA' i]"
-            )
-            
-            if project_key_input.count():
-                print(f"  Found project key input field")
-                project_key_input.first.fill("BRIDGE")
-                shot(page, "10_step4_filled")
-            
-            # Try to create ticket if button exists
-            if create_ticket_btn:
-                print("  [OK] clicking Create Ticket button...")
-                create_ticket_btn.scroll_into_view_if_needed()
-                page.wait_for_timeout(200)
-                
-                try:
-                    with page.expect_response(
-                        lambda r: "ticket" in r.url.lower() or "integration" in r.url.lower(),
-                        timeout=15000,  # Reduced from 20s
-                    ) as resp_info:
-                        create_ticket_btn.click()
-                    resp = resp_info.value
-                    print(f"  [OK] ticket response: {resp.status}")
-                    
-                    # Wait dynamically for success feedback
-                    try:
-                        page.wait_for_selector("text=/[Éé]xito|[Cc]reado|[Ss]uccess|[Cc]reated/", timeout=5000)
-                        print("  [OK] Ticket creation confirmed")
-                    except:
-                        print("  [INFO] Ticket created (no confirmation message)")
-                except:
-                    print("  [WARN] no ticket response captured")
-            else:
-                print("  [INFO] Create Ticket button not found (normal - may require valid Jira config)")
-                
-        except Exception as e:
-            print(f"  [ERROR] Step 4: {e}")
-            shot(page, "ERROR_step4_failed")
+        # ── [5] Workflow — Step 4: Create Ticket ──────────────────────────
+        print("\n[5] Workflow — Step 4")
+        # project-key is an <input> when jira-projects returns []
+        project_key = page.locator("#project-key")
+        expect(project_key).to_be_visible(timeout=8000)
+        project_key.fill("SCRUM")
+        _shot(page, "07_step4")
 
-        page.wait_for_timeout(300)
-        shot(page, "11_final")
+        create_btn = page.locator("button", has_text="Crear ticket").first
+        expect(create_btn).to_be_enabled(timeout=5000)
+        create_btn.click()
+        print("  [OK] Clicked 'Crear ticket'")
 
-        print(f"\n[DONE] E2E Workflow Complete - screenshots in {SCREENSHOTS_DIR}")
-        
-        print("\nClosing browser...")
+        # ── [6] Assert success ────────────────────────────────────────────
+        page.wait_for_selector("text=Ticket creado con exito", timeout=8000)
+        _shot(page, "08_success")
+        print("  [OK] Ticket creation confirmed")
+
+        print(f"\n[DONE] E2E happy path complete — screenshots in {SCREENSHOTS_DIR}")
+
         page.close()
         ctx.close()
         browser.close()
-        print("[OK] Browser closed")
-
-
-if __name__ == "__main__":
-    test_full_workflow()
