@@ -45,6 +45,7 @@ if (process.env.APP_URL) {
 // ── Next.js config ────────────────────────────────────────────────────────────
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   experimental: {
     serverActions: {
       allowedOrigins: ["localhost:3000", ...extraOrigins],
