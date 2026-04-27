@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     # different host.
     TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
 
+    # Field-level encryption for sensitive DB columns (OAuth tokens, PATs)
+    # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # Required for DORA compliance. Tokens are stored unencrypted with a warning when absent.
+    FIELD_ENCRYPTION_KEY: str = ""
+
     # Auth0
     AUTH0_DOMAIN: str = ""      # e.g. "my-tenant.eu.auth0.com"
     AUTH0_AUDIENCE: str = ""    # e.g. "https://api.bridgeai.com"

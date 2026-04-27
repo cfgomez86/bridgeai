@@ -58,6 +58,19 @@ interface Translations {
       delete: string
       disconnect: string
     }
+    pat: {
+      modal_title: string
+      token_label: string
+      token_placeholder: string
+      org_url_label: string
+      org_url_placeholder: string
+      base_url_label: string
+      base_url_placeholder: string
+      base_url_optional: string
+      connect_btn: string
+      connecting: string
+      use_pat: string
+    }
     card: {
       active_badge: string
       select_repo: string
@@ -219,7 +232,6 @@ interface Translations {
   settings: {
     sections: {
       integrations: string
-      generation: string
       language: string
       theme: string
     }
@@ -243,16 +255,6 @@ interface Translations {
         project: string
         area_path: string
         iteration_path: string
-      }
-    }
-    generation: {
-      title: string
-      rules: {
-        max_stories: { label: string; description: string }
-        gherkin: { label: string; description: string }
-        story_points: { label: string; description: string }
-        link_files: { label: string; description: string }
-        auto_assign: { label: string; description: string }
       }
     }
     language: {
@@ -336,6 +338,19 @@ const es: Translations = {
       save: "Error al guardar la configuracion.",
       delete: "Error al eliminar la configuracion.",
       disconnect: "Error al desconectar la cuenta.",
+    },
+    pat: {
+      modal_title: "Conectar con Token de Acceso Personal",
+      token_label: "Token de Acceso Personal",
+      token_placeholder: "Pega tu token aqui...",
+      org_url_label: "URL de la organizacion",
+      org_url_placeholder: "https://dev.azure.com/mi-org",
+      base_url_label: "URL base (instancia propia)",
+      base_url_placeholder: "https://gitlab.miempresa.com",
+      base_url_optional: "Opcional — solo para GitLab auto-hospedado",
+      connect_btn: "Conectar",
+      connecting: "Conectando...",
+      use_pat: "Usar PAT",
     },
     card: {
       active_badge: "activo",
@@ -498,7 +513,6 @@ const es: Translations = {
   settings: {
     sections: {
       integrations: "Integraciones",
-      generation: "Generacion",
       language: "Idioma",
       theme: "Apariencia",
     },
@@ -522,31 +536,6 @@ const es: Translations = {
         project: "Proyecto",
         area_path: "Area path",
         iteration_path: "Iteration path",
-      },
-    },
-    generation: {
-      title: "Reglas de generacion",
-      rules: {
-        max_stories: {
-          label: "Max. historias por requerimiento",
-          description: "Numero maximo de historias generadas por analisis.",
-        },
-        gherkin: {
-          label: "Formato Gherkin en criterios",
-          description: "Los criterios de aceptacion se escriben en Given/When/Then.",
-        },
-        story_points: {
-          label: "Incluir story points",
-          description: "Estima automaticamente los puntos de esfuerzo.",
-        },
-        link_files: {
-          label: "Enlazar archivos afectados",
-          description: "Adjunta la lista de archivos impactados al ticket.",
-        },
-        auto_assign: {
-          label: "Auto-asignar al creador",
-          description: "Asigna el ticket al usuario que lo genera.",
-        },
       },
     },
     language: {
@@ -650,6 +639,19 @@ const en: Translations = {
       save: "Error saving configuration.",
       delete: "Error deleting configuration.",
       disconnect: "Error disconnecting account.",
+    },
+    pat: {
+      modal_title: "Connect with Personal Access Token",
+      token_label: "Personal Access Token",
+      token_placeholder: "Paste your token here...",
+      org_url_label: "Organization URL",
+      org_url_placeholder: "https://dev.azure.com/my-org",
+      base_url_label: "Base URL (self-hosted)",
+      base_url_placeholder: "https://gitlab.mycompany.com",
+      base_url_optional: "Optional — only for self-hosted GitLab",
+      connect_btn: "Connect",
+      connecting: "Connecting...",
+      use_pat: "Use PAT",
     },
     card: {
       active_badge: "active",
@@ -812,7 +814,6 @@ const en: Translations = {
   settings: {
     sections: {
       integrations: "Integrations",
-      generation: "Generation",
       language: "Language",
       theme: "Appearance",
     },
@@ -836,31 +837,6 @@ const en: Translations = {
         project: "Project",
         area_path: "Area path",
         iteration_path: "Iteration path",
-      },
-    },
-    generation: {
-      title: "Generation rules",
-      rules: {
-        max_stories: {
-          label: "Max. stories per requirement",
-          description: "Maximum number of stories generated per analysis.",
-        },
-        gherkin: {
-          label: "Gherkin format in criteria",
-          description: "Acceptance criteria written in Given/When/Then format.",
-        },
-        story_points: {
-          label: "Include story points",
-          description: "Automatically estimate effort points.",
-        },
-        link_files: {
-          label: "Link affected files",
-          description: "Attach the list of impacted files to the ticket.",
-        },
-        auto_assign: {
-          label: "Auto-assign to creator",
-          description: "Assign the ticket to the user who generates it.",
-        },
       },
     },
     language: {

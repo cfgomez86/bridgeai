@@ -220,6 +220,7 @@ class CodeIndexingService:
         branch: str,
         force: bool = False,
         source_connection_id: Optional[str] = None,
+        base_url: Optional[str] = None,
     ) -> IndexingResult:
         max_workers = self._max_workers
         logger.info(
@@ -229,7 +230,7 @@ class CodeIndexingService:
         start = time.monotonic()
 
         # 1. Get tree (single API call)
-        entries = provider.list_tree(access_token, repo_full_name, branch)
+        entries = provider.list_tree(access_token, repo_full_name, branch, base_url=base_url)
         relevant = [
             e for e in entries
             if os.path.splitext(e.path)[1].lower() in self._language_map
@@ -264,7 +265,7 @@ class CodeIndexingService:
         _CONTENT_CAP = 51_200
 
         def _fetch(entry, existing):
-            content = provider.get_file_content(access_token, repo_full_name, entry.path, sha=entry.sha)
+            content = provider.get_file_content(access_token, repo_full_name, entry.path, sha=entry.sha, base_url=base_url)
             return entry, existing, content
 
         workers = min(max_workers, len(to_fetch)) if to_fetch else 1

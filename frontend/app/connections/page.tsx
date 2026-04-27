@@ -11,6 +11,8 @@ import {
 import { useLanguage } from "@/lib/i18n"
 import { BadgeStatus } from "@/components/ui/badge-status"
 import { ConnectionCard } from "@/components/features/connections/ConnectionCard"
+import { PatConnectModal } from "@/components/features/connections/PatConnectModal"
+import { PatHelpDrawer } from "@/components/features/connections/PatHelpDrawer"
 
 const PLATFORM_LABELS: Record<string, string> = {
   github: "GitHub",
@@ -28,6 +30,7 @@ const PLATFORM_ICONS: Record<string, string> = {
 }
 
 const SCM_PLATFORMS = new Set(["github", "gitlab", "azure_devops", "bitbucket"])
+const PAT_PLATFORMS = new Set(["github", "gitlab", "azure_devops", "bitbucket"])
 
 // Shown immediately on paint — server_configured updates after the API responds
 const STATIC_PLATFORMS: PlatformResponse[] = [
@@ -43,10 +46,14 @@ function PlatformCardDesign({
   platform,
   connections,
   onUpdated,
+  onOpenPat,
+  onOpenHelp,
 }: {
   platform: PlatformResponse
   connections: ConnectionResponse[]
   onUpdated: () => void
+  onOpenPat: (platform: string) => void
+  onOpenHelp: (platform: string) => void
 }) {
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
@@ -188,6 +195,50 @@ function PlatformCardDesign({
           {s.actions.connect_first}
         </button>
       )}
+
+      {!conn && PAT_PLATFORMS.has(platform.platform) && (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
+            type="button"
+            onClick={() => onOpenPat(platform.platform)}
+            style={{
+              padding: "0",
+              border: "none",
+              background: "transparent",
+              color: "var(--muted)",
+              fontSize: "11.5px",
+              cursor: "pointer",
+              textDecoration: "underline",
+              textDecorationColor: "var(--border-strong)",
+              textUnderlineOffset: "2px",
+            }}
+          >
+            {s.pat.use_pat}
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenHelp(platform.platform)}
+            title="Ver instrucciones"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "18px",
+              height: "18px",
+              borderRadius: "50%",
+              border: "1px solid var(--border)",
+              background: "var(--surface-2)",
+              color: "var(--muted)",
+              fontSize: "10px",
+              fontWeight: 700,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            ?
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -202,6 +253,8 @@ function ConnectionsContent() {
   const [connections, setConnections] = useState<ConnectionResponse[]>([])
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "err" } | null>(null)
   const [activeSection, setActiveSection] = useState("repositorios")
+  const [patModalPlatform, setPatModalPlatform] = useState<string | null>(null)
+  const [helpPlatform, setHelpPlatform] = useState<string | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const refreshingRef = useRef(false)
   const { t } = useLanguage()
@@ -253,6 +306,15 @@ function ConnectionsContent() {
     { id: "repositorios",  label: s.sections.repositories },
     { id: "herramientas",  label: s.sections.management_tools },
   ]
+
+  function handlePatConnected() {
+    const label = PLATFORM_LABELS[patModalPlatform ?? ""] ?? patModalPlatform
+    setPatModalPlatform(null)
+    refresh()
+    setToast({ msg: `${s.toast_connected} ${label}`, tone: "ok" })
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 5000)
+  }
 
   return (
     <>
@@ -356,6 +418,8 @@ function ConnectionsContent() {
                     platform={p}
                     connections={connections.filter((c) => SCM_PLATFORMS.has(c.platform))}
                     onUpdated={refresh}
+                    onOpenPat={setPatModalPlatform}
+                    onOpenHelp={setHelpPlatform}
                   />
                 ))}
               </div>
@@ -386,6 +450,8 @@ function ConnectionsContent() {
                     platform={p}
                     connections={connections.filter((c) => !SCM_PLATFORMS.has(c.platform))}
                     onUpdated={refresh}
+                    onOpenPat={setPatModalPlatform}
+                    onOpenHelp={setHelpPlatform}
                   />
                 ))}
               </div>
@@ -393,6 +459,20 @@ function ConnectionsContent() {
           )}
         </div>
       </div>
+
+      <PatConnectModal
+        platform={patModalPlatform ?? ""}
+        isOpen={patModalPlatform !== null}
+        onClose={() => setPatModalPlatform(null)}
+        onConnected={handlePatConnected}
+        onOpenHelp={patModalPlatform ? () => { setPatModalPlatform(null); setHelpPlatform(patModalPlatform) } : undefined}
+      />
+
+      <PatHelpDrawer
+        platform={helpPlatform}
+        onClose={() => setHelpPlatform(null)}
+        onConnectPat={(p) => { setHelpPlatform(null); setPatModalPlatform(p) }}
+      />
     </>
   )
 }

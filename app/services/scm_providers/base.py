@@ -36,22 +36,31 @@ class ScmProvider(ABC):
         ...
 
     @abstractmethod
-    def list_repos(self, access_token: str) -> list[dict]:
+    def list_repos(self, access_token: str, **kwargs) -> list[dict]:
         """List repositories accessible with this token.
 
         Returns list of dicts with keys: full_name, name, owner, default_branch, private.
+        kwargs may include base_url (self-hosted) or org_url (Azure DevOps).
         """
         ...
 
     @abstractmethod
-    def list_tree(self, access_token: str, repo_full_name: str, branch: str) -> list[RemoteFileEntry]:
-        """Return all blob entries in the repo tree recursively."""
+    def list_tree(
+        self, access_token: str, repo_full_name: str, branch: str, base_url: str | None = None
+    ) -> list[RemoteFileEntry]:
+        """Return all blob entries in the repo tree recursively.
+
+        base_url: override for self-hosted instances (GitHub Enterprise, GitLab, Bitbucket DC).
+        """
         ...
 
     @abstractmethod
-    def get_file_content(self, access_token: str, repo_full_name: str, path: str, sha: str = "") -> str:
+    def get_file_content(
+        self, access_token: str, repo_full_name: str, path: str, sha: str = "", base_url: str | None = None
+    ) -> str:
         """Return decoded text content of a single file.
 
         sha: git blob SHA — providers may use it for faster cached fetching.
+        base_url: override for self-hosted instances.
         """
         ...

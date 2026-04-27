@@ -12,6 +12,12 @@ class GitHubProvider(ScmProvider):
     _TOKEN_URL = "https://github.com/login/oauth/access_token"
     _API_BASE = "https://api.github.com"
 
+    def _api_base(self, base_url: str | None) -> str:
+        # GitHub Enterprise Server exposes the same API under /api/v3
+        if base_url:
+            return f"{base_url.rstrip('/')}/api/v3"
+        return self._API_BASE
+
     def get_authorize_url(self, client_id: str, redirect_uri: str, state: str) -> str:
         params = urllib.parse.urlencode({
             "client_id": client_id,
@@ -53,11 +59,28 @@ class GitHubProvider(ScmProvider):
             data = json.loads(resp.read())
         return {"login": data.get("login", ""), "name": data.get("name") or data.get("login", "")}
 
-    def list_repos(self, access_token: str) -> list[dict]:
+    def validate_pat(self, token: str, base_url: str | None = None, **_kwargs) -> dict:
+        api = self._api_base(base_url)
+        req = urllib.request.Request(
+            f"{api}/user",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+        except Exception as exc:
+            raise ValueError(f"GitHub PAT invalid: {exc}") from exc
+        login = data.get("login", "")
+        if not login:
+            raise ValueError("GitHub PAT did not return a valid user")
+        return {"login": login}
+
+    def list_repos(self, access_token: str, base_url: str | None = None, **_kwargs) -> list[dict]:
+        api = self._api_base(base_url)
         repos: list[dict] = []
         page = 1
         while True:
-            url = f"{self._API_BASE}/user/repos?per_page=100&page={page}&sort=updated"
+            url = f"{api}/user/repos?per_page=100&page={page}&sort=updated"
             req = urllib.request.Request(
                 url,
                 headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
@@ -79,8 +102,11 @@ class GitHubProvider(ScmProvider):
             page += 1
         return repos
 
-    def list_tree(self, access_token: str, repo_full_name: str, branch: str) -> list[RemoteFileEntry]:
-        url = f"{self._API_BASE}/repos/{repo_full_name}/git/trees/{urllib.parse.quote(branch, safe='')}?recursive=1"
+    def list_tree(
+        self, access_token: str, repo_full_name: str, branch: str, base_url: str | None = None
+    ) -> list[RemoteFileEntry]:
+        api = self._api_base(base_url)
+        url = f"{api}/repos/{repo_full_name}/git/trees/{urllib.parse.quote(branch, safe='')}?recursive=1"
         req = urllib.request.Request(
             url,
             headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
@@ -93,11 +119,12 @@ class GitHubProvider(ScmProvider):
             if item["type"] == "blob"
         ]
 
-    def get_file_content(self, access_token: str, repo_full_name: str, path: str, sha: str = "") -> str:
+    def get_file_content(
+        self, access_token: str, repo_full_name: str, path: str, sha: str = "", base_url: str | None = None
+    ) -> str:
+        api = self._api_base(base_url)
         if sha:
-            # Blobs API returns raw bytes directly — no JSON parsing or base64 decoding.
-            # GitHub CDN caches blobs by SHA, so this is significantly faster.
-            url = f"{self._API_BASE}/repos/{repo_full_name}/git/blobs/{sha}"
+            url = f"{api}/repos/{repo_full_name}/git/blobs/{sha}"
             req = urllib.request.Request(
                 url,
                 headers={
@@ -108,7 +135,7 @@ class GitHubProvider(ScmProvider):
             with urllib.request.urlopen(req, timeout=60) as resp:
                 return resp.read().decode("utf-8", errors="replace")
 
-        url = f"{self._API_BASE}/repos/{repo_full_name}/contents/{urllib.parse.quote(path)}"
+        url = f"{api}/repos/{repo_full_name}/contents/{urllib.parse.quote(path)}"
         req = urllib.request.Request(
             url,
             headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},

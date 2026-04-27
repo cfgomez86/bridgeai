@@ -6,13 +6,14 @@ from sqlalchemy.orm import Session
 
 from app.core.auth0_auth import get_current_user
 from app.core.config import Settings, get_settings
-from app.models.user import User
-
-SUPPORTED_PLATFORMS_SET = {"github", "gitlab", "azure_devops", "jira"}
 from app.database.session import get_db
+from app.models.user import User
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.source_connection_service import SourceConnectionService
+
+SUPPORTED_PLATFORMS_SET = {"github", "gitlab", "azure_devops", "jira"}
+_PAT_SUPPORTED_PLATFORMS = {"github", "gitlab", "azure_devops", "bitbucket"}
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class ConnectionResponse(BaseModel):
     owner: str | None
     default_branch: str
     is_active: bool
+    auth_method: str = "oauth"
 
 
 class RepoResponse(BaseModel):
@@ -58,6 +60,13 @@ class RepoResponse(BaseModel):
 class ActivateRequest(BaseModel):
     repo_full_name: str
     default_branch: str = "main"
+
+
+class PATConnectRequest(BaseModel):
+    platform: str
+    token: str
+    org_url: str | None = None   # Required for Azure DevOps PAT
+    base_url: str | None = None  # Optional for GitLab self-hosted
 
 
 # ── Platform listing ────────────────────────────────────────────────────────
@@ -146,6 +155,44 @@ def oauth_callback(
         return RedirectResponse(url=f"{frontend_url}/connections?error={platform}")
 
 
+# ── PAT connection endpoint ─────────────────────────────────────────────────
+
+@router.post("/pat", response_model=ConnectionResponse, status_code=status.HTTP_201_CREATED)
+def connect_pat(
+    body: PATConnectRequest,
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
+    if body.platform not in _PAT_SUPPORTED_PLATFORMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"PAT connections are not supported for platform {body.platform!r}. Supported: {sorted(_PAT_SUPPORTED_PLATFORMS)}",
+        )
+    try:
+        conn = service.create_pat_connection(
+            platform=body.platform,
+            token=body.token,
+            org_url=body.org_url,
+            base_url=body.base_url,
+        )
+        return ConnectionResponse(
+            id=conn.id,
+            platform=conn.platform,
+            display_name=conn.display_name,
+            repo_full_name=conn.repo_full_name,
+            repo_name=conn.repo_name,
+            owner=conn.owner,
+            default_branch=conn.default_branch,
+            is_active=conn.is_active,
+            auth_method=conn.auth_method,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:
+        logger.error("PAT connection failed platform=%s error=%s", body.platform, exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="PAT validation failed — check the token and try again.")
+
+
 # ── Connection management endpoints ─────────────────────────────────────────
 
 @router.get("", response_model=list[ConnectionResponse])
@@ -164,6 +211,7 @@ def list_connections(
             owner=c.owner,
             default_branch=c.default_branch,
             is_active=c.is_active,
+            auth_method=c.auth_method,
         )
         for c in conns
     ]
@@ -186,6 +234,7 @@ def get_active(
         owner=conn.owner,
         default_branch=conn.default_branch,
         is_active=conn.is_active,
+        auth_method=conn.auth_method,
     )
 
 
@@ -262,9 +311,40 @@ def activate_repo(
             owner=conn.owner,
             default_branch=conn.default_branch,
             is_active=conn.is_active,
+            auth_method=conn.auth_method,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+# ── Audit log endpoints ─────────────────────────────────────────────────────
+
+class AuditLogEntry(BaseModel):
+    id: str
+    connection_id: str
+    platform: str
+    auth_method: str
+    event: str
+    actor: str
+    detail: str | None
+    timestamp: str
+
+
+@router.get("/audit", response_model=list[AuditLogEntry])
+def list_all_audit_logs(
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
+    return service.list_audit_logs()
+
+
+@router.get("/{connection_id}/audit", response_model=list[AuditLogEntry])
+def list_connection_audit_logs(
+    connection_id: str,
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
+    return service.list_audit_logs(connection_id=connection_id)
 
 
 # ── Jira site selection ──────────────────────────────────────────────────────
@@ -340,6 +420,7 @@ def activate_site(
             owner=conn.owner,
             default_branch=conn.default_branch,
             is_active=conn.is_active,
+            auth_method=conn.auth_method,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

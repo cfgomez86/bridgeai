@@ -8,6 +8,7 @@ from app.core.context import current_tenant_id, get_tenant_id
 
 _SCM_PLATFORMS = {"github", "gitlab", "azure_devops", "bitbucket"}
 from app.models.code_file import CodeFile
+from app.models.connection_audit_log import ConnectionAuditLog
 from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
 from app.models.oauth_state import OAuthState
 from app.models.requirement import Requirement
@@ -83,6 +84,8 @@ class SourceConnectionRepository:
         display_name: str,
         access_token: str,
         refresh_token: Optional[str],
+        auth_method: str = "oauth",
+        base_url: Optional[str] = None,
     ) -> SourceConnection:
         conn = SourceConnection(
             id=str(uuid4()),
@@ -91,6 +94,8 @@ class SourceConnectionRepository:
             display_name=display_name,
             access_token=access_token,
             refresh_token=refresh_token,
+            auth_method=auth_method,
+            base_url=base_url,
             created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         self._db.add(conn)
@@ -197,3 +202,48 @@ class SourceConnectionRepository:
         self._db.delete(conn)
         self._db.commit()
         return True
+
+    # ── Audit log ───────────────────────────────────────────────────────────
+
+    def log_event(
+        self,
+        connection_id: str,
+        platform: str,
+        auth_method: str,
+        event: str,
+        actor: str,
+        detail: Optional[str] = None,
+    ) -> None:
+        entry = ConnectionAuditLog(
+            id=str(uuid4()),
+            tenant_id=self._tid(),
+            connection_id=connection_id,
+            platform=platform,
+            auth_method=auth_method,
+            event=event,
+            actor=actor,
+            detail=detail,
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        self._db.add(entry)
+        self._db.commit()
+
+    def get_audit_logs(self, limit: int = 100) -> list[ConnectionAuditLog]:
+        return (
+            self._db.query(ConnectionAuditLog)
+            .filter(ConnectionAuditLog.tenant_id == self._tid())
+            .order_by(ConnectionAuditLog.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def get_audit_logs_for_connection(self, connection_id: str) -> list[ConnectionAuditLog]:
+        return (
+            self._db.query(ConnectionAuditLog)
+            .filter(
+                ConnectionAuditLog.tenant_id == self._tid(),
+                ConnectionAuditLog.connection_id == connection_id,
+            )
+            .order_by(ConnectionAuditLog.timestamp.desc())
+            .all()
+        )

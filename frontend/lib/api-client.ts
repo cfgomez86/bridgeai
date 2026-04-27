@@ -70,6 +70,7 @@ export interface ConnectionResponse {
   default_branch?: string | null
   is_active?: boolean
   created_at: string
+  auth_method?: string
 }
 
 export interface RepoResponse {
@@ -161,6 +162,18 @@ export async function getOAuthAuthorizeUrl(platform: string): Promise<{ url: str
   )
 }
 
+
+export async function createPatConnection(
+  platform: string,
+  token: string,
+  orgUrl?: string,
+  baseUrl?: string,
+): Promise<ConnectionResponse> {
+  return apiFetch<ConnectionResponse>("/api/v1/connections/pat", {
+    method: "POST",
+    body: JSON.stringify({ platform, token, org_url: orgUrl, base_url: baseUrl }),
+  })
+}
 
 export async function deleteConnection(connectionId: string): Promise<void> {
   await apiFetch<unknown>(`/api/v1/connections/${connectionId}`, {

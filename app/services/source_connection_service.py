@@ -29,6 +29,7 @@ def _to_domain_connection(orm: SourceConnectionORM) -> SourceConnection:
         default_branch=orm.default_branch,
         is_active=orm.is_active,
         created_at=orm.created_at,
+        auth_method=orm.auth_method,
     )
 
 
@@ -125,7 +126,49 @@ class SourceConnectionService:
             access_token=tokens["access_token"],
             refresh_token=tokens.get("refresh_token"),
         )
+        self._repo.log_event(
+            connection_id=orm.id,
+            platform=platform,
+            auth_method="oauth",
+            event="connection_created",
+            actor=user_info["login"],
+        )
         logger.info("OAuth callback success platform=%s user=%s", platform, user_info["login"])
+        return _to_domain_connection(orm)
+
+    # ── PAT connection ──────────────────────────────────────────────────────
+
+    def create_pat_connection(
+        self,
+        platform: str,
+        token: str,
+        org_url: str | None = None,
+        base_url: str | None = None,
+    ) -> SourceConnection:
+        provider = get_provider(platform)
+        try:
+            user_info = provider.validate_pat(token, org_url=org_url, base_url=base_url)  # type: ignore[call-arg]
+        except Exception as exc:
+            raise ValueError(f"PAT validation failed: {exc}") from exc
+
+        display_name = user_info.get("login") or user_info.get("display_name", "")
+        stored_base_url = org_url or base_url or None
+        orm = self._repo.create_connection(
+            platform=platform,
+            display_name=display_name,
+            access_token=token,
+            refresh_token=None,
+            auth_method="pat",
+            base_url=stored_base_url,
+        )
+        self._repo.log_event(
+            connection_id=orm.id,
+            platform=platform,
+            auth_method="pat",
+            event="connection_created",
+            actor=display_name,
+        )
+        logger.info("PAT connection created platform=%s user=%s", platform, display_name)
         return _to_domain_connection(orm)
 
     # ── Connections ─────────────────────────────────────────────────────────
@@ -134,6 +177,15 @@ class SourceConnectionService:
         return [_to_domain_connection(c) for c in self._repo.list_connected()]
 
     def delete_connection(self, connection_id: str) -> bool:
+        conn = self._repo.find_by_id(connection_id)
+        if conn:
+            self._repo.log_event(
+                connection_id=conn.id,
+                platform=conn.platform,
+                auth_method=conn.auth_method,
+                event="connection_deleted",
+                actor=conn.display_name,
+            )
         return self._repo.delete(connection_id)
 
     def list_repos(self, connection_id: str) -> list[Repository]:
@@ -141,7 +193,12 @@ class SourceConnectionService:
         if not conn or not conn.access_token:
             raise ValueError(f"Connection {connection_id!r} not found or not authenticated.")
         provider = get_provider(conn.platform)
-        raw = provider.list_repos(conn.access_token)
+        kwargs: dict = {}
+        if conn.platform == "azure_devops" and conn.base_url:
+            kwargs["org_url"] = conn.base_url
+        elif conn.platform in ("github", "gitlab", "bitbucket") and conn.base_url:
+            kwargs["base_url"] = conn.base_url
+        raw = provider.list_repos(conn.access_token, **kwargs)
         return [
             Repository(
                 full_name=r["full_name"],
@@ -162,12 +219,40 @@ class SourceConnectionService:
         orm = self._repo.activate(connection_id, repo_full_name, repo_name, owner, default_branch)
         if not orm:
             raise ValueError(f"Connection {connection_id!r} not found.")
+        import json as _json
+        self._repo.log_event(
+            connection_id=orm.id,
+            platform=orm.platform,
+            auth_method=orm.auth_method,
+            event="repo_activated",
+            actor=orm.display_name,
+            detail=_json.dumps({"repo": repo_full_name, "branch": default_branch}),
+        )
         logger.info("Repo activated connection=%s repo=%s", connection_id, repo_full_name)
         return _to_domain_connection(orm)
 
     def get_active_connection(self) -> SourceConnection | None:
         orm = self._repo.get_active()
         return _to_domain_connection(orm) if orm else None
+
+    def list_audit_logs(self, connection_id: str | None = None) -> list[dict]:
+        if connection_id:
+            entries = self._repo.get_audit_logs_for_connection(connection_id)
+        else:
+            entries = self._repo.get_audit_logs()
+        return [
+            {
+                "id": e.id,
+                "connection_id": e.connection_id,
+                "platform": e.platform,
+                "auth_method": e.auth_method,
+                "event": e.event,
+                "actor": e.actor,
+                "detail": e.detail,
+                "timestamp": e.timestamp.isoformat(),
+            }
+            for e in entries
+        ]
 
     def list_sites(self, connection_id: str) -> list[dict]:
         conn = self._repo.find_by_id(connection_id)
