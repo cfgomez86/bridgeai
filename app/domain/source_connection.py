@@ -22,4 +22,5 @@ class SourceConnection:
     default_branch: str
     is_active: bool
     created_at: datetime
+    boards_project: str | None = None
     auth_method: str = "oauth"

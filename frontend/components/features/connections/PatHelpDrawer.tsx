@@ -1,13 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, ChevronRight } from "lucide-react"
+import { X } from "lucide-react"
 import { useLanguage } from "@/lib/i18n"
 
 interface PatHelpDrawerProps {
   platform: string | null
   onClose: () => void
-  onConnectPat?: (platform: string) => void
 }
 
 type Scope = { name: string; desc_es: string; desc_en: string }
@@ -22,7 +21,7 @@ interface PlatformHelp {
   note_en?: string
 }
 
-const PLATFORMS: string[] = ["github", "gitlab", "azure_devops", "bitbucket"]
+const PLATFORMS: string[] = ["github", "gitlab", "azure_devops", "azure_boards", "bitbucket", "jira"]
 
 const HELP: Record<string, PlatformHelp> = {
   github: {
@@ -176,6 +175,57 @@ const HELP: Record<string, PlatformHelp> = {
     note_es: "La URL de tu organización tiene el formato: https://dev.azure.com/nombre-de-tu-org",
     note_en: "Your organization URL follows this format: https://dev.azure.com/your-org-name",
   },
+  azure_boards: {
+    label: "Azure Boards",
+    tokenExample: "token de texto largo sin prefijo especial",
+    scopes: [
+      {
+        name: "Work Items › Read",
+        desc_es: "Leer tableros, sprints, issues y epics",
+        desc_en: "Read boards, sprints, issues and epics",
+      },
+      {
+        name: "Work Items › Write",
+        desc_es: "Crear y actualizar work items",
+        desc_en: "Create and update work items",
+      },
+      {
+        name: "Project and Team › Read",
+        desc_es: "Leer proyectos y equipos de la organización",
+        desc_en: "Read projects and teams in the organization",
+      },
+    ],
+    steps: [
+      {
+        es: "Ve a dev.azure.com e inicia sesión con tu cuenta de Microsoft.",
+        en: "Go to dev.azure.com and sign in with your Microsoft account.",
+      },
+      { es: "Selecciona tu organización.", en: "Select your organization." },
+      {
+        es: "Haz clic en tu avatar (arriba a la derecha) → Personal access tokens.",
+        en: "Click your avatar (top-right) → Personal access tokens.",
+      },
+      { es: 'Haz clic en "New Token".', en: 'Click "New Token".' },
+      {
+        es: 'Dale un nombre (ej. "BridgeAI Boards"), elige la organización y la expiración.',
+        en: 'Give it a name (e.g. "BridgeAI Boards"), choose the organization and expiration.',
+      },
+      {
+        es: 'En "Scopes" selecciona "Custom defined".',
+        en: 'Under "Scopes" choose "Custom defined".',
+      },
+      {
+        es: "Activa: Work Items → Read ✓, Work Items → Write ✓ y Project and Team → Read ✓.",
+        en: "Enable: Work Items → Read ✓, Work Items → Write ✓ and Project and Team → Read ✓.",
+      },
+      {
+        es: 'Haz clic en "Create" y copia el token generado.',
+        en: 'Click "Create" and copy the generated token.',
+      },
+    ],
+    note_es: "Si ya conectaste Azure Repos, puedes usar la misma conexión para Boards — no necesitas crear un token nuevo. Un token con los scopes de Boards también funciona para Repos y viceversa si incluyes ambos.",
+    note_en: "If you already connected Azure Repos, you can reuse that connection for Boards — no new token needed. A token with Boards scopes also works for Repos if you include both scope groups.",
+  },
   bitbucket: {
     label: "Bitbucket",
     tokenExample: "ATCTT3xFfGN... o ATBBxxxx...",
@@ -224,6 +274,59 @@ const HELP: Record<string, PlatformHelp> = {
     note_es: "Para Bitbucket Cloud usa HTTP Access Tokens del workspace (no App Passwords). Para Bitbucket Data Center, introduce la URL de tu instancia (ej. https://bitbucket.miempresa.com) al conectar.",
     note_en: "For Bitbucket Cloud use workspace HTTP Access Tokens (not App Passwords). For Bitbucket Data Center, enter your instance URL (e.g. https://bitbucket.mycompany.com) when connecting.",
   },
+  jira: {
+    label: "Jira",
+    tokenExample: "ATATT3xFfGN0aBcDeFgHiJkLmNoPqRsTuVwXyZ...",
+    scopes: [
+      {
+        name: "read:jira-work",
+        desc_es: "Leer proyectos, issues, tableros y sprints",
+        desc_en: "Read projects, issues, boards and sprints",
+      },
+      {
+        name: "read:jira-user",
+        desc_es: "Leer información del perfil de usuario",
+        desc_en: "Read user profile information",
+      },
+      {
+        name: "offline_access",
+        desc_es: "Mantener la sesión activa sin re-autenticar",
+        desc_en: "Keep the session active without re-authenticating",
+      },
+    ],
+    steps: [
+      {
+        es: "Inicia sesión en tu cuenta de Atlassian en id.atlassian.com.",
+        en: "Sign in to your Atlassian account at id.atlassian.com.",
+      },
+      {
+        es: "Haz clic en tu avatar (arriba a la derecha) → Manage account.",
+        en: "Click your avatar (top-right) → Manage account.",
+      },
+      {
+        es: 'Selecciona la pestaña "Security" en el menú superior.',
+        en: 'Select the "Security" tab in the top menu.',
+      },
+      {
+        es: 'En la sección "API tokens", haz clic en "Create and manage API tokens".',
+        en: 'Under "API tokens", click "Create and manage API tokens".',
+      },
+      {
+        es: 'Haz clic en "Create API token".',
+        en: 'Click "Create API token".',
+      },
+      {
+        es: 'Dale un nombre descriptivo (ej. "BridgeAI") y haz clic en "Create".',
+        en: 'Give it a descriptive name (e.g. "BridgeAI") and click "Create".',
+      },
+      {
+        es: "Copia el token generado — solo se muestra una vez.",
+        en: "Copy the generated token — it is only shown once.",
+      },
+    ],
+    note_es: "El token de API se usa junto con tu email de Atlassian. Introduce el token en el campo Token y tu email en el campo Email al conectar. La URL del sitio tiene el formato https://mi-org.atlassian.net",
+    note_en: "The API token is used together with your Atlassian email. Enter the token in the Token field and your email in the Email field when connecting. The site URL follows the format https://my-org.atlassian.net",
+  },
 }
 
 const LABELS_ES = {
@@ -244,7 +347,7 @@ const LABELS_EN = {
   connect_btn: "Connect with this token",
 }
 
-export function PatHelpDrawer({ platform, onClose, onConnectPat }: PatHelpDrawerProps) {
+export function PatHelpDrawer({ platform, onClose }: PatHelpDrawerProps) {
   const { locale } = useLanguage()
   const L = locale === "en" ? LABELS_EN : LABELS_ES
 
@@ -478,10 +581,10 @@ export function PatHelpDrawer({ platform, onClose, onConnectPat }: PatHelpDrawer
               <div style={{
                 padding: "10px 14px",
                 borderRadius: "var(--radius)",
-                background: "var(--warn-bg, #fef9c3)",
-                border: "1px solid var(--warn-border, #fde68a)",
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
                 fontSize: "12px",
-                color: "var(--warn-fg, #78350f)",
+                color: "var(--fg-2)",
                 lineHeight: 1.5,
               }}>
                 <span style={{ fontWeight: 600 }}>{L.note_title}: </span>
@@ -489,33 +592,6 @@ export function PatHelpDrawer({ platform, onClose, onConnectPat }: PatHelpDrawer
               </div>
             )}
 
-            {/* CTA */}
-            {onConnectPat && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose()
-                  onConnectPat(active)
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 16px",
-                  borderRadius: "var(--radius)",
-                  border: "none",
-                  background: "var(--accent)",
-                  color: "var(--accent-fg)",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  alignSelf: "flex-start",
-                }}
-              >
-                {L.connect_btn}
-                <ChevronRight size={14} />
-              </button>
-            )}
           </div>
         )}
       </div>

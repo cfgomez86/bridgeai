@@ -2,7 +2,7 @@ import base64
 import urllib.parse
 import urllib.request
 import json
-from app.services.scm_providers.base import ScmProvider, RemoteFileEntry
+from app.services.scm_providers.base import ScmProvider, RemoteFileEntry, validate_instance_url
 
 
 class GitHubProvider(ScmProvider):
@@ -13,8 +13,8 @@ class GitHubProvider(ScmProvider):
     _API_BASE = "https://api.github.com"
 
     def _api_base(self, base_url: str | None) -> str:
-        # GitHub Enterprise Server exposes the same API under /api/v3
         if base_url:
+            validate_instance_url(base_url)
             return f"{base_url.rstrip('/')}/api/v3"
         return self._API_BASE
 

@@ -7,7 +7,6 @@ import { useLanguage } from "@/lib/i18n"
 interface NavItem {
   href: string
   label: string
-  shortcut: string
   icon: React.ReactNode
 }
 
@@ -62,10 +61,10 @@ export function Sidebar() {
   const prefix = ""
 
   const NAV_ITEMS: NavItem[] = [
-    { href: `${prefix}/workflow`, label: t.nav.workflow, shortcut: "G W", icon: <IconWand /> },
-    { href: `${prefix}/indexing`, label: t.nav.indexing, shortcut: "G X", icon: <IconDatabase /> },
-    { href: `${prefix}/connections`, label: t.nav.connections, shortcut: "G C", icon: <IconPlug /> },
-    { href: `${prefix}/settings`, label: t.nav.settings, shortcut: "G S", icon: <IconSettings /> },
+    { href: `${prefix}/workflow`, label: t.nav.workflow, icon: <IconWand /> },
+    { href: `${prefix}/indexing`, label: t.nav.indexing, icon: <IconDatabase /> },
+    { href: `${prefix}/connections`, label: t.nav.connections, icon: <IconPlug /> },
+    { href: `${prefix}/settings`, label: t.nav.settings, icon: <IconSettings /> },
   ]
 
   function navItemStyle(isActive: boolean): React.CSSProperties {
@@ -121,7 +120,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav style={{ display: "flex", flexDirection: "column", gap: "1px", flex: 1 }}>
-        {NAV_ITEMS.map(({ href, label, shortcut, icon }) => {
+        {NAV_ITEMS.map(({ href, label, icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + "/")
           return (
             <Link key={href} href={href} style={navItemStyle(isActive)} className="group">
@@ -129,17 +128,12 @@ export function Sidebar() {
                 {icon}
               </span>
               <span style={{ flex: 1 }}>{label}</span>
-              <span style={{
-                fontSize: "10px", color: "var(--muted-2)",
-                fontFamily: "var(--font-mono)", opacity: 0, transition: "opacity 0.1s",
-              }} className="sb-kbd">{shortcut}</span>
             </Link>
           )
         })}
       </nav>
 
       <style>{`
-        .group:hover .sb-kbd { opacity: 1 !important; }
         .group:hover { background: var(--surface-3) !important; }
       `}</style>
     </aside>

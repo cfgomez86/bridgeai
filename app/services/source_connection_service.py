@@ -29,6 +29,7 @@ def _to_domain_connection(orm: SourceConnectionORM) -> SourceConnection:
         default_branch=orm.default_branch,
         is_active=orm.is_active,
         created_at=orm.created_at,
+        boards_project=orm.boards_project,
         auth_method=orm.auth_method,
     )
 
@@ -144,10 +145,11 @@ class SourceConnectionService:
         token: str,
         org_url: str | None = None,
         base_url: str | None = None,
+        email: str | None = None,
     ) -> SourceConnection:
         provider = get_provider(platform)
         try:
-            user_info = provider.validate_pat(token, org_url=org_url, base_url=base_url)  # type: ignore[call-arg]
+            user_info = provider.validate_pat(token, org_url=org_url, base_url=base_url, email=email)  # type: ignore[call-arg]
         except Exception as exc:
             raise ValueError(f"PAT validation failed: {exc}") from exc
 
@@ -254,6 +256,18 @@ class SourceConnectionService:
             for e in entries
         ]
 
+    def list_projects(self, connection_id: str) -> list[dict]:
+        conn = self._repo.find_by_id(connection_id)
+        if not conn or not conn.access_token:
+            raise ValueError(f"Connection {connection_id!r} not found or not authenticated.")
+        if conn.platform != "azure_devops":
+            raise ValueError(f"Project listing is only supported for azure_devops, not {conn.platform!r}")
+        provider = get_provider(conn.platform)
+        kwargs: dict = {}
+        if conn.base_url:
+            kwargs["org_url"] = conn.base_url
+        return provider.list_projects(conn.access_token, **kwargs)  # type: ignore[attr-defined]
+
     def list_sites(self, connection_id: str) -> list[dict]:
         conn = self._repo.find_by_id(connection_id)
         if not conn or conn.platform != "jira":
@@ -269,6 +283,13 @@ class SourceConnectionService:
             raise ValueError("No Jira site selected for this connection.")
         provider = get_provider("jira")
         return provider.list_projects(conn.access_token, conn.base_url)  # type: ignore[attr-defined]
+
+    def activate_boards_project(self, connection_id: str, project_full_name: str) -> SourceConnection:
+        orm = self._repo.activate_boards_project(connection_id, project_full_name)
+        if not orm:
+            raise ValueError(f"Connection {connection_id!r} not found.")
+        logger.info("Azure Boards project activated connection=%s project=%s", connection_id, project_full_name)
+        return _to_domain_connection(orm)
 
     def activate_site(
         self, connection_id: str, cloud_id: str, api_base_url: str, site_url: str, site_name: str

@@ -2,7 +2,7 @@ import base64
 import urllib.parse
 import urllib.request
 import json
-from app.services.scm_providers.base import ScmProvider, RemoteFileEntry
+from app.services.scm_providers.base import ScmProvider, RemoteFileEntry, validate_instance_url
 
 _BEARER = "Authorization"
 
@@ -20,6 +20,7 @@ class BitbucketProvider(ScmProvider):
         return bool(base_url)
 
     def _dc_api(self, base_url: str) -> str:
+        validate_instance_url(base_url)
         return f"{base_url.rstrip('/')}/rest/api/1.0"
 
     def _bearer(self, token: str) -> dict:

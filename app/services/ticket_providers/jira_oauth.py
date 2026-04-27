@@ -1,6 +1,8 @@
+import base64
 import json
 import urllib.parse
 import urllib.request
+import urllib.error
 
 
 class JiraOAuthProvider:
@@ -13,6 +15,29 @@ class JiraOAuthProvider:
     _ME_URL    = "https://api.atlassian.com/me"
     _SITES_URL = "https://api.atlassian.com/oauth/token/accessible-resources"
     _SCOPES    = "read:jira-work write:jira-work read:me offline_access"
+
+    def validate_pat(self, token: str, base_url: str | None = None, email: str | None = None, **_kwargs) -> dict:
+        if not base_url:
+            raise ValueError("base_url is required for Jira API token (e.g. https://myorg.atlassian.net)")
+        if not email:
+            raise ValueError("email is required for Jira API token authentication")
+        credentials = base64.b64encode(f"{email}:{token}".encode()).decode()
+        url = f"{base_url.rstrip('/')}/rest/api/3/myself"
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": f"Basic {credentials}", "Accept": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            raise ValueError(f"Jira API token invalid: HTTP {exc.code}") from exc
+        except Exception as exc:
+            raise ValueError(f"Jira API token validation failed: {exc}") from exc
+        login = data.get("emailAddress") or data.get("accountId", "")
+        if not login:
+            raise ValueError("Jira API token did not return a valid user")
+        return {"login": login, "display_name": data.get("displayName", login)}
 
     def get_authorize_url(self, client_id: str, redirect_uri: str, state: str) -> str:
         params = urllib.parse.urlencode({

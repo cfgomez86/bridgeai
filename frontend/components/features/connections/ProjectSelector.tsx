@@ -1,35 +1,35 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { listSites, activateSite, type JiraSiteResponse } from "@/lib/api-client"
-import { Loader2, Globe, X } from "lucide-react"
+import { listAzureProjects, activateAzureProject, type AzureProjectResponse } from "@/lib/api-client"
+import { Loader2, FolderKanban, X } from "lucide-react"
 
-interface SiteSelectorProps {
+interface ProjectSelectorProps {
   connectionId: string
   onActivated: () => void
   onClose: () => void
 }
 
-export function SiteSelector({ connectionId, onActivated, onClose }: SiteSelectorProps) {
-  const [sites, setSites] = useState<JiraSiteResponse[]>([])
+export function ProjectSelector({ connectionId, onActivated, onClose }: ProjectSelectorProps) {
+  const [projects, setProjects] = useState<AzureProjectResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activating, setActivating] = useState<string | null>(null)
 
   useEffect(() => {
-    listSites(connectionId)
-      .then(setSites)
-      .catch((err) => setError(err instanceof Error ? err.message : "Error al cargar los sites de Jira"))
+    listAzureProjects(connectionId)
+      .then(setProjects)
+      .catch((err) => setError(err instanceof Error ? err.message : "Error al cargar proyectos"))
       .finally(() => setLoading(false))
   }, [connectionId])
 
-  async function handleSelect(site: JiraSiteResponse) {
-    setActivating(site.id)
+  async function handleSelect(project: AzureProjectResponse) {
+    setActivating(project.full_name)
     try {
-      await activateSite(connectionId, site.id, site.api_base_url, site.url, site.name)
+      await activateAzureProject(connectionId, project.full_name)
       onActivated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al activar el site")
+      setError(err instanceof Error ? err.message : "Error al seleccionar el proyecto")
       setActivating(null)
     }
   }
@@ -58,7 +58,7 @@ export function SiteSelector({ connectionId, onActivated, onClose }: SiteSelecto
           padding: "14px 18px", borderBottom: "1px solid var(--border)",
         }}>
           <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--fg)", margin: 0, fontFamily: "var(--font-display)" }}>
-            Seleccionar site de Jira
+            Seleccionar proyecto de Azure DevOps
           </h2>
           <button
             type="button"
@@ -78,22 +78,22 @@ export function SiteSelector({ connectionId, onActivated, onClose }: SiteSelecto
           {loading && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "32px 0", color: "var(--muted)", fontSize: "13px" }}>
               <Loader2 size={15} className="animate-spin" />
-              Cargando sites...
+              Cargando proyectos...
             </div>
           )}
           {error && (
             <p style={{ fontSize: "12.5px", color: "var(--err-fg)", padding: "16px 10px", margin: 0 }}>{error}</p>
           )}
-          {!loading && !error && sites.length === 0 && (
+          {!loading && !error && projects.length === 0 && (
             <p style={{ fontSize: "12.5px", color: "var(--muted)", padding: "24px 10px", margin: 0, textAlign: "center" }}>
-              No se encontraron sites de Jira accesibles.
+              No se encontraron proyectos accesibles.
             </p>
           )}
-          {sites.map((site) => (
+          {projects.map((project) => (
             <button
-              key={site.id}
+              key={project.full_name}
               type="button"
-              onClick={() => handleSelect(site)}
+              onClick={() => handleSelect(project)}
               disabled={activating !== null}
               style={{
                 width: "100%", display: "flex", alignItems: "center",
@@ -101,23 +101,23 @@ export function SiteSelector({ connectionId, onActivated, onClose }: SiteSelecto
                 padding: "10px 12px", borderRadius: "var(--radius)",
                 border: "none", background: "transparent",
                 cursor: activating !== null ? "not-allowed" : "pointer",
-                textAlign: "left", transition: "background 0.1s",
+                textAlign: "left",
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-2)" }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent" }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
-                <Globe size={15} style={{ flexShrink: 0, color: "var(--muted)" }} />
+                <FolderKanban size={15} style={{ flexShrink: 0, color: "var(--muted)" }} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {site.name}
+                    {project.name}
                   </div>
-                  <div style={{ fontSize: "11.5px", color: "var(--muted)", fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>
-                    {site.url}
+                  <div style={{ fontSize: "11.5px", color: "var(--muted)", fontFamily: "var(--font-mono)" }}>
+                    {project.org}
                   </div>
                 </div>
               </div>
-              {activating === site.id && (
+              {activating === project.full_name && (
                 <Loader2 size={13} className="animate-spin" style={{ color: "var(--accent)", flexShrink: 0 }} />
               )}
             </button>

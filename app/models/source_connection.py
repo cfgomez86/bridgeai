@@ -19,6 +19,7 @@ class SourceConnection(Base):
     owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
     repo_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     repo_full_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    boards_project: Mapped[str | None] = mapped_column(String(512), nullable=True)
     default_branch: Mapped[str] = mapped_column(String(100), nullable=False, default="main")
     base_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

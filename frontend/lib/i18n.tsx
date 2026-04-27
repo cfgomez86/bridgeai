@@ -75,6 +75,7 @@ interface Translations {
       active_badge: string
       select_repo: string
       select_site: string
+      select_project: string
       disconnect_title: string
     }
     repo_selector: {
@@ -90,11 +91,29 @@ interface Translations {
       github: string
       gitlab: string
       azure_devops: string
+      azure_boards: string
       bitbucket: string
     }
     default_platform_desc: string
     toast_connected: string
     toast_error: string
+    tabs: { oauth: string; pat: string }
+    viewGuide: string
+    oauthPanel: {
+      info: string
+      connect: string
+      disconnect: string
+      notConfigured: string
+    }
+    patPanel: {
+      info: string
+      tokenLabel: string
+      instanceLabel: string
+      instanceOptional: string
+      scopesLabel: string
+      connect: string
+      validating: string
+    }
   }
   workflow: {
     step_prefix: string
@@ -282,6 +301,31 @@ interface Translations {
       generate: { title: string; description: string }
       ticket: { title: string; description: string }
     }
+    greeting: string
+    greetingNoName: string
+    summary: string
+    quickStartTitle: string
+    quickStartLead: string
+    startWorkflow: string
+    stats: {
+      requirements: string
+      stories: string
+      tickets: string
+      last30days: string
+      jiraAzure: string
+    }
+    activity: {
+      title: string
+      meta: string
+      viewAll: string
+    }
+    howItWorks: {
+      title: string
+      step1: { title: string; desc: string }
+      step2: { title: string; desc: string }
+      step3: { title: string; desc: string }
+      step4: { title: string; desc: string }
+    }
   }
 }
 
@@ -356,6 +400,7 @@ const es: Translations = {
       active_badge: "activo",
       select_repo: "Seleccionar repo",
       select_site: "Seleccionar organización",
+      select_project: "Seleccionar proyecto",
       disconnect_title: "Desconectar cuenta",
     },
     repo_selector: {
@@ -371,11 +416,29 @@ const es: Translations = {
       github: "Conecta repositorios de GitHub para analizar codigo y estimar impacto.",
       gitlab: "Conecta repositorios de GitLab para analizar codigo y estimar impacto.",
       azure_devops: "Conecta repositorios de Azure Repos para analizar codigo y estimar impacto.",
+      azure_boards: "Gestiona work items y tableros de Azure Boards. Usa la misma conexión de Azure DevOps.",
       bitbucket: "Conecta repositorios de Bitbucket para analizar codigo y estimar impacto.",
     },
     default_platform_desc: "Conecta gestor de tickets para registrar historias.",
     toast_connected: "Conectado con exito a",
     toast_error: "Error al conectar con",
+    tabs: { oauth: "OAuth", pat: "PAT" },
+    viewGuide: "Ver guía",
+    oauthPanel: {
+      info: "Te llevamos a {platform} para autorizar BridgeAI. Sin tokens manuales, los permisos los gestionas desde tu cuenta.",
+      connect: "Conectar",
+      disconnect: "Desconectar",
+      notConfigured: "OAuth no está configurado en este servidor. Pide al admin que registre la app de {platform} o usa un PAT.",
+    },
+    patPanel: {
+      info: "Pega tu Personal Access Token. Se almacena en el servidor y se cifra si el administrador ha configurado la clave de cifrado.",
+      tokenLabel: "Personal Access Token",
+      instanceLabel: "URL de la instancia",
+      instanceOptional: "(opcional)",
+      scopesLabel: "Necesitas estos scopes:",
+      connect: "Conectar",
+      validating: "se valida en tiempo real",
+    },
   },
   workflow: {
     step_prefix: "Paso",
@@ -583,6 +646,31 @@ const es: Translations = {
         description: "Crea el ticket directamente en Jira o Azure DevOps con un solo clic, sin copiar ni pegar.",
       },
     },
+    greeting: "Buenas tardes,",
+    greetingNoName: "Buenas tardes",
+    summary: "Tienes 1 repo activo y 3 requerimientos esperando análisis.",
+    quickStartTitle: "Empieza una historia desde un requerimiento",
+    quickStartLead: "Pega tu requisito, BridgeAI lo entiende, calcula el impacto en tu código indexado y genera la historia con criterios de aceptación.",
+    startWorkflow: "Iniciar workflow →",
+    stats: {
+      requirements: "Requerimientos",
+      stories: "Historias generadas",
+      tickets: "Tickets creados",
+      last30days: "últimos 30 días",
+      jiraAzure: "Jira · Azure DevOps",
+    },
+    activity: {
+      title: "Actividad reciente",
+      meta: "últimas 24h",
+      viewAll: "Ver todo",
+    },
+    howItWorks: {
+      title: "Cómo funciona",
+      step1: { title: "Entiende", desc: "Extrae intención, complejidad y términos" },
+      step2: { title: "Impacta", desc: "Cruza tu codebase indexado" },
+      step3: { title: "Genera", desc: "Historias + criterios + story points" },
+      step4: { title: "Entrega", desc: "Crea ticket en Jira o Azure DevOps" },
+    },
   },
 }
 
@@ -657,6 +745,7 @@ const en: Translations = {
       active_badge: "active",
       select_repo: "Select repo",
       select_site: "Select organization",
+      select_project: "Select project",
       disconnect_title: "Disconnect account",
     },
     repo_selector: {
@@ -672,11 +761,29 @@ const en: Translations = {
       github: "Connect GitHub repositories to analyze code and estimate impact.",
       gitlab: "Connect GitLab repositories to analyze code and estimate impact.",
       azure_devops: "Connect Azure Repos repositories to analyze code and estimate impact.",
+      azure_boards: "Manage work items and Azure Boards. Shares the existing Azure DevOps connection.",
       bitbucket: "Connect Bitbucket repositories to analyze code and estimate impact.",
     },
     default_platform_desc: "Connect this platform to get started.",
     toast_connected: "Successfully connected to",
     toast_error: "Error connecting to",
+    tabs: { oauth: "OAuth", pat: "PAT" },
+    viewGuide: "View guide",
+    oauthPanel: {
+      info: "We take you to {platform} to authorize BridgeAI. No manual tokens — you manage permissions from your account.",
+      connect: "Connect",
+      disconnect: "Disconnect",
+      notConfigured: "OAuth is not configured on this server. Ask your admin to register the {platform} app or use a PAT.",
+    },
+    patPanel: {
+      info: "Paste your Personal Access Token. It is stored on the server and encrypted if the administrator has configured the encryption key.",
+      tokenLabel: "Personal Access Token",
+      instanceLabel: "Instance URL",
+      instanceOptional: "(optional)",
+      scopesLabel: "You need these scopes:",
+      connect: "Connect",
+      validating: "validated in real time",
+    },
   },
   workflow: {
     step_prefix: "Step",
@@ -883,6 +990,31 @@ const en: Translations = {
         title: "Ticket",
         description: "Pushes the generated story directly to Jira or Azure DevOps with a single click — no copy-paste needed.",
       },
+    },
+    greeting: "Good afternoon,",
+    greetingNoName: "Good afternoon",
+    summary: "You have 1 active repo and 3 requirements awaiting analysis.",
+    quickStartTitle: "Start a story from a requirement",
+    quickStartLead: "Paste your requirement, BridgeAI understands it, calculates the impact on your indexed code, and generates the story with acceptance criteria.",
+    startWorkflow: "Start workflow →",
+    stats: {
+      requirements: "Requirements",
+      stories: "Stories generated",
+      tickets: "Tickets created",
+      last30days: "last 30 days",
+      jiraAzure: "Jira · Azure DevOps",
+    },
+    activity: {
+      title: "Recent activity",
+      meta: "last 24h",
+      viewAll: "View all",
+    },
+    howItWorks: {
+      title: "How it works",
+      step1: { title: "Understand", desc: "Extracts intent, complexity and terms" },
+      step2: { title: "Impact", desc: "Crosses your indexed codebase" },
+      step3: { title: "Generate", desc: "Stories + criteria + story points" },
+      step4: { title: "Deliver", desc: "Creates ticket in Jira or Azure DevOps" },
     },
   },
 }

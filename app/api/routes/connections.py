@@ -13,7 +13,7 @@ from app.repositories.source_connection_repository import SourceConnectionReposi
 from app.services.source_connection_service import SourceConnectionService
 
 SUPPORTED_PLATFORMS_SET = {"github", "gitlab", "azure_devops", "jira"}
-_PAT_SUPPORTED_PLATFORMS = {"github", "gitlab", "azure_devops", "bitbucket"}
+_PAT_SUPPORTED_PLATFORMS = {"github", "gitlab", "azure_devops", "bitbucket", "jira"}
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,7 @@ class ConnectionResponse(BaseModel):
     owner: str | None
     default_branch: str
     is_active: bool
+    boards_project: str | None = None
     auth_method: str = "oauth"
 
 
@@ -66,7 +67,8 @@ class PATConnectRequest(BaseModel):
     platform: str
     token: str
     org_url: str | None = None   # Required for Azure DevOps PAT
-    base_url: str | None = None  # Optional for GitLab self-hosted
+    base_url: str | None = None  # Required for Jira; optional for GitLab/Bitbucket self-hosted
+    email: str | None = None     # Required for Jira API token (Basic Auth)
 
 
 # ── Platform listing ────────────────────────────────────────────────────────
@@ -174,6 +176,7 @@ def connect_pat(
             token=body.token,
             org_url=body.org_url,
             base_url=body.base_url,
+            email=body.email,
         )
         return ConnectionResponse(
             id=conn.id,
@@ -184,6 +187,7 @@ def connect_pat(
             owner=conn.owner,
             default_branch=conn.default_branch,
             is_active=conn.is_active,
+            boards_project=conn.boards_project,
             auth_method=conn.auth_method,
         )
     except ValueError as exc:
@@ -211,6 +215,7 @@ def list_connections(
             owner=c.owner,
             default_branch=c.default_branch,
             is_active=c.is_active,
+            boards_project=c.boards_project,
             auth_method=c.auth_method,
         )
         for c in conns
@@ -234,6 +239,7 @@ def get_active(
         owner=conn.owner,
         default_branch=conn.default_branch,
         is_active=conn.is_active,
+        boards_project=conn.boards_project,
         auth_method=conn.auth_method,
     )
 
@@ -311,6 +317,7 @@ def activate_repo(
             owner=conn.owner,
             default_branch=conn.default_branch,
             is_active=conn.is_active,
+            boards_project=conn.boards_project,
             auth_method=conn.auth_method,
         )
     except ValueError as exc:
@@ -347,7 +354,60 @@ def list_connection_audit_logs(
     return service.list_audit_logs(connection_id=connection_id)
 
 
+# ── Azure Boards project selection ──────────────────────────────────────────
+
+class ActivateBoardsProjectRequest(BaseModel):
+    project_full_name: str
+
+
+@router.post("/{connection_id}/activate-project", response_model=ConnectionResponse)
+def activate_boards_project(
+    connection_id: str,
+    body: ActivateBoardsProjectRequest,
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
+    try:
+        conn = service.activate_boards_project(connection_id, body.project_full_name)
+        return ConnectionResponse(
+            id=conn.id,
+            platform=conn.platform,
+            display_name=conn.display_name,
+            repo_full_name=conn.repo_full_name,
+            repo_name=conn.repo_name,
+            owner=conn.owner,
+            default_branch=conn.default_branch,
+            is_active=conn.is_active,
+            boards_project=conn.boards_project,
+            auth_method=conn.auth_method,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
 # ── Jira site selection ──────────────────────────────────────────────────────
+
+class AzureProjectResponse(BaseModel):
+    name: str
+    org: str
+    full_name: str
+
+
+@router.get("/{connection_id}/projects", response_model=list[AzureProjectResponse])
+def list_projects(
+    connection_id: str,
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
+    try:
+        projects = service.list_projects(connection_id)
+        return [AzureProjectResponse(**p) for p in projects]
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to list projects connection=%s error=%s", connection_id, exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to fetch Azure DevOps projects.")
+
 
 class JiraSiteResponse(BaseModel):
     id: str
@@ -420,6 +480,7 @@ def activate_site(
             owner=conn.owner,
             default_branch=conn.default_branch,
             is_active=conn.is_active,
+            boards_project=conn.boards_project,
             auth_method=conn.auth_method,
         )
     except ValueError as exc:

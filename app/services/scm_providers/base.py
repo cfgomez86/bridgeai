@@ -1,5 +1,37 @@
+import ipaddress
+import urllib.parse
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+
+
+def validate_instance_url(url: str) -> None:
+    """Reject user-supplied base_url values that could enable SSRF.
+
+    Allows only http/https schemes and blocks private, loopback, link-local,
+    and reserved IP ranges. Hostname-based URLs pass here; DNS rebinding is
+    not addressed at this layer (requires connection-time IP resolution).
+    Raises ValueError with a safe message on any violation.
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
+        raise ValueError("Invalid instance URL")
+
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Instance URL must use http or https, got {parsed.scheme!r}")
+
+    host = parsed.hostname or ""
+    if not host:
+        raise ValueError("Instance URL must include a hostname")
+
+    try:
+        addr = ipaddress.ip_address(host)
+        if any([addr.is_private, addr.is_loopback, addr.is_link_local, addr.is_reserved]):
+            raise ValueError("Instance URL points to a disallowed IP range")
+    except ValueError as exc:
+        # ip_address() raises ValueError for hostnames — re-raise only for actual IP violations
+        if "disallowed" in str(exc) or "Invalid" in str(exc):
+            raise
 
 
 @dataclass(frozen=True)

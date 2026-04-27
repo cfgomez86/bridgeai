@@ -5,7 +5,9 @@ import { deleteConnection, type ConnectionResponse } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import { RepoSelector } from "./RepoSelector"
 import { SiteSelector } from "./SiteSelector"
-import { GitBranch, FolderGit2, Globe, Trash2, Loader2 } from "lucide-react"
+import { ProjectSelector } from "./ProjectSelector"
+import { PlatformLogo } from "./PlatformLogos"
+import { GitBranch, FolderGit2, FolderKanban, Globe, Trash2, Loader2 } from "lucide-react"
 
 const PLATFORM_LABELS: Record<string, string> = {
   github: "GitHub",
@@ -14,28 +16,25 @@ const PLATFORM_LABELS: Record<string, string> = {
   jira: "Jira Cloud",
 }
 
-const PLATFORM_ICONS: Record<string, string> = {
-  github: "GH",
-  gitlab: "GL",
-  azure_devops: "AZ",
-  jira: "JR",
-}
-
 const TICKET_PLATFORMS = new Set(["jira"])
 
 interface ConnectionCardProps {
   connection: ConnectionResponse
   onUpdated: () => void
+  boardsMode?: boolean
 }
 
-export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
+export function ConnectionCard({ connection, onUpdated, boardsMode = false }: ConnectionCardProps) {
   const [deleting, setDeleting] = useState(false)
   const [showRepos, setShowRepos] = useState(false)
   const [showSites, setShowSites] = useState(false)
+  const [showProjects, setShowProjects] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { t } = useLanguage()
   const s = t.connections
   const isTicket = TICKET_PLATFORMS.has(connection.platform)
+  const isAzureBoards = boardsMode && connection.platform === "azure_devops"
+  const platformLabel = isAzureBoards ? "Azure Boards" : (PLATFORM_LABELS[connection.platform] ?? connection.platform)
 
   async function handleDelete() {
     setDeleting(true)
@@ -66,12 +65,12 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
           <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
             <div style={{
               width: "34px", height: "34px", borderRadius: "7px",
-              background: "var(--surface-3)", border: "1px solid var(--border)",
+              background: "var(--surface-2)", border: "1px solid var(--border)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "10px", fontWeight: 700, color: "var(--fg-2)",
-              fontFamily: "var(--font-mono)", flexShrink: 0,
+              flexShrink: 0,
+              color: connection.platform === "github" ? "var(--fg)" : undefined,
             }}>
-              {PLATFORM_ICONS[connection.platform] ?? "?"}
+              <PlatformLogo platform={connection.platform} size={18} />
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--fg)", fontFamily: "var(--font-display)", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -84,7 +83,7 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
                 )}
               </div>
               <div style={{ fontSize: "11.5px", color: "var(--muted)" }}>
-                {PLATFORM_LABELS[connection.platform] ?? connection.platform}
+                {platformLabel}
               </div>
             </div>
           </div>
@@ -92,7 +91,7 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
           {/* Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
             <button
-              onClick={() => isTicket ? setShowSites(true) : setShowRepos(true)}
+              onClick={() => isAzureBoards ? setShowProjects(true) : isTicket ? setShowSites(true) : setShowRepos(true)}
               style={{
                 display: "flex", alignItems: "center", gap: "5px",
                 padding: "5px 10px", borderRadius: "var(--radius)",
@@ -100,8 +99,8 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
                 color: "var(--fg-2)", fontSize: "12px", fontWeight: 500, cursor: "pointer",
               }}
             >
-              {isTicket ? <Globe size={13} /> : <FolderGit2 size={13} />}
-              {isTicket ? s.card.select_site : s.card.select_repo}
+              {isAzureBoards ? <FolderKanban size={13} /> : isTicket ? <Globe size={13} /> : <FolderGit2 size={13} />}
+              {isAzureBoards ? s.card.select_project : isTicket ? s.card.select_site : s.card.select_repo}
             </button>
             <button
               onClick={handleDelete}
@@ -119,8 +118,22 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
           </div>
         </div>
 
+        {/* Active project (Azure Boards) */}
+        {isAzureBoards && connection.boards_project && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: "6px",
+            padding: "6px 10px", borderRadius: "var(--radius)",
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+          }}>
+            <FolderKanban size={12} style={{ color: "var(--muted)", flexShrink: 0 }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--fg-2)", flex: 1 }}>
+              {connection.boards_project}
+            </span>
+          </div>
+        )}
+
         {/* Active repo (SCM) or active site (Jira) */}
-        {connection.repo_full_name && !isTicket && (
+        {connection.repo_full_name && !isTicket && !isAzureBoards && (
           <div style={{
             display: "flex", alignItems: "center", gap: "6px",
             padding: "6px 10px", borderRadius: "var(--radius)",
@@ -143,7 +156,7 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
             <span style={{ fontSize: "12px", color: "var(--fg-2)", flex: 1 }}>
               {connection.repo_name}
             </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted)", wordBreak: "break-all" }}>
               {connection.repo_full_name}
             </span>
           </div>
@@ -166,6 +179,13 @@ export function ConnectionCard({ connection, onUpdated }: ConnectionCardProps) {
           connectionId={connection.id}
           onActivated={() => { setShowSites(false); onUpdated() }}
           onClose={() => setShowSites(false)}
+        />
+      )}
+      {showProjects && (
+        <ProjectSelector
+          connectionId={connection.id}
+          onActivated={() => { setShowProjects(false); onUpdated() }}
+          onClose={() => setShowProjects(false)}
         />
       )}
     </>

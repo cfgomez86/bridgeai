@@ -94,6 +94,48 @@ class AzureDevOpsProvider(ScmProvider):
             raise ValueError(f"Azure DevOps PAT validation failed: {exc}") from exc
         return {"login": f"PAT@{org}", "display_name": f"PAT@{org}"}
 
+    def list_projects(self, access_token: str, org_url: str | None = None, **_kwargs) -> list[dict]:
+        if org_url or not access_token.startswith("eyJ"):
+            if not org_url:
+                raise ValueError("org_url required for PAT-based Azure DevOps connections")
+            org = org_url.rstrip("/").split("/")[-1]
+            return self._get_org_projects(access_token, org)
+        return self._list_projects_oauth(access_token)
+
+    def _get_org_projects(self, token: str, org: str) -> list[dict]:
+        url = f"https://dev.azure.com/{org}/_apis/projects?api-version=7.1"
+        req = urllib.request.Request(url, headers={"Authorization": self._auth_header(token)})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+        except Exception:
+            return []
+        return [
+            {"name": p["name"], "org": org, "full_name": f"{org}/{p['name']}"}
+            for p in data.get("value", [])
+        ]
+
+    def _list_projects_oauth(self, access_token: str) -> list[dict]:
+        profile_req = urllib.request.Request(
+            self._PROFILE_URL,
+            headers={"Authorization": self._auth_header(access_token)},
+        )
+        with urllib.request.urlopen(profile_req, timeout=15) as resp:
+            profile = json.loads(resp.read())
+        member_id = profile.get("id", "")
+        accounts_url = self._ACCOUNTS_URL + (f"&memberId={member_id}" if member_id else "")
+        req = urllib.request.Request(
+            accounts_url,
+            headers={"Authorization": self._auth_header(access_token)},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            accounts_data = json.loads(resp.read())
+        projects: list[dict] = []
+        for account in accounts_data.get("value", []):
+            org = account.get("accountName", "")
+            projects.extend(self._get_org_projects(access_token, org))
+        return projects
+
     def list_repos(self, access_token: str, org_url: str | None = None, **_kwargs) -> list[dict]:
         if org_url or not access_token.startswith("eyJ"):
             if not org_url:

@@ -67,6 +67,7 @@ export interface ConnectionResponse {
   display_name: string
   active_repo?: string | null
   repo_full_name?: string | null
+  boards_project?: string | null
   default_branch?: string | null
   is_active?: boolean
   created_at: string
@@ -91,6 +92,12 @@ export interface JiraSiteResponse {
 export interface JiraProjectResponse {
   key: string
   name: string
+}
+
+export interface AzureProjectResponse {
+  name: string
+  org: string
+  full_name: string
 }
 
 export interface IndexResponse {
@@ -175,6 +182,23 @@ export async function createPatConnection(
   })
 }
 
+// endpoint: POST /api/v1/connections/pat
+export async function createPATConnection(
+  platform: string,
+  payload: { token: string; instance_url?: string; email?: string },
+): Promise<ConnectionResponse> {
+  // Azure DevOps uses org_url; all other platforms use base_url
+  const extra = payload.instance_url
+    ? platform === "azure_devops"
+      ? { org_url: payload.instance_url }
+      : { base_url: payload.instance_url }
+    : {}
+  return apiFetch<ConnectionResponse>("/api/v1/connections/pat", {
+    method: "POST",
+    body: JSON.stringify({ platform, token: payload.token, email: payload.email || undefined, ...extra }),
+  })
+}
+
 export async function deleteConnection(connectionId: string): Promise<void> {
   await apiFetch<unknown>(`/api/v1/connections/${connectionId}`, {
     method: "DELETE",
@@ -196,8 +220,22 @@ export async function activateRepo(
   })
 }
 
+export async function activateAzureProject(
+  connectionId: string,
+  projectFullName: string,
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/connections/${connectionId}/activate-project`, {
+    method: "POST",
+    body: JSON.stringify({ project_full_name: projectFullName }),
+  })
+}
+
 export async function listSites(connectionId: string): Promise<JiraSiteResponse[]> {
   return apiFetch<JiraSiteResponse[]>(`/api/v1/connections/${connectionId}/sites`)
+}
+
+export async function listAzureProjects(connectionId: string): Promise<AzureProjectResponse[]> {
+  return apiFetch<AzureProjectResponse[]>(`/api/v1/connections/${connectionId}/projects`)
 }
 
 export async function listJiraProjects(connectionId: string): Promise<JiraProjectResponse[]> {

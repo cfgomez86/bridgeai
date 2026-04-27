@@ -167,6 +167,15 @@ class SourceConnectionRepository:
         self._db.refresh(conn)
         return conn
 
+    def activate_boards_project(self, connection_id: str, project_full_name: str) -> Optional[SourceConnection]:
+        conn = self.find_by_id(connection_id)
+        if not conn:
+            return None
+        conn.boards_project = project_full_name
+        self._db.commit()
+        self._db.refresh(conn)
+        return conn
+
     def activate_site(
         self, connection_id: str, cloud_id: str, api_base_url: str, site_url: str, site_name: str
     ) -> Optional[SourceConnection]:

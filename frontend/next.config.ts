@@ -47,7 +47,6 @@ if (process.env.APP_URL) {
 const nextConfig: NextConfig = {
   output: "standalone",
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
   experimental: {
     serverActions: {
       allowedOrigins: ["localhost:3000", ...extraOrigins],

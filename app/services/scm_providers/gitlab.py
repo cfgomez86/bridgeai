@@ -1,7 +1,7 @@
 import urllib.parse
 import urllib.request
 import json
-from app.services.scm_providers.base import ScmProvider, RemoteFileEntry
+from app.services.scm_providers.base import ScmProvider, RemoteFileEntry, validate_instance_url
 
 
 class GitLabProvider(ScmProvider):
@@ -61,7 +61,7 @@ class GitLabProvider(ScmProvider):
         return {"login": data.get("username", ""), "name": data.get("name") or data.get("username", "")}
 
     def validate_pat(self, token: str, base_url: str | None = None, **_kwargs) -> dict:
-        api_base = f"{base_url.rstrip('/')}/api/v4" if base_url else self._API_BASE
+        api_base = self._effective_api_base(base_url)
         req = urllib.request.Request(
             f"{api_base}/user",
             headers={"Private-Token": token},
@@ -78,6 +78,7 @@ class GitLabProvider(ScmProvider):
 
     def _effective_api_base(self, base_url: str | None) -> str:
         if base_url:
+            validate_instance_url(base_url)
             return f"{base_url.rstrip('/')}/api/v4"
         return self._API_BASE
 

@@ -1,18 +1,16 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react"
+import React, { useState, useEffect, useCallback, useRef, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useUser } from "@auth0/nextjs-auth0/client"
 import {
   listPlatforms, listConnections,
-  getOAuthAuthorizeUrl, deleteConnection,
   type PlatformResponse, type ConnectionResponse,
 } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
-import { BadgeStatus } from "@/components/ui/badge-status"
 import { ConnectionCard } from "@/components/features/connections/ConnectionCard"
-import { PatConnectModal } from "@/components/features/connections/PatConnectModal"
 import { PatHelpDrawer } from "@/components/features/connections/PatHelpDrawer"
+import { PlatformCard } from "@/components/features/connections/PlatformCard"
 
 const PLATFORM_LABELS: Record<string, string> = {
   github: "GitHub",
@@ -21,226 +19,24 @@ const PLATFORM_LABELS: Record<string, string> = {
   bitbucket: "Bitbucket",
 }
 
-const PLATFORM_ICONS: Record<string, string> = {
-  github: "GH",
-  gitlab: "GL",
-  azure_devops: "AZ",
-  bitbucket: "BB",
-  jira: "JR",
-}
-
 const SCM_PLATFORMS = new Set(["github", "gitlab", "azure_devops", "bitbucket"])
-const PAT_PLATFORMS = new Set(["github", "gitlab", "azure_devops", "bitbucket"])
 
 // Shown immediately on paint — server_configured updates after the API responds
 const STATIC_PLATFORMS: PlatformResponse[] = [
-  { platform: "github",      label: "GitHub",        server_configured: false },
-  { platform: "gitlab",      label: "GitLab",        server_configured: false },
+  { platform: "github",       label: "GitHub",       server_configured: false },
+  { platform: "gitlab",       label: "GitLab",       server_configured: false },
   { platform: "azure_devops", label: "Azure Repos",  server_configured: false },
-  { platform: "bitbucket",   label: "Bitbucket",     server_configured: false },
+  { platform: "bitbucket",    label: "Bitbucket",    server_configured: false },
 ]
 
-type PlatformTone = "ok" | "warn" | "neutral"
-
-function PlatformCardDesign({
-  platform,
-  connections,
-  onUpdated,
-  onOpenPat,
-  onOpenHelp,
-}: {
-  platform: PlatformResponse
-  connections: ConnectionResponse[]
-  onUpdated: () => void
-  onOpenPat: (platform: string) => void
-  onOpenHelp: (platform: string) => void
-}) {
-  const [connecting, setConnecting] = useState(false)
-  const [disconnecting, setDisconnecting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { t } = useLanguage()
-  const s = t.connections
-
-  const conn = connections.find((c) => c.platform === platform.platform)
-  const hasAnyActive = connections.length > 0
-  const tone: PlatformTone = conn ? "ok" : platform.server_configured ? "warn" : "neutral"
-  const statusLabel = conn ? s.status.connected : platform.server_configured ? s.status.configured : s.status.disconnected
-
-  async function handleConnect() {
-    setConnecting(true)
-    setError(null)
-    try {
-      const { url } = await getOAuthAuthorizeUrl(platform.platform)
-      window.location.href = url
-    } catch (err) {
-      setError(err instanceof Error ? err.message : s.errors.oauth)
-      setConnecting(false)
-    }
-  }
-
-  async function handleDisconnect() {
-    if (!conn) return
-    setDisconnecting(true)
-    setError(null)
-    try {
-      await deleteConnection(conn.id)
-    } catch (err) {
-      // 404 means already deleted — desired state achieved, not an error
-      const msg = err instanceof Error ? err.message : ""
-      if (!msg.includes("404") && !msg.toLowerCase().includes("not found")) {
-        setError(msg || s.errors.disconnect)
-        setDisconnecting(false)
-        return
-      }
-    }
-    onUpdated()
-    setDisconnecting(false)
-  }
-
-  const platformDesc = s.platform_desc[platform.platform as keyof typeof s.platform_desc] ?? s.default_platform_desc
-
-  return (
-    <div style={{
-      background: "var(--surface)",
-      border: "1px solid var(--border)",
-      borderRadius: "var(--radius-lg)",
-      padding: "16px",
-      boxShadow: "var(--shadow-sm)",
-      display: "flex",
-      flexDirection: "column",
-      gap: "12px",
-    }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-        <div style={{
-          width: "40px",
-          height: "40px",
-          borderRadius: "8px",
-          background: "var(--surface-2)",
-          border: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: "11px",
-          fontWeight: 700,
-          color: "var(--fg-2)",
-          fontFamily: "var(--font-mono)",
-          flexShrink: 0,
-        }}>
-          {PLATFORM_ICONS[platform.platform] ?? "??"}
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
-            <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-display)", color: "var(--fg)" }}>
-              {platform.label}
-            </span>
-            <BadgeStatus tone={tone} label={statusLabel} />
-          </div>
-          <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0, lineHeight: 1.4 }}>
-            {platformDesc}
-          </p>
-        </div>
-      </div>
-
-      {error && (
-        <div style={{ padding: "8px 10px", borderRadius: "var(--radius)", background: "var(--err-bg)", color: "var(--err-fg)", fontSize: "12px" }}>
-          {error}
-        </div>
-      )}
-
-      {/* BridgeAI OAuth */}
-      {platform.server_configured && !conn && (
-        <button
-          onClick={handleConnect}
-          disabled={connecting || hasAnyActive}
-          title={hasAnyActive ? s.actions.one_active : undefined}
-          style={{
-            padding: "5px 12px", borderRadius: "var(--radius)", border: "none",
-            background: hasAnyActive ? "var(--surface-3)" : "var(--accent)",
-            color: hasAnyActive ? "var(--muted)" : "var(--accent-fg)",
-            fontSize: "12.5px", fontWeight: 500, alignSelf: "flex-start",
-            cursor: (connecting || hasAnyActive) ? "not-allowed" : "pointer",
-          }}
-        >
-          {connecting ? s.actions.connecting : s.actions.connect}
-        </button>
-      )}
-
-      {/* Disconnect (if active connection) */}
-      {conn && (
-        <button
-          onClick={handleDisconnect}
-          disabled={disconnecting}
-          style={{
-            padding: "5px 12px", borderRadius: "var(--radius)",
-            border: "1px solid var(--err-bg)", background: "var(--err-bg)",
-            color: "var(--err-fg)", fontSize: "12.5px", fontWeight: 500,
-            cursor: disconnecting ? "not-allowed" : "pointer", alignSelf: "flex-start",
-          }}
-        >
-          {disconnecting ? s.actions.disconnecting : s.actions.disconnect}
-        </button>
-      )}
-
-      {/* Connect (no connection, not ready) */}
-      {!conn && !platform.server_configured && (
-        <button
-          disabled
-          style={{
-            padding: "5px 12px", borderRadius: "var(--radius)", border: "none",
-            background: "var(--surface-3)", color: "var(--muted)",
-            fontSize: "12.5px", fontWeight: 500, cursor: "not-allowed",
-          }}
-        >
-          {s.actions.connect_first}
-        </button>
-      )}
-
-      {!conn && PAT_PLATFORMS.has(platform.platform) && (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <button
-            type="button"
-            onClick={() => onOpenPat(platform.platform)}
-            style={{
-              padding: "0",
-              border: "none",
-              background: "transparent",
-              color: "var(--muted)",
-              fontSize: "11.5px",
-              cursor: "pointer",
-              textDecoration: "underline",
-              textDecorationColor: "var(--border-strong)",
-              textUnderlineOffset: "2px",
-            }}
-          >
-            {s.pat.use_pat}
-          </button>
-          <button
-            type="button"
-            onClick={() => onOpenHelp(platform.platform)}
-            title="Ver instrucciones"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "18px",
-              height: "18px",
-              borderRadius: "50%",
-              border: "1px solid var(--border)",
-              background: "var(--surface-2)",
-              color: "var(--muted)",
-              fontSize: "10px",
-              fontWeight: 700,
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
-          >
-            ?
-          </button>
-        </div>
-      )}
-    </div>
-  )
+const SECTION_LABEL_STYLE: React.CSSProperties = {
+  fontSize: "11px",
+  fontWeight: 600,
+  color: "var(--fg-2)",
+  margin: 0,
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  fontFamily: "var(--font-mono)",
 }
 
 function ConnectionsContent() {
@@ -253,7 +49,6 @@ function ConnectionsContent() {
   const [connections, setConnections] = useState<ConnectionResponse[]>([])
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "err" } | null>(null)
   const [activeSection, setActiveSection] = useState("repositorios")
-  const [patModalPlatform, setPatModalPlatform] = useState<string | null>(null)
   const [helpPlatform, setHelpPlatform] = useState<string | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const refreshingRef = useRef(false)
@@ -285,12 +80,10 @@ function ConnectionsContent() {
     const error = searchParams.get("error")
     if (!connected && !error) return
 
-    // Clear params from URL immediately so StrictMode double-mount doesn't re-process them
     router.replace("/connections", { scroll: false })
 
     if (connected) {
-      // Only refresh now if Auth0 is already loaded — otherwise the isLoaded/isSignedIn
-      // effect will fire refresh() once Auth0 finishes initializing after the OAuth redirect.
+      if (!SCM_PLATFORMS.has(connected)) setActiveSection("herramientas")
       if (isLoaded && isSignedIn) refresh()
     } else if (error) {
       setToast({ msg: `${s.toast_error} ${PLATFORM_LABELS[error] ?? error}`, tone: "err" })
@@ -303,18 +96,9 @@ function ConnectionsContent() {
   }, [searchParams, router, refresh, isLoaded, isSignedIn, s.toast_connected, s.toast_error])
 
   const NAV_ITEMS = [
-    { id: "repositorios",  label: s.sections.repositories },
-    { id: "herramientas",  label: s.sections.management_tools },
+    { id: "repositorios", label: s.sections.repositories },
+    { id: "herramientas", label: s.sections.management_tools },
   ]
-
-  function handlePatConnected() {
-    const label = PLATFORM_LABELS[patModalPlatform ?? ""] ?? patModalPlatform
-    setPatModalPlatform(null)
-    refresh()
-    setToast({ msg: `${s.toast_connected} ${label}`, tone: "ok" })
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
-    toastTimerRef.current = setTimeout(() => setToast(null), 5000)
-  }
 
   return (
     <>
@@ -382,14 +166,16 @@ function ConnectionsContent() {
           {/* Header */}
           <div>
             <h1 style={{
-              fontSize: "20px",
-              fontWeight: 700,
+              fontSize: "24px",
+              fontWeight: 600,
               fontFamily: "var(--font-display)",
               color: "var(--fg)",
               margin: 0,
-              letterSpacing: "-0.01em",
-            }}>{NAV_ITEMS.find((n) => n.id === activeSection)?.label}</h1>
-            <p style={{ fontSize: "13px", color: "var(--muted)", marginTop: "4px", marginBottom: 0 }}>
+              letterSpacing: "-0.02em",
+            }}>
+              {activeSection === "repositorios" ? s.title : NAV_ITEMS.find((n) => n.id === activeSection)?.label}
+            </h1>
+            <p style={{ fontSize: "13.5px", color: "var(--muted)", marginTop: "4px", marginBottom: 0, maxWidth: "640px" }}>
               {s.description}
             </p>
           </div>
@@ -399,7 +185,7 @@ function ConnectionsContent() {
               {/* Connected SCM accounts */}
               {connections.filter((c) => SCM_PLATFORMS.has(c.platform)).length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <h2 style={{ fontSize: "13px", fontWeight: 600, color: "var(--fg-2)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  <h2 style={SECTION_LABEL_STYLE}>
                     {s.connected_accounts}
                   </h2>
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -413,12 +199,11 @@ function ConnectionsContent() {
               {/* SCM platform cards */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                 {platforms.filter((p) => SCM_PLATFORMS.has(p.platform)).map((p) => (
-                  <PlatformCardDesign
+                  <PlatformCard
                     key={p.platform}
                     platform={p}
                     connections={connections.filter((c) => SCM_PLATFORMS.has(c.platform))}
                     onUpdated={refresh}
-                    onOpenPat={setPatModalPlatform}
                     onOpenHelp={setHelpPlatform}
                   />
                 ))}
@@ -426,52 +211,71 @@ function ConnectionsContent() {
             </>
           )}
 
-          {activeSection === "herramientas" && (
-            <>
-              {/* Connected management tool accounts */}
-              {connections.filter((c) => !SCM_PLATFORMS.has(c.platform)).length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <h2 style={{ fontSize: "13px", fontWeight: 600, color: "var(--fg-2)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    {s.connected_accounts}
-                  </h2>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {connections.filter((c) => !SCM_PLATFORMS.has(c.platform)).map((c) => (
-                      <ConnectionCard key={c.id} connection={c} onUpdated={refresh} />
-                    ))}
+          {activeSection === "herramientas" && (() => {
+            const jiraConns = connections.filter((c) => !SCM_PLATFORMS.has(c.platform))
+            const azureConn = connections.find((c) => c.platform === "azure_devops") ?? null
+            const hasJira = jiraConns.length > 0
+            // Azure Boards counts as a configured management tool only when boards_project is set
+            const azureBoardsConns = connections.filter((c) => c.platform === "azure_devops" && c.boards_project)
+            // Jira takes priority: if Jira is connected, hide Azure Boards from connected accounts
+            const showAzureBoardsAccount = !!azureConn && !hasJira
+            const mgmtAccounts = [
+              ...(showAzureBoardsAccount ? [{ conn: azureConn, boards: true }] : []),
+              ...jiraConns.map((c) => ({ conn: c, boards: false })),
+            ]
+
+            return (
+              <>
+                {/* Connected management tool accounts — at most ONE shown */}
+                {mgmtAccounts.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <h2 style={SECTION_LABEL_STYLE}>{s.connected_accounts}</h2>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {mgmtAccounts.map(({ conn, boards }) => (
+                        <ConnectionCard
+                          key={boards ? `boards-${conn.id}` : conn.id}
+                          connection={conn}
+                          onUpdated={refresh}
+                          boardsMode={boards}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Management tool platform cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                {platforms.filter((p) => !SCM_PLATFORMS.has(p.platform)).map((p) => (
-                  <PlatformCardDesign
-                    key={p.platform}
-                    platform={p}
-                    connections={connections.filter((c) => !SCM_PLATFORMS.has(c.platform))}
-                    onUpdated={refresh}
-                    onOpenPat={setPatModalPlatform}
-                    onOpenHelp={setHelpPlatform}
-                  />
-                ))}
-              </div>
-            </>
-          )}
+                {/* Management tool platform cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                  {/* Azure Boards — disabled when Jira is already connected */}
+                  {platforms.filter((p) => p.platform === "azure_devops").map((p) => (
+                    <PlatformCard
+                      key="azure_boards"
+                      platform={p}
+                      connections={[...(azureConn ? [azureConn] : []), ...jiraConns]}
+                      onUpdated={refresh}
+                      onOpenHelp={setHelpPlatform}
+                      boardsMode
+                    />
+                  ))}
+                  {/* Jira — disabled when Azure Boards is configured (boards_project set) */}
+                  {platforms.filter((p) => !SCM_PLATFORMS.has(p.platform)).map((p) => (
+                    <PlatformCard
+                      key={p.platform}
+                      platform={p}
+                      connections={[...jiraConns, ...azureBoardsConns]}
+                      onUpdated={refresh}
+                      onOpenHelp={setHelpPlatform}
+                    />
+                  ))}
+                </div>
+              </>
+            )
+          })()}
         </div>
       </div>
-
-      <PatConnectModal
-        platform={patModalPlatform ?? ""}
-        isOpen={patModalPlatform !== null}
-        onClose={() => setPatModalPlatform(null)}
-        onConnected={handlePatConnected}
-        onOpenHelp={patModalPlatform ? () => { setPatModalPlatform(null); setHelpPlatform(patModalPlatform) } : undefined}
-      />
 
       <PatHelpDrawer
         platform={helpPlatform}
         onClose={() => setHelpPlatform(null)}
-        onConnectPat={(p) => { setHelpPlatform(null); setPatModalPlatform(p) }}
       />
     </>
   )
