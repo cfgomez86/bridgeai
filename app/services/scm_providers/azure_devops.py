@@ -1,23 +1,25 @@
 import urllib.parse
 import urllib.request
 import json
-import base64
 from app.services.scm_providers.base import ScmProvider, RemoteFileEntry
 
 
 class AzureDevOpsProvider(ScmProvider):
     platform = "azure_devops"
 
-    _AUTHORIZE_URL = "https://app.vssps.visualstudio.com/oauth2/authorize"
-    _TOKEN_URL = "https://app.vssps.visualstudio.com/oauth2/token"
+    # Microsoft Entra ID (AAD) OAuth 2.0 endpoints
+    _AUTHORIZE_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+    _TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     _PROFILE_URL = "https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1"
     _ACCOUNTS_URL = "https://app.vssps.visualstudio.com/_apis/accounts?api-version=7.1"
+    # Azure DevOps resource ID in Entra ID
+    _SCOPE = "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation offline_access"
 
     def get_authorize_url(self, client_id: str, redirect_uri: str, state: str) -> str:
         params = urllib.parse.urlencode({
             "client_id": client_id,
-            "response_type": "Assertion",
-            "scope": "vso.code vso.project",
+            "response_type": "code",
+            "scope": self._SCOPE,
             "redirect_uri": redirect_uri,
             "state": state,
         })
@@ -25,11 +27,12 @@ class AzureDevOpsProvider(ScmProvider):
 
     def exchange_code(self, code: str, client_id: str, client_secret: str, redirect_uri: str) -> dict:
         payload = urllib.parse.urlencode({
-            "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-            "client_assertion": client_secret,
-            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-            "assertion": code,
+            "grant_type": "authorization_code",
+            "code": code,
             "redirect_uri": redirect_uri,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": self._SCOPE,
         }).encode()
         req = urllib.request.Request(
             self._TOKEN_URL,
@@ -59,9 +62,17 @@ class AzureDevOpsProvider(ScmProvider):
         return {"login": login, "name": name}
 
     def list_repos(self, access_token: str) -> list[dict]:
-        # Get accounts first
+        # Entra ID tokens require memberId to filter accounts for the authenticated user
+        profile_req = urllib.request.Request(
+            self._PROFILE_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        with urllib.request.urlopen(profile_req, timeout=15) as resp:
+            profile = json.loads(resp.read())
+        member_id = profile.get("id", "")
+        accounts_url = self._ACCOUNTS_URL + (f"&memberId={member_id}" if member_id else "")
         req = urllib.request.Request(
-            self._ACCOUNTS_URL,
+            accounts_url,
             headers={"Authorization": f"Bearer {access_token}"},
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
