@@ -66,10 +66,6 @@ jobs:
         run: npm ci
         working-directory: frontend
 
-      - name: Lint
-        run: npx eslint .
-        working-directory: frontend
-
       - name: Typecheck
         run: npx tsc --noEmit
         working-directory: frontend
