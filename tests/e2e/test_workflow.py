@@ -74,8 +74,22 @@ _STORY_DETAIL = {
     "risk_notes": ["Token expiry must be validated server-side"],
     "story_points": 5,
     "risk_level": "medium",
+    "is_locked": False,
     "created_at": "2024-01-01T00:00:00Z",
     "generation_time_seconds": 1.0,
+}
+
+_QUALITY_METRICS = {
+    "structural": {
+        "schema_valid": True,
+        "ac_count": 2,
+        "risk_notes_count": 1,
+        "subtask_count": 4,
+        "cited_paths_total": 0,
+        "cited_paths_existing": 0,
+        "citation_grounding_ratio": 1.0,
+    },
+    "judge": None,
 }
 
 
@@ -146,6 +160,17 @@ def _setup_routes(page) -> None:
                 "risk_level": "medium",
                 "generation_time_seconds": 1.0,
             })
+
+        elif "/api/v1/stories/" in url and "/feedback" in url:
+            if method == "GET":
+                route.fulfill(status=200, content_type="application/json", body="null")
+            else:
+                ok({"id": "fb-test", "story_id": "story-test", "user_id": "user-test",
+                    "rating": "thumbs_up", "comment": None,
+                    "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"})
+
+        elif "/api/v1/stories/" in url and "/quality" in url:
+            ok(_QUALITY_METRICS)
 
         elif "/api/v1/stories/" in url:
             ok(_STORY_DETAIL)
