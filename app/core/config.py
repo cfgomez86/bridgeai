@@ -90,6 +90,12 @@ class Settings(BaseSettings):
     JIRA_CLIENT_ID: str = ""
     JIRA_CLIENT_SECRET: str = ""
 
+    # Quality Judge (LLM-as-Judge)
+    AI_JUDGE_PROVIDER: str = ""   # if empty, uses AI_PROVIDER
+    AI_JUDGE_MODEL: str = ""      # if empty, uses AI_MODEL
+    AI_JUDGE_ENABLED: bool = True
+    EVAL_REPORT_PATH: str = "./eval_report.json"
+
     @property
     def project_root_path(self) -> Path:
         return Path(self.PROJECT_ROOT).resolve()

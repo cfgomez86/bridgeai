@@ -327,6 +327,64 @@ interface Translations {
       step4: { title: string; desc: string }
     }
   }
+  stories: {
+    edit_title: string
+    edit_btn: string
+    edit_saved: string
+    locked_badge: string
+    locked_error: string
+    field_title: string
+    field_description: string
+    field_ac: string
+    field_dod: string
+    field_risk_notes: string
+    field_story_points: string
+    field_risk_level: string
+    subtasks_frontend: string
+    subtasks_backend: string
+    subtasks_configuration: string
+    subtask: string
+    subtask_title_placeholder: string
+    subtask_desc_placeholder: string
+    add_item: string
+    add_subtask: string
+    quality: {
+      title: string
+      loading: string
+      structural_title: string
+      judge_title: string
+      schema_valid: string
+      schema_invalid: string
+      ac_count: string
+      subtask_count: string
+      citation_grounding: string
+      evaluate_btn: string
+      evaluating: string
+      completeness: string
+      specificity: string
+      feasibility: string
+      risk_coverage: string
+      language_consistency: string
+      overall: string
+    }
+    feedback: {
+      title: string
+      thumbs_up: string
+      thumbs_down: string
+      comment_placeholder: string
+      submit_btn: string
+      update_btn: string
+      submitting: string
+      submitted_ok: string
+      submit_error: string
+    }
+    system_quality: {
+      precision_label: string
+      evaluated_label: string
+      dataset_size: string
+      evaluated_at: string
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -612,6 +670,64 @@ const es: Translations = {
         light: "Claro",
         dark: "Oscuro",
       },
+    },
+  },
+  stories: {
+    edit_title: "Editar historia",
+    edit_btn: "Editar",
+    edit_saved: "Historia actualizada",
+    locked_badge: "Enviado",
+    locked_error: "Esta historia ya fue enviada a Jira/Azure y no puede editarse",
+    field_title: "Titulo",
+    field_description: "Descripcion",
+    field_ac: "Criterios de aceptacion",
+    field_dod: "Definicion de terminado",
+    field_risk_notes: "Notas de riesgo",
+    field_story_points: "Story points",
+    field_risk_level: "Nivel de riesgo",
+    subtasks_frontend: "Subtareas Frontend",
+    subtasks_backend: "Subtareas Backend",
+    subtasks_configuration: "Subtareas Configuracion",
+    subtask: "Subtarea",
+    subtask_title_placeholder: "Titulo de la subtarea",
+    subtask_desc_placeholder: "Descripcion detallada de la subtarea",
+    add_item: "Agregar elemento",
+    add_subtask: "Agregar subtarea",
+    quality: {
+      title: "Calidad de la historia",
+      loading: "Cargando metricas...",
+      structural_title: "Estructural",
+      judge_title: "Evaluacion AI",
+      schema_valid: "Esquema valido",
+      schema_invalid: "Esquema invalido",
+      ac_count: "AC",
+      subtask_count: "Subtareas",
+      citation_grounding: "Grounding",
+      evaluate_btn: "Evaluar con IA",
+      evaluating: "Evaluando...",
+      completeness: "Completitud",
+      specificity: "Especificidad",
+      feasibility: "Viabilidad",
+      risk_coverage: "Cobertura de riesgos",
+      language_consistency: "Consistencia de idioma",
+      overall: "Puntuacion general",
+    },
+    feedback: {
+      title: "Tu opinion",
+      thumbs_up: "Util",
+      thumbs_down: "Mejorable",
+      comment_placeholder: "Comentario opcional...",
+      submit_btn: "Enviar",
+      update_btn: "Actualizar",
+      submitting: "Enviando...",
+      submitted_ok: "Feedback enviado",
+      submit_error: "Error al enviar feedback",
+    },
+    system_quality: {
+      precision_label: "Precision historica del analisis: {pct}%",
+      evaluated_label: "Evaluado",
+      dataset_size: "Dataset",
+      evaluated_at: "Evaluado el",
     },
   },
   dashboard: {
@@ -1015,6 +1131,64 @@ const en: Translations = {
       step2: { title: "Impact", desc: "Crosses your indexed codebase" },
       step3: { title: "Generate", desc: "Stories + criteria + story points" },
       step4: { title: "Deliver", desc: "Creates ticket in Jira or Azure DevOps" },
+    },
+  },
+  stories: {
+    edit_title: "Edit story",
+    edit_btn: "Edit",
+    edit_saved: "Story updated",
+    locked_badge: "Sent",
+    locked_error: "This story was already sent to Jira/Azure and cannot be edited",
+    field_title: "Title",
+    field_description: "Description",
+    field_ac: "Acceptance criteria",
+    field_dod: "Definition of done",
+    field_risk_notes: "Risk notes",
+    field_story_points: "Story points",
+    field_risk_level: "Risk level",
+    subtasks_frontend: "Frontend subtasks",
+    subtasks_backend: "Backend subtasks",
+    subtasks_configuration: "Configuration subtasks",
+    subtask: "Subtask",
+    subtask_title_placeholder: "Subtask title",
+    subtask_desc_placeholder: "Detailed subtask description",
+    add_item: "Add item",
+    add_subtask: "Add subtask",
+    quality: {
+      title: "Story quality",
+      loading: "Loading metrics...",
+      structural_title: "Structural",
+      judge_title: "AI Evaluation",
+      schema_valid: "Schema valid",
+      schema_invalid: "Schema invalid",
+      ac_count: "AC",
+      subtask_count: "Subtasks",
+      citation_grounding: "Grounding",
+      evaluate_btn: "Evaluate with AI",
+      evaluating: "Evaluating...",
+      completeness: "Completeness",
+      specificity: "Specificity",
+      feasibility: "Feasibility",
+      risk_coverage: "Risk coverage",
+      language_consistency: "Language consistency",
+      overall: "Overall score",
+    },
+    feedback: {
+      title: "Your feedback",
+      thumbs_up: "Useful",
+      thumbs_down: "Needs improvement",
+      comment_placeholder: "Optional comment...",
+      submit_btn: "Submit",
+      update_btn: "Update",
+      submitting: "Submitting...",
+      submitted_ok: "Feedback submitted",
+      submit_error: "Error submitting feedback",
+    },
+    system_quality: {
+      precision_label: "Historical analysis precision: {pct}%",
+      evaluated_label: "Evaluated",
+      dataset_size: "Dataset",
+      evaluated_at: "Evaluated on",
     },
   },
 }

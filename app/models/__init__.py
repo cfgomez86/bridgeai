@@ -7,6 +7,8 @@ from app.models.requirement import Requirement  # noqa: F401
 from app.models.ticket_integration import IntegrationAuditLog, TicketIntegration  # noqa: F401
 from app.models.user_story import UserStory  # noqa: F401
 from app.models.source_connection import SourceConnection  # noqa: F401
+from app.models.story_feedback import StoryFeedback  # noqa: F401
+from app.models.story_quality_score import StoryQualityScore  # noqa: F401
 
 __all__ = [
     "Tenant",
@@ -20,4 +22,6 @@ __all__ = [
     "IntegrationAuditLog",
     "UserStory",
     "SourceConnection",
+    "StoryFeedback",
+    "StoryQualityScore",
 ]

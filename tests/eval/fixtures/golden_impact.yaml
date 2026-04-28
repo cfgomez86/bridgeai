@@ -1,0 +1,17 @@
+- id: REQ_001
+  requirement: "Agregar autenticacion OAuth y modificar auth routes de autenticacion"
+  expected_files:
+    - app/core/auth0_auth.py
+    - app/api/routes/auth.py
+
+- id: REQ_002
+  requirement: "Permitir editar story generation antes de enviarlas como ticket"
+  expected_files:
+    - app/api/routes/story_generation.py
+    - app/services/story_generation_service.py
+
+- id: REQ_003
+  requirement: "Indexar codigo fuente del repositorio usando code indexing service"
+  expected_files:
+    - app/services/code_indexing_service.py
+    - app/api/routes/indexing.py

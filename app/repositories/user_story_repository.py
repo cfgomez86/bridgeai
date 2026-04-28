@@ -8,6 +8,8 @@ from app.domain.user_story import UserStory as DomainUserStory
 from app.models.user_story import UserStory
 from app.utils.json_utils import parse_json_field
 
+_JSON_FIELDS = frozenset({"acceptance_criteria", "subtasks", "definition_of_done", "risk_notes"})
+
 
 class UserStoryRepository:
     def __init__(self, db: Session) -> None:
@@ -49,10 +51,9 @@ class UserStoryRepository:
             .first()
         )
 
-    def find_domain_by_id(self, story_id: str) -> Optional[DomainUserStory]:
-        model = self.find_by_id(story_id)
-        if not model:
-            return None
+    @staticmethod
+    def to_domain(model: "UserStory") -> DomainUserStory:
+        """Convert an ORM UserStory to a DomainUserStory without an extra DB query."""
         return DomainUserStory(
             story_id=model.id,
             requirement_id=model.requirement_id,
@@ -69,6 +70,30 @@ class UserStoryRepository:
             created_at=model.created_at,
             generation_time_seconds=model.generation_time_seconds,
         )
+
+    def find_domain_by_id(self, story_id: str) -> Optional[DomainUserStory]:
+        model = self.find_by_id(story_id)
+        if not model:
+            return None
+        return self.to_domain(model)
+
+    def update_story(
+        self,
+        story_id: str,
+        source_connection_id: str,
+        **fields,
+    ) -> Optional[UserStory]:
+        """Update editable fields of a story. JSON list/dict fields are re-serialised."""
+        story = self.find_by_id_scoped(story_id, source_connection_id)
+        if story is None:
+            return None
+        for key, value in fields.items():
+            if key in _JSON_FIELDS and not isinstance(value, str):
+                value = json.dumps(value, ensure_ascii=False)
+            setattr(story, key, value)
+        self._db.commit()
+        self._db.refresh(story)
+        return story
 
     def find_by_requirement_and_analysis(
         self,

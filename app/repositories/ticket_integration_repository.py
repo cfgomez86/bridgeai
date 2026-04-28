@@ -15,6 +15,18 @@ class TicketIntegrationRepository:
     def _tid(self) -> str:
         return get_tenant_id()
 
+    def exists_for_story(self, story_id: str) -> bool:
+        """Return True if any CREATED ticket integration exists for this story."""
+        return (
+            self._db.query(TicketIntegration)
+            .filter(
+                TicketIntegration.tenant_id == self._tid(),
+                TicketIntegration.story_id == story_id,
+                TicketIntegration.status == "CREATED",
+            )
+            .first()
+        ) is not None
+
     def find_by_story_and_provider(
         self, story_id: str, provider: str
     ) -> Optional[TicketIntegration]:

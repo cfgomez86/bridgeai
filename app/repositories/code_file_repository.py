@@ -108,6 +108,13 @@ class CodeFileRepository:
         self._db.commit()
         return deleted
 
+    def exists_by_path(self, file_path: str, source_connection_id: str) -> bool:
+        return (
+            self._base_query(source_connection_id)
+            .filter(CodeFile.file_path == file_path)
+            .first()
+        ) is not None
+
     def get_status(self, source_connection_id: Optional[str] = None) -> tuple[int, Optional[datetime]]:
         total, last = (
             self._base_query(source_connection_id)

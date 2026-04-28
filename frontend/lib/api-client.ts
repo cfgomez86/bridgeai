@@ -141,6 +141,62 @@ export interface StoryDetailResponse {
   risk_level: string
   created_at: string
   generation_time_seconds: number
+  is_locked?: boolean
+}
+
+export interface StoryUpdateRequest {
+  source_connection_id: string
+  title?: string
+  story_description?: string
+  acceptance_criteria?: string[]
+  subtasks?: Record<string, Subtask[]>
+  definition_of_done?: string[]
+  risk_notes?: string[]
+  story_points?: number
+  risk_level?: string
+}
+
+export interface FeedbackResponse {
+  id: string
+  story_id: string
+  user_id: string
+  rating: string
+  comment?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface StructuralMetrics {
+  schema_valid: boolean
+  ac_count: number
+  risk_notes_count: number
+  subtask_count: number
+  cited_paths_total: number
+  cited_paths_existing: number
+  citation_grounding_ratio: number
+}
+
+export interface JudgeScores {
+  completeness: number
+  specificity: number
+  feasibility: number
+  risk_coverage: number
+  language_consistency: number
+  overall: number
+  justification?: string | null
+  judge_model?: string | null
+  evaluated_at?: string | null
+}
+
+export interface QualityMetricsResponse {
+  story_id: string
+  structural: StructuralMetrics
+  judge?: JudgeScores | null
+}
+
+export interface SystemQualityResponse {
+  status: string
+  data?: Record<string, unknown> | null
 }
 
 export interface CreateTicketResponse {
@@ -392,6 +448,46 @@ export async function generateStory(
 
 export async function getStoryDetail(storyId: string): Promise<StoryDetailResponse> {
   return apiFetch<StoryDetailResponse>(`/api/v1/stories/${storyId}`)
+}
+
+export async function updateStory(
+  storyId: string,
+  patch: StoryUpdateRequest,
+): Promise<StoryDetailResponse> {
+  return apiFetch<StoryDetailResponse>(`/api/v1/stories/${storyId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  })
+}
+
+export async function getStoryFeedback(storyId: string): Promise<FeedbackResponse | null> {
+  return apiFetch<FeedbackResponse | null>(`/api/v1/stories/${storyId}/feedback`)
+}
+
+export async function submitStoryFeedback(
+  storyId: string,
+  rating: string,
+  comment?: string,
+): Promise<FeedbackResponse> {
+  return apiFetch<FeedbackResponse>(`/api/v1/stories/${storyId}/feedback`, {
+    method: "POST",
+    body: JSON.stringify({ rating, comment }),
+  })
+}
+
+export async function getStoryQuality(storyId: string): Promise<QualityMetricsResponse> {
+  return apiFetch<QualityMetricsResponse>(`/api/v1/stories/${storyId}/quality`)
+}
+
+export async function evaluateStoryQuality(storyId: string): Promise<QualityMetricsResponse> {
+  return apiFetch<QualityMetricsResponse>(`/api/v1/stories/${storyId}/quality/evaluate`, {
+    method: "POST",
+    body: "{}",
+  })
+}
+
+export async function getSystemQuality(): Promise<SystemQualityResponse> {
+  return apiFetch<SystemQualityResponse>("/api/v1/system/quality")
 }
 
 export async function createTicket(

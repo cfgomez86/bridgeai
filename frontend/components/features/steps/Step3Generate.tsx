@@ -6,7 +6,10 @@ import { useLanguage } from "@/lib/i18n"
 import type { WorkflowState } from "@/hooks/useWorkflow"
 import { RiskBadge } from "@/components/features/RiskBadge"
 import { StepSummaryCard } from "@/components/features/StepSummaryCard"
-import { Loader2, GitPullRequest, CheckCircle, Code, ListChecks, FileText, Search, Zap, AlertTriangle } from "lucide-react"
+import { EditStoryModal } from "@/components/features/stories/EditStoryModal"
+import { QualityPanel } from "@/components/features/stories/QualityPanel"
+import { StoryFeedback } from "@/components/features/stories/StoryFeedback"
+import { Loader2, GitPullRequest, CheckCircle, Code, ListChecks, FileText, Search, Zap, AlertTriangle, Pencil, Lock } from "lucide-react"
 
 const truncate = (text: string, max: number) =>
   text.length > max ? text.slice(0, max) + "…" : text
@@ -37,8 +40,15 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [story, setStory] = useState<StoryDetailResponse | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; tone: "ok" | "err" } | null>(null)
   const { t } = useLanguage()
   const s = t.workflow.step3
+
+  function showToast(msg: string, tone: "ok" | "err") {
+    setToast({ msg, tone })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   async function handleGenerate() {
     if (!state.requirementId || !state.analysisId) return
@@ -136,9 +146,35 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
         {story && (
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <div>
-              <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--fg)", margin: "0 0 6px", fontFamily: "var(--font-display)" }}>
-                {story.title}
-              </h3>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "6px" }}>
+                <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--fg)", margin: 0, fontFamily: "var(--font-display)", flex: 1 }}>
+                  {story.title}
+                </h3>
+                {story.is_locked ? (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: "4px",
+                    padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 600,
+                    background: "var(--surface-3)", color: "var(--muted)",
+                    flexShrink: 0,
+                  }}>
+                    <Lock size={10} /> {t.stories.locked_badge}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditOpen(true)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "4px",
+                      padding: "4px 10px", borderRadius: "var(--radius)",
+                      border: "1px solid var(--border)", background: "var(--surface-2)",
+                      color: "var(--fg-2)", fontSize: "12px", cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Pencil size={11} /> {t.stories.edit_btn}
+                  </button>
+                )}
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ ...chip("pts"), background: "var(--accent-soft)", color: "var(--accent-strong)" }}>
                   {story.story_points} {story.story_points === 1 ? s.point : s.points}
@@ -303,6 +339,41 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
           </button>
         )}
       </div>
+
+      {/* Quality Panel and Feedback — shown after story is generated */}
+      {story && (
+        <>
+          <QualityPanel storyId={story.story_id} />
+          <StoryFeedback storyId={story.story_id} onToast={showToast} />
+        </>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: "fixed", top: "64px", right: "16px", zIndex: 50,
+          background: toast.tone === "ok" ? "var(--ok-bg)" : "var(--err-bg)",
+          color: toast.tone === "ok" ? "var(--ok-fg)" : "var(--err-fg)",
+          padding: "10px 16px", borderRadius: "var(--radius)",
+          border: `1px solid ${toast.tone === "ok" ? "var(--ok-fg)" : "var(--err-fg)"}`,
+          fontSize: "13px", fontWeight: 500, boxShadow: "var(--shadow-sm)", maxWidth: "320px",
+        }}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {story && editOpen && (
+        <EditStoryModal
+          story={story}
+          isOpen={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSaved={updated => {
+            setStory(updated)
+            showToast(t.stories.edit_saved, "ok")
+          }}
+        />
+      )}
     </div>
   )
 }
