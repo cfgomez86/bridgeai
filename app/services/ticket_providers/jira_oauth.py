@@ -75,6 +75,28 @@ class JiraOAuthProvider:
             "expires_in": data.get("expires_in"),
         }
 
+    def refresh_access_token(self, refresh_token: str, client_id: str, client_secret: str) -> dict:
+        payload = json.dumps({
+            "grant_type": "refresh_token",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+        }).encode()
+        req = urllib.request.Request(
+            self._TOKEN_URL,
+            data=payload,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        if "error" in data:
+            raise ValueError(f"Jira token refresh failed: {data.get('error_description', data['error'])}")
+        return {
+            "access_token": data["access_token"],
+            "refresh_token": data.get("refresh_token", refresh_token),
+        }
+
     def get_user_info(self, access_token: str) -> dict:
         req = urllib.request.Request(
             self._ME_URL,

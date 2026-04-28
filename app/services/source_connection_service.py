@@ -1,4 +1,5 @@
 import logging
+import urllib.error
 import uuid
 
 from app.core.config import Settings, get_settings
@@ -268,12 +269,29 @@ class SourceConnectionService:
             kwargs["org_url"] = conn.base_url
         return provider.list_projects(conn.access_token, **kwargs)  # type: ignore[attr-defined]
 
+    def _refresh_jira_token(self, conn) -> str:
+        """Exchange the stored refresh_token for a new access_token and persist it."""
+        if not conn.refresh_token:
+            raise ValueError("Jira token expired and no refresh token is available — please reconnect.")
+        client_id, client_secret = self._resolve_credentials("jira")
+        provider = get_provider("jira")
+        tokens = provider.refresh_access_token(conn.refresh_token, client_id, client_secret)  # type: ignore[attr-defined]
+        self._repo.update_tokens(conn.id, tokens["access_token"], tokens.get("refresh_token") or conn.refresh_token)
+        logger.info("Jira token refreshed connection=%s", conn.id)
+        return tokens["access_token"]
+
     def list_sites(self, connection_id: str) -> list[dict]:
         conn = self._repo.find_by_id(connection_id)
         if not conn or conn.platform != "jira":
             raise ValueError(f"Jira connection {connection_id!r} not found.")
         provider = get_provider("jira")
-        return provider.list_sites(conn.access_token)  # type: ignore[attr-defined]
+        try:
+            return provider.list_sites(conn.access_token)  # type: ignore[attr-defined]
+        except urllib.error.HTTPError as exc:
+            if exc.code == 401 and conn.refresh_token:
+                new_token = self._refresh_jira_token(conn)
+                return provider.list_sites(new_token)  # type: ignore[attr-defined]
+            raise
 
     def list_jira_projects(self, connection_id: str) -> list[dict]:
         conn = self._repo.find_by_id(connection_id)
@@ -282,7 +300,13 @@ class SourceConnectionService:
         if not conn.base_url:
             raise ValueError("No Jira site selected for this connection.")
         provider = get_provider("jira")
-        return provider.list_projects(conn.access_token, conn.base_url)  # type: ignore[attr-defined]
+        try:
+            return provider.list_projects(conn.access_token, conn.base_url)  # type: ignore[attr-defined]
+        except urllib.error.HTTPError as exc:
+            if exc.code == 401 and conn.refresh_token:
+                new_token = self._refresh_jira_token(conn)
+                return provider.list_projects(new_token, conn.base_url)  # type: ignore[attr-defined]
+            raise
 
     def get_project_process(self, connection_id: str, project_name: str) -> str:
         """Returns the Azure DevOps process template name for the given project."""

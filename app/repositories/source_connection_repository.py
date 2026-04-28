@@ -103,6 +103,13 @@ class SourceConnectionRepository:
         self._db.refresh(conn)
         return conn
 
+    def update_tokens(self, connection_id: str, access_token: str, refresh_token: Optional[str]) -> None:
+        self._db.query(SourceConnection).filter(
+            SourceConnection.id == connection_id,
+            SourceConnection.tenant_id == self._tid(),
+        ).update({"access_token": access_token, "refresh_token": refresh_token})
+        self._db.commit()
+
     def find_by_id(self, connection_id: str) -> Optional[SourceConnection]:
         return (
             self._db.query(SourceConnection)

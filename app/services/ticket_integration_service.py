@@ -74,7 +74,31 @@ class TicketIntegrationService:
             )
         return db_conn.access_token, org_url, project_name
 
-    def _get_provider(self, provider_name: str) -> TicketProvider:
+    def _refresh_jira_token(self) -> str | None:
+        """Refresh the Jira OAuth token and persist it. Returns the new access_token or None on failure."""
+        db_conn = self._conn_repo.get_active_for_platform("jira")
+        if not (db_conn and db_conn.refresh_token):
+            return None
+        try:
+            from app.services.ticket_providers.jira_oauth import JiraOAuthProvider
+            provider = JiraOAuthProvider()
+            tokens = provider.refresh_access_token(
+                db_conn.refresh_token,
+                self._settings.JIRA_CLIENT_ID,
+                self._settings.JIRA_CLIENT_SECRET,
+            )
+            self._conn_repo.update_tokens(
+                db_conn.id,
+                tokens["access_token"],
+                tokens.get("refresh_token") or db_conn.refresh_token,
+            )
+            logger.info("jira_token_refreshed connection=%s", db_conn.id)
+            return tokens["access_token"]
+        except Exception as exc:
+            logger.warning("jira_token_refresh_failed error=%s", exc)
+            return None
+
+    def _get_provider(self, provider_name: str, access_token_override: str | None = None) -> TicketProvider:
         if provider_name not in _PROVIDERS:
             raise UnsupportedProviderError(
                 f"Provider '{provider_name}' is not supported. "
@@ -88,7 +112,7 @@ class TicketIntegrationService:
                 )
             return JiraTicketProvider(
                 self._settings,
-                access_token=db_conn.access_token,
+                access_token=access_token_override or db_conn.access_token,
                 base_url=db_conn.base_url,
                 site_url=db_conn.repo_full_name or "",
             )
@@ -212,7 +236,18 @@ class TicketIntegrationService:
 
         start = time.monotonic()
         try:
-            result = await provider.create_ticket(story, project_key, issue_type)
+            try:
+                result = await provider.create_ticket(story, project_key, issue_type)
+            except HTTPError as exc:
+                if exc.code == 401 and provider_name == "jira":
+                    new_token = self._refresh_jira_token()
+                    if new_token:
+                        provider = self._get_provider(provider_name, access_token_override=new_token)
+                        result = await provider.create_ticket(story, project_key, issue_type)
+                    else:
+                        raise
+                else:
+                    raise
 
             subtask_ids, subtask_urls, subtask_titles, failed_subtasks = [], [], [], []
             if create_subtasks and story.subtasks:
