@@ -82,9 +82,47 @@ html, body {
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; border: 2px solid var(--bg); }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* ═══════════════════════════════════════════════════════
+/* ── Inline story editing ─────────────────────────── */
+.editable-field {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  width: 100%;
+  box-sizing: border-box;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  resize: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+.editable-field:not(:disabled):hover  { background: var(--surface-3); border-color: var(--border); }
+.editable-field:not(:disabled):focus  { background: var(--surface-2); border-color: var(--accent); outline: none; }
+.editable-field:disabled              { cursor: default; opacity: 1; -webkit-text-fill-color: currentColor; }
+
+.delete-btn {
+  padding: 2px 3px; border: none; background: transparent;
+  color: var(--muted); cursor: pointer; border-radius: 3px;
+  display: flex; align-items: center; flex-shrink: 0;
+  transition: color 0.1s;
+}
+.delete-btn:hover    { color: var(--err-fg); }
+.delete-btn:disabled { display: none; }
+
+.add-item-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 8px; border: 1px dashed var(--border);
+  border-radius: var(--radius); background: transparent;
+  color: var(--muted); font-size: 12px; cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+}
+.add-item-btn:hover { color: var(--fg-2); border-color: var(--fg-2); }
+
+/* -------------------------------------------------------
    RESPONSIVE LAYOUT SYSTEM
-   ═══════════════════════════════════════════════════════ */
+   ------------------------------------------------------- */
 
 /* Grid utilities — desktop defaults */
 .grid-sidebar-layout     { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
@@ -108,7 +146,7 @@ html, body {
 .stepper-mobile-compact { display: none; }
 .login-mobile-brand     { display: none; }
 
-/* ── Tablet: 769px – 1024px ─────────────────────────── */
+/* --- Tablet: 769px - 1024px --- */
 @media (max-width: 1024px) {
   .dashboard-content     { padding: 28px 32px; }
   .grid-3col             { grid-template-columns: repeat(2, 1fr); }
@@ -116,7 +154,7 @@ html, body {
   .grid-dashboard-bottom { grid-template-columns: 1fr; }
 }
 
-/* ── Mobile: ≤ 768px ────────────────────────────────── */
+/* --- Mobile: <= 768px --- */
 @media (max-width: 768px) {
   /* Base typography — slightly larger for touch readability */
   html, body { font-size: 14px; }

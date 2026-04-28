@@ -11,6 +11,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isAuth = AUTH_PATHS.some((p) => pathname.startsWith(p))
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768)
+    check()
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [])
 
   // Prevent background scroll when sidebar drawer is open on mobile
   useEffect(() => {
@@ -26,13 +34,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="grid-sidebar-layout">
-      {sidebarOpen && (
-        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+    <div
+      className="grid-sidebar-layout"
+      style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "240px 1fr",
+        minHeight: "100vh",
+      }}
+    >
+      {sidebarOpen && isMobile && (
+        <div
+          className="sidebar-overlay"
+          style={{
+            display: "block",
+            position: "fixed",
+            inset: 0,
+            background: "oklch(0 0 0 / 0.45)",
+            zIndex: 39,
+            backdropFilter: "blur(1px)",
+          }}
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} />
       <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", minWidth: 0, overflow: "hidden" }}>
-        <Topbar onMenuToggle={() => setSidebarOpen(true)} />
+        <Topbar onMenuToggle={() => setSidebarOpen(true)} isMobile={isMobile} />
         <main style={{ flex: 1, background: "var(--bg)" }}>{children}</main>
       </div>
     </div>

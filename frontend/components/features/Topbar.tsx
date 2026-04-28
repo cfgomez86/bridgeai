@@ -6,9 +6,10 @@ import { useUser } from "@auth0/nextjs-auth0/client"
 
 interface TopbarProps {
   onMenuToggle?: () => void
+  isMobile?: boolean
 }
 
-export function Topbar({ onMenuToggle }: TopbarProps) {
+export function Topbar({ onMenuToggle, isMobile = false }: TopbarProps) {
   const pathname = usePathname()
   const { t } = useLanguage()
   const { user } = useUser()
@@ -45,11 +46,26 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
       zIndex: 20,
       flexShrink: 0,
     }}>
-      {/* Hamburger — mobile only */}
+      {/* Hamburger — visible only on mobile */}
       <button
         onClick={onMenuToggle}
         className="hamburger-btn"
         aria-label="Abrir menú"
+        style={{
+          display: isMobile ? "flex" : "none",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "36px",
+          height: "36px",
+          padding: 0,
+          border: "none",
+          background: "transparent",
+          color: "var(--fg)",
+          cursor: "pointer",
+          borderRadius: "var(--radius)",
+          flexShrink: 0,
+          marginRight: "4px",
+        }}
       >
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
           <line x1="2" y1="4.5" x2="16" y2="4.5" />

@@ -184,6 +184,7 @@ interface Translations {
       generate_btn: string
       regenerating: string
       regenerate_btn: string
+      continue_btn: string
     }
     step4: {
       title: string
@@ -348,6 +349,7 @@ interface Translations {
     subtask_desc_placeholder: string
     add_item: string
     add_subtask: string
+    save_changes: string
     quality: {
       title: string
       loading: string
@@ -356,8 +358,10 @@ interface Translations {
       schema_valid: string
       schema_invalid: string
       ac_count: string
+      risk_notes_count: string
       subtask_count: string
-      citation_grounding: string
+      cited_paths: string
+      no_citations: string
       evaluate_btn: string
       evaluating: string
       completeness: string
@@ -366,6 +370,22 @@ interface Translations {
       risk_coverage: string
       language_consistency: string
       overall: string
+      score_good: string
+      score_ok: string
+      score_low: string
+      help: {
+        schema_valid: string
+        ac_count: string
+        risk_notes_count: string
+        subtask_count: string
+        citation_grounding: string
+        completeness: string
+        specificity: string
+        feasibility: string
+        risk_coverage: string
+        language_consistency: string
+        overall: string
+      }
     }
     feedback: {
       title: string
@@ -567,6 +587,7 @@ const es: Translations = {
       generate_btn: "Generar historia",
       regenerating: "Regenerando...",
       regenerate_btn: "Regenerar",
+      continue_btn: "Continuar al ticket →",
     },
     step4: {
       title: "Crear ticket",
@@ -693,16 +714,19 @@ const es: Translations = {
     subtask_desc_placeholder: "Descripcion detallada de la subtarea",
     add_item: "Agregar elemento",
     add_subtask: "Agregar subtarea",
+    save_changes: "Guardar cambios",
     quality: {
       title: "Calidad de la historia",
       loading: "Cargando metricas...",
-      structural_title: "Estructural",
-      judge_title: "Evaluacion AI",
+      structural_title: "Metricas estructurales",
+      judge_title: "Evaluacion IA",
       schema_valid: "Esquema valido",
       schema_invalid: "Esquema invalido",
-      ac_count: "AC",
-      subtask_count: "Subtareas",
-      citation_grounding: "Grounding",
+      ac_count: "Criterios de aceptacion",
+      risk_notes_count: "Notas de riesgo",
+      subtask_count: "Subtareas tecnicas",
+      cited_paths: "Archivos en repo",
+      no_citations: "Sin citas externas",
       evaluate_btn: "Evaluar con IA",
       evaluating: "Evaluando...",
       completeness: "Completitud",
@@ -711,6 +735,22 @@ const es: Translations = {
       risk_coverage: "Cobertura de riesgos",
       language_consistency: "Consistencia de idioma",
       overall: "Puntuacion general",
+      score_good: "Bueno",
+      score_ok: "Aceptable",
+      score_low: "Bajo",
+      help: {
+        schema_valid: "La historia tiene titulo, descripcion, al menos 1 criterio de aceptacion y 1 subtarea tecnica",
+        ac_count: "Numero de condiciones que deben cumplirse para dar la historia por completada",
+        risk_notes_count: "Riesgos tecnicos o de negocio identificados y documentados en la historia",
+        subtask_count: "Total de tareas tecnicas de implementacion entre frontend, backend y configuracion",
+        citation_grounding: "De las rutas de archivos mencionadas en subtareas, cuantas existen realmente en el repositorio. Si no hay citas se considera 100%. Detecta rutas inventadas por el modelo",
+        completeness: "La historia cubre todos los casos de uso del requerimiento original",
+        specificity: "Los criterios y subtareas son suficientemente detallados para implementarse sin ambiguedad",
+        feasibility: "La historia es implementable con el stack y el equipo actuales",
+        risk_coverage: "Se identificaron y documentaron todos los riesgos tecnicos relevantes",
+        language_consistency: "Toda la historia esta escrita consistentemente en el mismo idioma",
+        overall: "Puntuacion integrada que considera todos los criterios de evaluacion",
+      },
     },
     feedback: {
       title: "Tu opinion",
@@ -970,6 +1010,7 @@ const en: Translations = {
       generate_btn: "Generate story",
       regenerating: "Regenerating...",
       regenerate_btn: "Regenerate",
+      continue_btn: "Continue to ticket →",
     },
     step4: {
       title: "Create ticket",
@@ -1154,16 +1195,19 @@ const en: Translations = {
     subtask_desc_placeholder: "Detailed subtask description",
     add_item: "Add item",
     add_subtask: "Add subtask",
+    save_changes: "Save changes",
     quality: {
       title: "Story quality",
       loading: "Loading metrics...",
-      structural_title: "Structural",
+      structural_title: "Structural metrics",
       judge_title: "AI Evaluation",
       schema_valid: "Schema valid",
       schema_invalid: "Schema invalid",
-      ac_count: "AC",
-      subtask_count: "Subtasks",
-      citation_grounding: "Grounding",
+      ac_count: "Acceptance criteria",
+      risk_notes_count: "Risk notes",
+      subtask_count: "Technical subtasks",
+      cited_paths: "Files in repo",
+      no_citations: "No external citations",
       evaluate_btn: "Evaluate with AI",
       evaluating: "Evaluating...",
       completeness: "Completeness",
@@ -1172,6 +1216,22 @@ const en: Translations = {
       risk_coverage: "Risk coverage",
       language_consistency: "Language consistency",
       overall: "Overall score",
+      score_good: "Good",
+      score_ok: "Acceptable",
+      score_low: "Low",
+      help: {
+        schema_valid: "The story has a title, description, at least 1 acceptance criterion and 1 subtask",
+        ac_count: "Number of conditions that must be met for the story to be considered complete",
+        risk_notes_count: "Technical or business risks identified and documented in the story",
+        subtask_count: "Total implementation tasks across frontend, backend, and configuration",
+        citation_grounding: "Of the file paths mentioned in subtasks, how many actually exist in the repository. 100% if no citations. Detects hallucinated paths",
+        completeness: "Does the story cover all use cases from the original requirement?",
+        specificity: "Are the criteria and subtasks detailed enough to implement without ambiguity?",
+        feasibility: "Is the story implementable with the current stack and team?",
+        risk_coverage: "Were all relevant technical risks identified and documented?",
+        language_consistency: "Is the entire story written consistently in the same language?",
+        overall: "Integrated score considering all evaluation criteria",
+      },
     },
     feedback: {
       title: "Your feedback",

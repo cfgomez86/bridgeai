@@ -57,9 +57,10 @@ function IconSettings() {
 interface SidebarProps {
   isOpen?: boolean
   onClose?: () => void
+  isMobile?: boolean
 }
 
-export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
+export function Sidebar({ isOpen = false, onClose, isMobile = false }: SidebarProps) {
   const pathname = usePathname()
   const { t } = useLanguage()
 
@@ -89,6 +90,18 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     }
   }
 
+  const mobileStyle: React.CSSProperties = isMobile ? {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "260px",
+    height: "100vh",
+    zIndex: 40,
+    transform: isOpen ? "translateX(0)" : "translateX(-100%)",
+    transition: "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+    boxShadow: isOpen ? "4px 0 32px oklch(0 0 0 / 0.2)" : "none",
+  } : {}
+
   return (
     <aside
       className={`sidebar-mobile${isOpen ? " is-open" : ""}`}
@@ -103,9 +116,10 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         top: 0,
         overflow: "hidden",
         gap: "0",
+        ...mobileStyle,
       }}
     >
-      {/* Close button — mobile only */}
+      {/* Close button — mobile only, visible when drawer is open */}
       <button
         onClick={onClose}
         className="sidebar-close-btn"
@@ -121,6 +135,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           color: "var(--muted)",
           cursor: "pointer",
           borderRadius: "4px",
+          display: isMobile && isOpen ? "flex" : "none",
           alignItems: "center",
           justifyContent: "center",
           fontSize: "20px",

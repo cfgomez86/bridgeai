@@ -79,6 +79,7 @@ frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/.env*.local
+frontend/tsconfig.tsbuildinfo
 
 # E2E test artifacts
 tests/e2e/screenshots/*.png
