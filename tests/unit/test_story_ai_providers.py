@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from app.services.story_ai_provider import AnthropicStoryProvider, OpenAIStoryProvider
@@ -166,7 +167,7 @@ class _FailThenSucceedStoryProvider(StoryAIProvider):
     def generate_story(self, context: dict) -> dict:
         self._calls += 1
         if self._calls <= self._fail_times:
-            raise ValueError("Simulated provider failure")
+            raise httpx.ConnectError("Simulated transient network failure")
         return {
             "title": "Test Story",
             "story_description": "As a user, I want X so that Y.",
@@ -187,7 +188,7 @@ class _FailThenSucceedStoryProvider(StoryAIProvider):
 
 class _AlwaysFailStoryProvider(StoryAIProvider):
     def generate_story(self, context: dict) -> dict:
-        raise ValueError("Always fails")
+        raise httpx.ConnectError("Always fails")
 
 
 def _make_settings_with_retries(max_retries: int) -> MagicMock:

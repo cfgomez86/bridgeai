@@ -163,14 +163,10 @@ class JiraTicketProvider(TicketProvider):
         title: str,
         category: str,
         description: str,
-        parent_meta: dict,
     ) -> dict:
         prefix = _CATEGORY_PREFIX.get(category, category.capitalize())
         summary = f"[{prefix}] {title}"[:250]
         paragraphs = [p.strip() for p in (description or "").split("\n\n") if p.strip()]
-        paragraphs.append(
-            f"Parent story: {parent_meta['title']} | Risk: {parent_meta['risk']} | {parent_meta['pts']} pts"
-        )
         return {
             "fields": {
                 "project": {"key": project_key},
@@ -197,10 +193,9 @@ class JiraTicketProvider(TicketProvider):
         title: str,
         category: str,
         description: str,
-        parent_meta: dict,
     ) -> tuple[str | None, str | None, str | None, str | None]:
         """Returns (key, ticket_url, title, error_summary). On success error_summary is None."""
-        payload = self._build_subtask_payload(parent_key, project_key, title, category, description, parent_meta)
+        payload = self._build_subtask_payload(parent_key, project_key, title, category, description)
         prefix = _CATEGORY_PREFIX.get(category, category.capitalize())
         full_title = f"[{prefix}] {title}"[:250]
         max_retries = self._settings.JIRA_MAX_RETRIES
@@ -240,7 +235,7 @@ class JiraTicketProvider(TicketProvider):
         return None, None, None, full_title
 
     async def create_subtasks(
-        self, parent_key: str, project_key: str, subtasks: dict, parent_meta: dict
+        self, parent_key: str, project_key: str, subtasks: dict
     ) -> tuple[list[str], list[str], list[str], list[str]]:
         """Create Jira subtasks in parallel. Returns (ids, urls, titles, failed_titles)."""
         url = self._api_url("issue")
@@ -252,7 +247,6 @@ class JiraTicketProvider(TicketProvider):
                 item["title"],
                 category,
                 item.get("description", ""),
-                parent_meta,
             )
             for category, tasks in [
                 ("frontend", subtasks.get("frontend") or []),
@@ -271,12 +265,7 @@ class JiraTicketProvider(TicketProvider):
     async def create_subtasks_for(
         self, story: UserStory, parent_id: str, project_key: str
     ) -> tuple[list[str], list[str], list[str], list[str]]:
-        parent_meta = {
-            "title": story.title,
-            "risk": story.risk_level,
-            "pts": story.story_points,
-        }
-        return await self.create_subtasks(parent_id, project_key, story.subtasks or {}, parent_meta)
+        return await self.create_subtasks(parent_id, project_key, story.subtasks or {})
 
     async def create_ticket(self, story: UserStory, project_key: str, issue_type: str) -> TicketResult:
         payload = self.build_payload(story, project_key, issue_type)

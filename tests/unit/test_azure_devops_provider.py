@@ -53,10 +53,6 @@ def make_story(**kwargs) -> UserStory:
     return UserStory(**defaults)
 
 
-def _meta(story: UserStory | None = None) -> dict:
-    s = story or make_story()
-    return {"title": s.title, "risk": s.risk_level, "pts": s.story_points}
-
 
 class TestAzureAuth:
     def test_pat_auth_header_uses_base64_colon_token(self):
@@ -181,7 +177,7 @@ class TestAzureCreateChildTasks:
 
         responses = [{"id": 101}, {"id": 102}, {"id": 103}]
         with patch.object(provider, "_request", new=AsyncMock(side_effect=responses)):
-            ids, urls, titles, failed = await provider.create_child_tasks(42, subtasks, _meta())
+            ids, urls, titles, failed = await provider.create_child_tasks(42, subtasks)
 
         assert ids == ["101", "102", "103"]
         assert all("101" in u or "102" in u or "103" in u for u in urls)
@@ -192,7 +188,7 @@ class TestAzureCreateChildTasks:
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
         payload = provider._build_child_task_payload(
-            42, "Add endpoint", "backend", "Define POST /auth/register.", _meta(),
+            42, "Add endpoint", "backend", "Define POST /auth/register.",
         )
 
         relation_op = next(op for op in payload if op["path"] == "/relations/-")
@@ -205,21 +201,21 @@ class TestAzureCreateChildTasks:
         tags_op = next(op for op in payload if op["path"] == "/fields/System.Tags")
         assert "backend" in tags_op["value"]
 
-    def test_child_task_payload_description_has_paragraphs_and_parent_meta(self):
+    def test_child_task_payload_description_has_only_user_paragraphs(self):
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
         description = "First step.\n\nSecond step.\n\nVerify with pytest."
         payload = provider._build_child_task_payload(
-            42, "Add endpoint", "backend", description, _meta(),
+            42, "Add endpoint", "backend", description,
         )
         desc_op = next(op for op in payload if op["path"] == "/fields/System.Description")
         body = desc_op["value"]
         assert "<p>First step.</p>" in body
         assert "<p>Second step.</p>" in body
         assert "<p>Verify with pytest.</p>" in body
-        assert "Parent story:" in body
-        assert "Risk: MEDIUM" in body
-        assert "5 pts" in body
+        assert "Parent story:" not in body
+        assert "Risk:" not in body
+        assert "pts" not in body
 
     def test_child_task_payload_escapes_html_in_title_and_description(self):
         settings = make_settings()
@@ -229,7 +225,6 @@ class TestAzureCreateChildTasks:
             "<script>alert('xss')</script> bad title",
             "backend",
             "Use <b>bold</b> & special chars.",
-            _meta(),
         )
         title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
         desc_op = next(op for op in payload if op["path"] == "/fields/System.Description")
@@ -244,7 +239,7 @@ class TestAzureCreateChildTasks:
         provider = AzureDevOpsTicketProvider(settings)
         long_title = "x" * 300
         payload = provider._build_child_task_payload(
-            42, long_title, "backend", "Some description.", _meta(),
+            42, long_title, "backend", "Some description.",
         )
         title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
         # html.escape doesn't grow plain "x" chars; "[Backend] " (10) + sliced to 250
@@ -254,7 +249,7 @@ class TestAzureCreateChildTasks:
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
         payload = provider._build_child_task_payload(
-            42, "Add env vars", "configuration", "Document SMTP_HOST.", _meta(),
+            42, "Add env vars", "configuration", "Document SMTP_HOST.",
         )
         title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
         assert title_op["value"] == "[Config] Add env vars"
@@ -263,7 +258,7 @@ class TestAzureCreateChildTasks:
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
         payload = provider._build_child_task_payload(
-            42, "Build form", "frontend", "Render inputs.", _meta(),
+            42, "Build form", "frontend", "Render inputs.",
         )
         title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
         assert title_op["value"] == "[Frontend] Build form"
@@ -284,7 +279,7 @@ class TestAzureCreateChildTasks:
 
         error = HTTPError(url="", code=400, msg="Bad Request", hdrs=None, fp=None)
         with patch.object(provider, "_request", new=AsyncMock(side_effect=[error, {"id": 55}])):
-            ids, urls, titles, failed = await provider.create_child_tasks(10, subtasks, _meta())
+            ids, urls, titles, failed = await provider.create_child_tasks(10, subtasks)
 
         assert ids == ["55"]
         assert len(titles) == 1

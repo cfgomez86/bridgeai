@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     AI_MODEL: str = ""
     AI_TIMEOUT_SECONDS: int = 30
     AI_MAX_RETRIES: int = 2
+    AI_MAX_OUTPUT_TOKENS: int = 8192
 
     # Jira integration
     JIRA_REQUEST_TIMEOUT_SECONDS: int = 10

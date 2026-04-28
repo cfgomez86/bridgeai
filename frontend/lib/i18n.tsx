@@ -398,8 +398,8 @@ const es: Translations = {
     },
     card: {
       active_badge: "activo",
-      select_repo: "Seleccionar repo",
-      select_site: "Seleccionar organización",
+      select_repo: "Seleccionar Repositorio",
+      select_site: "Seleccionar Organización",
       select_project: "Seleccionar proyecto",
       disconnect_title: "Desconectar cuenta",
     },

@@ -1,3 +1,4 @@
+import httpx
 import pytest
 from app.services.story_ai_provider import StoryAIProvider, StubStoryProvider
 from app.services.ai_story_generator import AIStoryGenerator
@@ -52,6 +53,8 @@ class FixedStoryProvider(StoryAIProvider):
 
 
 class FailThenSucceedProvider(StoryAIProvider):
+    """Simulates a transient (retryable) network failure followed by success."""
+
     def __init__(self, fail_times: int = 1):
         self._fail_times = fail_times
         self._calls = 0
@@ -59,8 +62,19 @@ class FailThenSucceedProvider(StoryAIProvider):
     def generate_story(self, context: dict) -> dict:
         self._calls += 1
         if self._calls <= self._fail_times:
-            raise ValueError("Simulated failure")
+            raise httpx.ConnectError("Simulated transient network failure")
         return valid_story()
+
+
+class AlwaysFailValueErrorProvider(StoryAIProvider):
+    """Simulates a deterministic (non-retryable) error like JSON parse failure."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def generate_story(self, context: dict) -> dict:
+        self.calls += 1
+        raise ValueError("Invalid JSON from AI provider: ...")
 
 
 def test_stub_provider_returns_valid_dict():
@@ -118,6 +132,41 @@ def test_raises_after_max_retries():
     gen = AIStoryGenerator(provider, settings)
     with pytest.raises(ValueError, match="Story generation failed after"):
         gen.generate({})
+    assert provider._calls == 2  # initial + 1 retry
+
+
+def test_non_retryable_error_fails_fast_without_retries():
+    """ValueError (parse/shape) must fail fast, not retry."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    provider = AlwaysFailValueErrorProvider()
+    gen = AIStoryGenerator(provider, settings)
+    with pytest.raises(ValueError, match="Invalid JSON from AI provider"):
+        gen.generate({})
+    assert provider.calls == 1  # no retry on deterministic error
+
+
+def test_shape_validation_error_fails_fast():
+    """Missing required field must fail fast, not retry 3 times."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    del bad["title"]
+
+    class CountingProvider(StoryAIProvider):
+        def __init__(self, response):
+            self.response = response
+            self.calls = 0
+
+        def generate_story(self, context):
+            self.calls += 1
+            return dict(self.response)
+
+    provider = CountingProvider(bad)
+    gen = AIStoryGenerator(provider, settings)
+    with pytest.raises(ValueError, match="missing required fields"):
+        gen.generate({})
+    assert provider.calls == 1  # no retry
 
 
 # ─── New subtask shape: title + description ───────────────────────────────

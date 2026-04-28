@@ -162,19 +162,11 @@ class AzureDevOpsTicketProvider(TicketProvider):
         title: str,
         category: str,
         description: str,
-        parent_meta: dict,
     ) -> list:
         prefix = _CATEGORY_PREFIX.get(category, category.capitalize())
         safe_title = html.escape(f"[{prefix}] {title}"[:250])
         paragraphs = [p.strip() for p in (description or "").split("\n\n") if p.strip()]
         body_parts = [f"<p>{html.escape(p)}</p>" for p in paragraphs]
-        body_parts.append(
-            "<p><em>"
-            f"Parent story: {html.escape(str(parent_meta['title']))} | "
-            f"Risk: {html.escape(str(parent_meta['risk']))} | "
-            f"{int(parent_meta['pts'])} pts"
-            "</em></p>"
-        )
         body_html = "".join(body_parts)
         return [
             {"op": "add", "path": "/fields/System.Title", "value": safe_title},
@@ -198,10 +190,9 @@ class AzureDevOpsTicketProvider(TicketProvider):
         title: str,
         category: str,
         description: str,
-        parent_meta: dict,
     ) -> tuple[str | None, str | None, str | None, str | None]:
         """Returns (id, browse_url, title, error_summary). On success error_summary is None."""
-        payload = self._build_child_task_payload(parent_id, title, category, description, parent_meta)
+        payload = self._build_child_task_payload(parent_id, title, category, description)
         prefix = _CATEGORY_PREFIX.get(category, category.capitalize())
         full_title = f"[{prefix}] {title}"[:250]
         max_retries = self._settings.AZURE_MAX_RETRIES
@@ -240,7 +231,7 @@ class AzureDevOpsTicketProvider(TicketProvider):
         return None, None, None, full_title
 
     async def create_child_tasks(
-        self, parent_id: int, subtasks: dict, parent_meta: dict
+        self, parent_id: int, subtasks: dict
     ) -> tuple[list[str], list[str], list[str], list[str]]:
         """Create Azure Repos Tasks in parallel. Returns (ids, urls, titles, failed_titles)."""
         url = self._work_items_url("Task")
@@ -251,7 +242,6 @@ class AzureDevOpsTicketProvider(TicketProvider):
                 item["title"],
                 category,
                 item.get("description", ""),
-                parent_meta,
             )
             for category, tasks in [
                 ("frontend", subtasks.get("frontend") or []),
@@ -270,12 +260,7 @@ class AzureDevOpsTicketProvider(TicketProvider):
     async def create_subtasks_for(
         self, story: UserStory, parent_id: str, project_key: str
     ) -> tuple[list[str], list[str], list[str], list[str]]:
-        parent_meta = {
-            "title": story.title,
-            "risk": story.risk_level,
-            "pts": story.story_points,
-        }
-        return await self.create_child_tasks(int(parent_id), story.subtasks or {}, parent_meta)
+        return await self.create_child_tasks(int(parent_id), story.subtasks or {})
 
     async def create_ticket(self, story: UserStory, project_key: str, issue_type: str) -> TicketResult:
         payload_dict = self.build_payload(story, project_key, issue_type)

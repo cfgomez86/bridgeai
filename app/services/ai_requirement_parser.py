@@ -7,6 +7,7 @@ from app.services.ai_provider import (
     VALID_FEATURE_TYPES,
     VALID_SCOPES,
 )
+from app.utils.ai_retry import is_retryable_error
 
 _REQUIRED_FIELDS = {
     "intent", "action", "entity", "feature_type", "priority",
@@ -37,10 +38,13 @@ class AIRequirementParser:
                 return validated
             except Exception as exc:
                 last_error = exc
-                self._logger.warning("Attempt %d/%d failed: %s", attempt + 1, self._max_retries + 1, exc)
+                if not is_retryable_error(exc):
+                    self._logger.warning("Non-retryable error from requirement AI provider: %s", exc)
+                    raise
+                self._logger.warning("Attempt %d/%d failed (transient): %s", attempt + 1, self._max_retries + 1, exc)
                 if attempt < self._max_retries:
                     continue
-        raise ValueError(f"AI parsing failed after {self._max_retries + 1} attempts: {last_error}")
+        raise ValueError(f"AI parsing failed after {self._max_retries + 1} transient errors: {last_error}")
 
     def _validate(self, raw: dict) -> dict:
         missing = _REQUIRED_FIELDS - raw.keys()

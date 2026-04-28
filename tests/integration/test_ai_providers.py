@@ -113,7 +113,7 @@ class _FailThenSucceedProvider(StubAIProvider):
     def parse_requirement(self, requirement_text: str) -> dict:
         self._calls += 1
         if self._calls <= self._fail_times:
-            raise ValueError("Simulated AI failure")
+            raise ConnectionError("Simulated transient AI failure")
         return dict({
             "intent": "create_feature", "action": "create", "entity": "user",
             "feature_type": "feature", "priority": "medium",

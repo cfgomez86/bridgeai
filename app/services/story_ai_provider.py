@@ -196,16 +196,22 @@ class AnthropicStoryProvider(StoryAIProvider):
         self._client = _anthropic_lib.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self._model = settings.AI_MODEL or "claude-haiku-4-5-20251001"
         self._timeout = settings.AI_TIMEOUT_SECONDS
+        self._max_output_tokens = settings.AI_MAX_OUTPUT_TOKENS
 
     def generate_story(self, context: dict) -> dict:
         prompt = self._build_prompt(context)
         response = self._client.messages.create(
             model=self._model,
-            max_tokens=2048,
+            max_tokens=self._max_output_tokens,
             temperature=0,
             timeout=self._timeout,
             messages=[{"role": "user", "content": prompt}],
         )
+        if getattr(response, "stop_reason", None) == "max_tokens":
+            raise ValueError(
+                f"Anthropic response truncated at max_tokens={self._max_output_tokens}; "
+                "increase AI_MAX_OUTPUT_TOKENS"
+            )
         raw_text = response.content[0].text
         return extract_json(raw_text)
 
@@ -217,17 +223,25 @@ class OpenAIStoryProvider(StoryAIProvider):
         self._client = _openai_lib.OpenAI(api_key=settings.OPENAI_API_KEY)
         self._model = settings.AI_MODEL or "gpt-4o-mini"
         self._timeout = settings.AI_TIMEOUT_SECONDS
+        self._max_output_tokens = settings.AI_MAX_OUTPUT_TOKENS
 
     def generate_story(self, context: dict) -> dict:
         prompt = self._build_prompt(context)
         response = self._client.chat.completions.create(
             model=self._model,
+            max_tokens=self._max_output_tokens,
             temperature=0,
             timeout=self._timeout,
             response_format={"type": "json_object"},
             messages=[{"role": "user", "content": prompt}],
         )
-        raw_text = response.choices[0].message.content
+        choice = response.choices[0]
+        if getattr(choice, "finish_reason", None) == "length":
+            raise ValueError(
+                f"OpenAI response truncated at max_tokens={self._max_output_tokens}; "
+                "increase AI_MAX_OUTPUT_TOKENS"
+            )
+        raw_text = choice.message.content
         return extract_json(raw_text)
 
 

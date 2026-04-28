@@ -3,6 +3,7 @@ import re
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.services.story_ai_provider import StoryAIProvider
+from app.utils.ai_retry import is_retryable_error
 
 _REQUIRED_FIELDS = {
     "title", "story_description", "acceptance_criteria",
@@ -79,14 +80,19 @@ class AIStoryGenerator:
                 return self._validate_shape(stripped)
             except Exception as exc:
                 last_error = exc
+                if not is_retryable_error(exc):
+                    self._logger.warning(
+                        "Non-retryable error from story AI provider: %s", exc,
+                    )
+                    raise
                 self._logger.warning(
-                    "Attempt %d/%d failed: %s",
+                    "Attempt %d/%d failed (transient): %s",
                     attempt + 1, self._max_retries + 1, exc,
                 )
                 if attempt < self._max_retries:
                     continue
         raise ValueError(
-            f"Story generation failed after {self._max_retries + 1} attempts: {last_error}"
+            f"Story generation failed after {self._max_retries + 1} transient errors: {last_error}"
         )
 
     def _validate_shape(self, raw: dict) -> dict:
