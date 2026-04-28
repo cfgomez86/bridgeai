@@ -123,9 +123,9 @@ function ConnectionsContent() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", minHeight: "calc(100vh - 48px)" }}>
-        {/* Left nav */}
-        <nav style={{
+      <div className="grid-connections-layout">
+        {/* Left nav — hidden on mobile */}
+        <nav className="desktop-side-nav" style={{
           background: "var(--surface)",
           borderRight: "1px solid var(--border)",
           padding: "16px 8px",
@@ -161,8 +161,23 @@ function ConnectionsContent() {
           })}
         </nav>
 
-        {/* Main content */}
-        <div style={{ padding: "28px 32px", maxWidth: "900px", display: "flex", flexDirection: "column", gap: "24px" }}>
+        {/* Content column */}
+        <div style={{ minWidth: 0 }}>
+          {/* Mobile tabs — shown only on mobile */}
+          <div className="mobile-nav-tabs">
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id)}
+                className={item.id === activeSection ? "tab-active" : undefined}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Main content */}
+          <div className="page-content" style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "24px" }}>
           {/* Header */}
           <div>
             <h1 style={{
@@ -197,7 +212,7 @@ function ConnectionsContent() {
               )}
 
               {/* SCM platform cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <div className="grid-2col" style={{ gap: "14px" }}>
                 {platforms.filter((p) => SCM_PLATFORMS.has(p.platform)).map((p) => (
                   <PlatformCard
                     key={p.platform}
@@ -244,7 +259,7 @@ function ConnectionsContent() {
                 )}
 
                 {/* Management tool platform cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                <div className="grid-2col" style={{ gap: "14px" }}>
                   {/* Azure Boards — disabled when Jira is already connected */}
                   {platforms.filter((p) => p.platform === "azure_devops").map((p) => (
                     <PlatformCard
@@ -270,6 +285,7 @@ function ConnectionsContent() {
               </>
             )
           })()}
+          </div>
         </div>
       </div>
 

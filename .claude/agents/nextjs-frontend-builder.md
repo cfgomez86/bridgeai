@@ -168,6 +168,15 @@ export async function proxy(req: NextRequest) {
 
 Never create or modify `middleware.ts`.
 
+## next.config.ts — valid keys only
+
+In Next.js 16, the following keys were **removed** from `next.config.ts` and must never be added:
+
+- `eslint` — ESLint no longer runs during `next build`. Remove any `eslint: { ignoreDuringBuilds: true }` entry. Using it generates a build warning that can break Railway deployments.
+- `--no-lint` build flag — also removed; don't add it to build scripts.
+
+The current valid top-level config keys are: `output`, `typescript`, `experimental`, `rewrites`, `headers`, `redirects`, `images`, `env`. When in doubt, verify against the `NextConfig` TypeScript type before adding a key.
+
 ## URL contract — verify before writing
 
 Always read `app/api/routes/` to confirm backend route paths before adding a function to `api-client.ts`. After writing, grep both files to confirm the path matches end-to-end.

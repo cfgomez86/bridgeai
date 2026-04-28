@@ -59,63 +59,66 @@ export function ConnectionCard({ connection, onUpdated, boardsMode = false }: Co
         flexDirection: "column",
         gap: "10px",
         boxShadow: connection.is_active ? "0 0 0 1px color-mix(in oklch, var(--accent) 15%, transparent)" : "var(--shadow-sm)",
+        overflow: "hidden",
+        minWidth: 0,
       }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-          {/* Platform + user */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
-            <div style={{
-              width: "34px", height: "34px", borderRadius: "7px",
-              background: "var(--surface-2)", border: "1px solid var(--border)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-              color: connection.platform === "github" ? "var(--fg)" : undefined,
-            }}>
-              <PlatformLogo platform={connection.platform} size={18} />
+        {/* Row 1: Platform + user info */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{
+            width: "34px", height: "34px", borderRadius: "7px",
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0,
+            color: connection.platform === "github" ? "var(--fg)" : undefined,
+          }}>
+            <PlatformLogo platform={connection.platform} size={18} />
+          </div>
+          <div>
+            <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--fg)", fontFamily: "var(--font-display)", display: "flex", alignItems: "center", gap: "6px" }}>
+              {connection.display_name}
+              {connection.is_active && (
+                <span style={{
+                  fontSize: "10px", fontWeight: 500, padding: "1px 6px", borderRadius: "3px",
+                  background: "var(--accent-soft)", color: "var(--accent-strong)", fontFamily: "var(--font-mono)",
+                  flexShrink: 0,
+                }}>{s.card.active_badge}</span>
+              )}
             </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--fg)", fontFamily: "var(--font-display)", display: "flex", alignItems: "center", gap: "6px" }}>
-                {connection.display_name}
-                {connection.is_active && (
-                  <span style={{
-                    fontSize: "10px", fontWeight: 500, padding: "1px 6px", borderRadius: "3px",
-                    background: "var(--accent-soft)", color: "var(--accent-strong)", fontFamily: "var(--font-mono)",
-                  }}>{s.card.active_badge}</span>
-                )}
-              </div>
-              <div style={{ fontSize: "11.5px", color: "var(--muted)" }}>
-                {platformLabel}
-              </div>
+            <div style={{ fontSize: "11.5px", color: "var(--muted)" }}>
+              {platformLabel}
             </div>
           </div>
+        </div>
 
-          {/* Actions */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-            <button
-              onClick={() => isAzureBoards ? setShowProjects(true) : isTicket ? setShowSites(true) : setShowRepos(true)}
-              style={{
-                display: "flex", alignItems: "center", gap: "5px",
-                padding: "5px 10px", borderRadius: "var(--radius)",
-                border: "1px solid var(--border)", background: "var(--surface-2)",
-                color: "var(--fg-2)", fontSize: "12px", fontWeight: 500, cursor: "pointer",
-              }}
-            >
-              {isAzureBoards ? <FolderKanban size={13} /> : isTicket ? <Globe size={13} /> : <FolderGit2 size={13} />}
-              {isAzureBoards ? s.card.select_project : isTicket ? s.card.select_site : s.card.select_repo}
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              title={s.card.disconnect_title}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: "30px", height: "30px", borderRadius: "var(--radius)",
-                border: "1px solid var(--border)", background: "var(--surface-2)",
-                color: deleting ? "var(--muted)" : "var(--err-fg)", cursor: deleting ? "not-allowed" : "pointer",
-              }}
-            >
-              {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-            </button>
-          </div>
+        {/* Row 2: Actions */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <button
+            onClick={() => isAzureBoards ? setShowProjects(true) : isTicket ? setShowSites(true) : setShowRepos(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: "5px",
+              padding: "5px 10px", borderRadius: "var(--radius)",
+              border: "1px solid var(--border)", background: "var(--surface-2)",
+              color: "var(--fg-2)", fontSize: "12px", fontWeight: 500, cursor: "pointer",
+              flex: 1, justifyContent: "center",
+            }}
+          >
+            {isAzureBoards ? <FolderKanban size={13} /> : isTicket ? <Globe size={13} /> : <FolderGit2 size={13} />}
+            {isAzureBoards ? s.card.select_project : isTicket ? s.card.select_site : s.card.select_repo}
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            title={s.card.disconnect_title}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: "30px", height: "30px", borderRadius: "var(--radius)",
+              border: "1px solid var(--border)", background: "var(--surface-2)",
+              color: deleting ? "var(--muted)" : "var(--err-fg)", cursor: deleting ? "not-allowed" : "pointer",
+              flexShrink: 0,
+            }}
+          >
+            {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+          </button>
         </div>
 
         {/* Active project (Azure Boards) */}
@@ -138,12 +141,13 @@ export function ConnectionCard({ connection, onUpdated, boardsMode = false }: Co
             display: "flex", alignItems: "center", gap: "6px",
             padding: "6px 10px", borderRadius: "var(--radius)",
             background: "var(--surface-2)", border: "1px solid var(--border)",
+            overflow: "hidden",
           }}>
             <GitBranch size={12} style={{ color: "var(--muted)", flexShrink: 0 }} />
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--fg-2)", flex: 1 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--fg-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
               {connection.repo_full_name}
             </span>
-            <span style={{ fontSize: "11px", color: "var(--muted)" }}>{connection.default_branch}</span>
+            <span style={{ fontSize: "11px", color: "var(--muted)", flexShrink: 0 }}>{connection.default_branch}</span>
           </div>
         )}
         {isTicket && connection.repo_name && (
@@ -151,12 +155,13 @@ export function ConnectionCard({ connection, onUpdated, boardsMode = false }: Co
             display: "flex", alignItems: "center", gap: "6px",
             padding: "6px 10px", borderRadius: "var(--radius)",
             background: "var(--surface-2)", border: "1px solid var(--border)",
+            overflow: "hidden",
           }}>
             <Globe size={12} style={{ color: "var(--muted)", flexShrink: 0 }} />
-            <span style={{ fontSize: "12px", color: "var(--fg-2)", flex: 1 }}>
+            <span style={{ fontSize: "12px", color: "var(--fg-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
               {connection.repo_name}
             </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted)", wordBreak: "break-all" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 1, minWidth: 0, maxWidth: "55%" }}>
               {connection.repo_full_name}
             </span>
           </div>

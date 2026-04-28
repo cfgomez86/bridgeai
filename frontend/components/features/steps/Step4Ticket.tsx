@@ -248,7 +248,7 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                 <FileText size={11} style={{ color: "var(--muted)" }} />
                 <span style={sectionLabel}>{s.description_label}</span>
               </div>
-              <p style={{ fontSize: "12px", lineHeight: 1.6, color: "var(--fg-2)", margin: 0 }}>
+              <p style={{ fontSize: "12px", lineHeight: 1.6, color: "var(--fg-2)", margin: 0, overflowWrap: "break-word" }}>
                 {story.story_description}
               </p>
             </div>
@@ -269,7 +269,7 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                       background: "var(--surface-3)", color: "var(--fg-2)",
                       fontSize: "9px", fontWeight: 600, fontFamily: "var(--font-mono)",
                     }}>{i + 1}</span>
-                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{item}</span>
+                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5, overflowWrap: "break-word", flex: 1, minWidth: 0 }}>{item}</span>
                   </li>
                 ))}
               </ol>
@@ -287,11 +287,23 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                     <Code size={11} style={{ color: "var(--muted)" }} />
                     <span style={sectionLabel}>{labels[cat]}</span>
                   </div>
-                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "5px" }}>
-                    {tasks.map((task, i) => (
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {tasks.map((sub, i) => (
                       <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
                         <span style={{ flexShrink: 0, marginTop: "3px", width: "12px", height: "12px", borderRadius: "3px", border: "1px solid var(--border)" }} />
-                        <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{task}</span>
+                        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "3px" }}>
+                          <span style={{ color: "var(--fg)", fontWeight: 500, lineHeight: 1.4, overflowWrap: "break-word" }}>
+                            {sub.title}
+                          </span>
+                          {sub.description && (
+                            <span style={{
+                              color: "var(--muted)", fontSize: "11.5px", lineHeight: 1.55,
+                              whiteSpace: "pre-wrap", overflowWrap: "break-word",
+                            }}>
+                              {sub.description}
+                            </span>
+                          )}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -310,7 +322,7 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                 {story.definition_of_done.map((item, i) => (
                   <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
                     <span style={{ flexShrink: 0, marginTop: "3px", width: "12px", height: "12px", borderRadius: "3px", border: "1px solid var(--border)" }} />
-                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{item}</span>
+                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5, overflowWrap: "break-word", flex: 1, minWidth: 0 }}>{item}</span>
                   </li>
                 ))}
               </ul>

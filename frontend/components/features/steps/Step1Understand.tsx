@@ -22,6 +22,7 @@ const SCM_PLATFORMS = new Set(["github", "gitlab", "azure_devops", "bitbucket"])
 const LANGUAGES = [
   { code: "es", label: "Español" },
   { code: "en", label: "English" },
+  { code: "ca", label: "Català" },
   { code: "fr", label: "Français" },
   { code: "de", label: "Deutsch" },
   { code: "pt", label: "Português" },
@@ -273,33 +274,26 @@ export function Step1Understand({
 
         {/* Story language */}
         <div>
-          <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: "6px" }}>
+          <label htmlFor="story-language" style={{ ...labelStyle, display: "flex", alignItems: "center", gap: "6px" }}>
             <Globe size={13} style={{ color: "var(--muted)" }} />
             {s.story_language}
           </label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+          <select
+            id="story-language"
+            value={state.language}
+            onChange={(e) => setLanguage(e.target.value)}
+            style={{
+              ...inputStyle,
+              cursor: "pointer",
+              appearance: "auto",
+            }}
+          >
             {LANGUAGES.map((lang) => (
-              <button
-                key={lang.code}
-                type="button"
-                onClick={() => setLanguage(lang.code)}
-                style={{
-                  padding: "4px 12px",
-                  borderRadius: "var(--radius)",
-                  border: "1px solid",
-                  fontSize: "12.5px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  transition: "all .12s",
-                  background: state.language === lang.code ? "var(--accent)" : "var(--surface)",
-                  borderColor: state.language === lang.code ? "transparent" : "var(--border)",
-                  color: state.language === lang.code ? "var(--accent-fg)" : "var(--fg-2)",
-                }}
-              >
+              <option key={lang.code} value={lang.code}>
                 {lang.label}
-              </button>
+              </option>
             ))}
-          </div>
+          </select>
         </div>
 
         {/* Requirement text */}

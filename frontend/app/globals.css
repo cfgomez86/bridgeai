@@ -81,3 +81,156 @@ html, body {
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; border: 2px solid var(--bg); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE LAYOUT SYSTEM
+   ═══════════════════════════════════════════════════════ */
+
+/* Grid utilities — desktop defaults */
+.grid-sidebar-layout     { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+.grid-connections-layout { display: grid; grid-template-columns: 200px 1fr; min-height: calc(100vh - 48px); }
+.grid-2col               { display: grid; grid-template-columns: 1fr 1fr; }
+.grid-3col               { display: grid; grid-template-columns: repeat(3, 1fr); }
+.grid-stats-4            { display: grid; grid-template-columns: repeat(4, 1fr); }
+.grid-stepper-4          { display: grid; grid-template-columns: repeat(4, 1fr); }
+.grid-dashboard-bottom   { display: grid; grid-template-columns: 1.6fr 1fr; }
+.login-page-grid         { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; }
+
+/* Content padding utilities */
+.page-content      { padding: 28px 32px; }
+.dashboard-content { padding: 40px 48px; }
+
+/* Mobile-only elements (hidden on desktop) */
+.sidebar-overlay        { display: none; }
+.sidebar-close-btn      { display: none; }
+.hamburger-btn          { display: none; }
+.mobile-nav-tabs        { display: none; }
+.stepper-mobile-compact { display: none; }
+.login-mobile-brand     { display: none; }
+
+/* ── Tablet: 769px – 1024px ─────────────────────────── */
+@media (max-width: 1024px) {
+  .dashboard-content     { padding: 28px 32px; }
+  .grid-3col             { grid-template-columns: repeat(2, 1fr); }
+  .grid-stats-4          { grid-template-columns: repeat(2, 1fr); }
+  .grid-dashboard-bottom { grid-template-columns: 1fr; }
+}
+
+/* ── Mobile: ≤ 768px ────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Base typography — slightly larger for touch readability */
+  html, body { font-size: 14px; }
+
+  /* Content padding */
+  .page-content      { padding: 16px; }
+  .dashboard-content { padding: 16px; }
+
+  /* App shell — collapse sidebar column */
+  .grid-sidebar-layout { grid-template-columns: 1fr; }
+
+  /* Sidebar as fixed overlay drawer */
+  .sidebar-mobile {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 260px !important;
+    height: 100vh !important;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 4px 0 32px oklch(0 0 0 / 0.2) !important;
+  }
+  .sidebar-mobile.is-open { transform: translateX(0); }
+  .sidebar-close-btn      { display: flex; }
+
+  /* Semi-transparent overlay behind open sidebar */
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: oklch(0 0 0 / 0.45);
+    z-index: 39;
+    backdrop-filter: blur(1px);
+  }
+
+  /* Hamburger button in topbar */
+  .hamburger-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+    border-radius: var(--radius);
+    flex-shrink: 0;
+    margin-right: 4px;
+  }
+  .hamburger-btn:hover { background: var(--surface-2); }
+
+  /* Connections / Settings: collapse side nav, show top tabs */
+  .grid-connections-layout { grid-template-columns: 1fr; }
+  .desktop-side-nav        { display: none !important; }
+  .mobile-nav-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .mobile-nav-tabs button {
+    flex: 1;
+    min-width: max-content;
+    padding: 10px 16px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    font-size: 13px;
+    color: var(--fg-2);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    min-height: 44px;
+  }
+  .mobile-nav-tabs button.tab-active {
+    border-bottom-color: var(--accent);
+    color: var(--accent-strong);
+    font-weight: 500;
+  }
+
+  /* Grids — stack to single column */
+  .grid-2col             { grid-template-columns: 1fr; }
+  .grid-3col             { grid-template-columns: 1fr; }
+  .grid-dashboard-bottom { grid-template-columns: 1fr; }
+  .login-page-grid       { grid-template-columns: 1fr; }
+  /* Stats: keep 2-col for compact density */
+  .grid-stats-4 { grid-template-columns: repeat(2, 1fr); }
+
+  /* Workflow stepper — hide 4-col grid, show compact indicator */
+  .grid-stepper-4 { display: none; }
+  .stepper-mobile-compact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Topbar — hide email on mobile, keep only logout button */
+  .topbar-email { display: none !important; }
+
+  /* Login — hide decorative left column */
+  .login-left-col { display: none !important; }
+  .login-mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .login-right-col { padding: 40px 24px !important; }
+}

@@ -28,17 +28,53 @@ _STUB_STORY_RESPONSE = {
     ],
     "subtasks": {
         "frontend": [
-            "Create registration form component with email/password fields",
-            "Add client-side validation for password strength indicator",
+            {
+                "title": "Crear componente RegisterForm con campos email y contraseña",
+                "description": (
+                    "Construir un formulario controlado en React con inputs de email, contraseña y confirmación. "
+                    "Aplicar validaciones inline (formato de email, longitud mínima, coincidencia de contraseñas).\n\n"
+                    "Archivos: frontend/components/auth/RegisterForm.tsx\n\n"
+                    "Verificar: navegar a /register en dev, intentar enviar con campos vacíos o inválidos y confirmar mensajes de error."
+                ),
+            },
+            {
+                "title": "Añadir indicador visual de fortaleza de contraseña",
+                "description": (
+                    "Mostrar un medidor debajo del input de contraseña que evalúe longitud, mayúsculas, números y símbolos. "
+                    "Reusar la lógica de evaluación en utils si ya existe.\n\n"
+                    "Archivos: frontend/components/auth/RegisterForm.tsx\n\n"
+                    "Verificar: tipear contraseñas de distinta complejidad y observar el cambio del medidor."
+                ),
+            },
         ],
         "backend": [
-            "Create POST /auth/register endpoint in app/api/routes/auth.py",
-            "Implement email validation logic in app/services/auth_service.py",
-            "Add email confirmation service in app/services/email_service.py",
-            "Write unit tests for registration flow in tests/test_auth.py",
+            {
+                "title": "Crear endpoint POST /auth/register con validación de email",
+                "description": (
+                    "Definir la ruta FastAPI que reciba {email, password}, valide formato de email y reglas de seguridad de contraseña, "
+                    "persista el usuario y devuelva 201.\n\n"
+                    "Archivos: app/api/routes/auth.py, app/services/auth_service.py\n\n"
+                    "Verificar: pytest tests/test_auth.py y curl manual al endpoint."
+                ),
+            },
+            {
+                "title": "Implementar servicio de envío de email de confirmación",
+                "description": (
+                    "Tras crear un usuario, encolar un email de confirmación con un token único. El token expira en 24h.\n\n"
+                    "Archivos: app/services/email_service.py\n\n"
+                    "Verificar: registrar un usuario en dev y revisar que el log de SMTP muestre el envío."
+                ),
+            },
         ],
         "configuration": [
-            "Add SMTP_HOST, SMTP_PORT, SMTP_USER env variables to .env.example",
+            {
+                "title": "Añadir variables SMTP al .env.example",
+                "description": (
+                    "Agregar SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD al .env.example y documentar en el README cómo obtenerlas.\n\n"
+                    "Archivos: .env.example\n\n"
+                    "Verificar: copiar .env.example a .env y arrancar la app sin errores de configuración."
+                ),
+            },
         ],
     },
     "definition_of_done": [
@@ -83,11 +119,13 @@ Genera ÚNICAMENTE un JSON válido con estos campos exactos:
 - title: string corto y descriptivo (máximo 80 caracteres)
 - story_description: string en formato de historia de usuario estándar: "Como [tipo de usuario], quiero [acción] para que [beneficio]". Usa el mismo idioma que el texto del requerimiento.
 - acceptance_criteria: array de strings (mínimo 3 criterios verificables)
-- subtasks: objeto con tres claves obligatorias, cada una con un array de strings:
-    * "frontend": tareas para la capa de presentación/UI. Si hay archivos del whitelist relacionados a UI, referéncialos exactamente; si no hay, describe la tarea sin archivo o deja el array vacío.
-    * "backend": tareas para la lógica de negocio, servicios, rutas y base de datos. Si hay archivos del whitelist aplicables, referéncialos exactamente; si no hay, describe la tarea SIN path. Mínimo 2 tareas, aunque sea sin path.
-    * "configuration": tareas de infraestructura, variables de entorno, dependencias, scripts de migración o CI/CD. Si no aplica, devuelve array vacío.
-    Usa los archivos impactados y el whitelist para decidir categorías. NUNCA inventes paths.
+- subtasks: objeto con tres claves obligatorias ("frontend", "backend", "configuration"). Cada una es un array de objetos con dos claves: "title" y "description".
+    * "title": string ≤150 caracteres, en imperativo, accionable. Describe la INTENCIÓN de la tarea SIN prefijo de categoría y SIN repetir la ruta de archivo. Ej: "Agregar campo descripción al ProductReadModelMapper".
+    * "description": string multilínea (usa "\n\n" entre párrafos). Debe explicar: (1) QUÉ hacer en detalle, paso a paso si es necesario; (2) POR QUÉ es necesario o cómo conecta con la historia; (3) qué archivos del whitelist tocar (lista los paths exactos); (4) cómo verificarlo (qué tests correr, qué comportamiento observar). Mínimo 30 caracteres.
+    * "frontend": tareas para presentación/UI. Si no hay archivos UI en el whitelist, deja el array vacío.
+    * "backend": tareas para lógica de negocio, servicios, rutas, base de datos. Mínimo 2 tareas. Si no hay archivos verificables, describe sin path.
+    * "configuration": infraestructura, variables de entorno, dependencias, migraciones, CI/CD. Si no aplica, array vacío.
+    NUNCA inventes paths en title ni en description. La regla anti-alucinación aplica a ambos campos.
 - definition_of_done: array de strings (mínimo 3 criterios de completitud)
 - risk_notes: array de strings con riesgos técnicos específicos. Considera siempre:
     * Invalidación de caché si el requerimiento afecta parámetros de generación (ej: idioma, configuración)

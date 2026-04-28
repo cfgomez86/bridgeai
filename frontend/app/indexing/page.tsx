@@ -79,7 +79,7 @@ export default function IndexingPage() {
   const hasActiveRepo = activeConn?.repo_full_name
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: "900px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="page-content" style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "24px" }}>
 
       {/* Header */}
       <div>
@@ -248,7 +248,7 @@ export default function IndexingPage() {
             </span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+          <div className="grid-stats-4" style={{ gap: "10px" }}>
             <StatBlock label="Scanned" value={result.files_scanned} />
             <StatBlock label="Indexed" value={result.files_indexed} accent />
             <StatBlock label="Updated" value={result.files_updated} accent />

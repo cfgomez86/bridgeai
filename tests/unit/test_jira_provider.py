@@ -41,7 +41,14 @@ def make_story(**kwargs) -> UserStory:
         title="User Registration",
         story_description="As a user I want to register",
         acceptance_criteria=["Email is validated", "Password is hashed"],
-        subtasks={"frontend": [], "backend": ["Add endpoint", "Add repository"], "configuration": []},
+        subtasks={
+            "frontend": [],
+            "backend": [
+                {"title": "Add endpoint", "description": "Define POST /auth/register and return 201."},
+                {"title": "Add repository", "description": "Persist users via the repository pattern."},
+            ],
+            "configuration": [],
+        },
         definition_of_done=["Tests pass", "Code reviewed"],
         risk_notes=["No PII stored in logs"],
         story_points=5,
@@ -51,6 +58,11 @@ def make_story(**kwargs) -> UserStory:
     )
     defaults.update(kwargs)
     return UserStory(**defaults)
+
+
+def _meta(story: UserStory | None = None) -> dict:
+    s = story or make_story()
+    return {"title": s.title, "risk": s.risk_level, "pts": s.story_points}
 
 
 class TestJiraAuth:
@@ -123,11 +135,18 @@ class TestJiraPayloadMapping:
 class TestJiraCreateSubtasks:
     async def test_create_subtasks_returns_created_keys(self):
         provider = make_provider()
-        subtasks = {"frontend": ["Build form"], "backend": ["Add endpoint", "Add repo"], "configuration": []}
+        subtasks = {
+            "frontend": [{"title": "Build form", "description": "React form with email and password."}],
+            "backend": [
+                {"title": "Add endpoint", "description": "Define POST /auth/register."},
+                {"title": "Add repo", "description": "Persist users."},
+            ],
+            "configuration": [],
+        }
 
         responses = [{"key": "PROJ-2"}, {"key": "PROJ-3"}, {"key": "PROJ-4"}]
         with patch.object(provider, "_request", new=AsyncMock(side_effect=responses)):
-            ids, urls, titles, failed = await provider.create_subtasks("PROJ-1", "PROJ", subtasks)
+            ids, urls, titles, failed = await provider.create_subtasks("PROJ-1", "PROJ", subtasks, _meta())
 
         assert ids == ["PROJ-2", "PROJ-3", "PROJ-4"]
         assert all("PROJ-2" in u or "PROJ-3" in u or "PROJ-4" in u for u in urls)
@@ -136,7 +155,10 @@ class TestJiraCreateSubtasks:
 
     async def test_create_subtasks_payload_has_parent_and_label(self):
         provider = make_provider()
-        payload = provider._build_subtask_payload("PROJ-1", "PROJ", "Add endpoint", "backend")
+        payload = provider._build_subtask_payload(
+            "PROJ-1", "PROJ", "Add endpoint", "backend",
+            "Implement the route.\n\nVerify with pytest.", _meta(),
+        )
 
         fields = payload["fields"]
         assert fields["parent"]["key"] == "PROJ-1"
@@ -144,29 +166,67 @@ class TestJiraCreateSubtasks:
         assert fields["labels"] == ["backend"]
         assert fields["summary"] == "[Backend] Add endpoint"
 
+    async def test_create_subtasks_payload_description_has_multiple_paragraphs_and_parent_meta(self):
+        provider = make_provider()
+        description = "First step.\n\nSecond step.\n\nVerify with pytest."
+        payload = provider._build_subtask_payload(
+            "PROJ-1", "PROJ", "Add endpoint", "backend", description, _meta(),
+        )
+        adf = payload["fields"]["description"]
+        assert adf["type"] == "doc"
+        # 3 paragraphs from description + 1 trailing parent-meta paragraph
+        assert len(adf["content"]) == 4
+        texts = [p["content"][0]["text"] for p in adf["content"]]
+        assert texts[0] == "First step."
+        assert texts[1] == "Second step."
+        assert texts[2] == "Verify with pytest."
+        assert texts[3].startswith("Parent story:")
+        assert "Risk: MEDIUM" in texts[3]
+        assert "5 pts" in texts[3]
+
+    async def test_create_subtasks_payload_truncates_long_summary(self):
+        provider = make_provider()
+        long_title = "x" * 300
+        payload = provider._build_subtask_payload(
+            "PROJ-1", "PROJ", long_title, "backend", "Some description here.", _meta(),
+        )
+        # "[Backend] " (10 chars) + sliced to 250 total
+        assert len(payload["fields"]["summary"]) == 250
+
     async def test_create_subtasks_payload_uses_config_prefix_for_configuration(self):
         provider = make_provider()
-        payload = provider._build_subtask_payload("PROJ-1", "PROJ", "Add env vars", "configuration")
+        payload = provider._build_subtask_payload(
+            "PROJ-1", "PROJ", "Add env vars", "configuration", "Document SMTP_HOST and SMTP_PORT.", _meta(),
+        )
         assert payload["fields"]["summary"] == "[Config] Add env vars"
 
     async def test_create_subtasks_payload_uses_frontend_prefix(self):
         provider = make_provider()
-        payload = provider._build_subtask_payload("PROJ-1", "PROJ", "Build form", "frontend")
+        payload = provider._build_subtask_payload(
+            "PROJ-1", "PROJ", "Build form", "frontend", "Render inputs and submit handler.", _meta(),
+        )
         assert payload["fields"]["summary"] == "[Frontend] Build form"
 
     async def test_create_subtasks_skips_failed_items(self):
         from urllib.error import HTTPError
 
         provider = make_provider()
-        subtasks = {"frontend": [], "backend": ["Task A", "Task B"], "configuration": []}
+        subtasks = {
+            "frontend": [],
+            "backend": [
+                {"title": "Task A", "description": "Do something useful here."},
+                {"title": "Task B", "description": "Do something else useful here."},
+            ],
+            "configuration": [],
+        }
 
         error = HTTPError(url="", code=400, msg="Bad Request", hdrs=None, fp=None)
         with patch.object(provider, "_request", new=AsyncMock(side_effect=[error, {"key": "PROJ-2"}])):
-            ids, urls, titles, failed = await provider.create_subtasks("PROJ-1", "PROJ", subtasks)
+            ids, urls, titles, failed = await provider.create_subtasks("PROJ-1", "PROJ", subtasks, _meta())
 
         assert ids == ["PROJ-2"]
         assert len(titles) == 1
-        assert failed == ["Task A"]
+        assert failed == ["[Backend] Task A"]
 
 
 class TestJiraCreateTicket:

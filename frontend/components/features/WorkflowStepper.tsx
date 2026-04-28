@@ -18,15 +18,18 @@ export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
   ]
 
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(4, 1fr)",
-      background: "var(--surface)",
-      border: "1px solid var(--border)",
-      borderRadius: "var(--radius-lg)",
-      overflow: "hidden",
-      boxShadow: "var(--shadow-sm)",
-    }}>
+    <>
+    {/* Desktop stepper — hidden on mobile */}
+    <div
+      className="grid-stepper-4"
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)",
+        overflow: "hidden",
+        boxShadow: "var(--shadow-sm)",
+      }}
+    >
       {STEPS.map((step, i) => {
         const done   = step.id < currentStep
         const active = step.id === currentStep
@@ -95,5 +98,47 @@ export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
         )
       })}
     </div>
+
+    {/* Mobile compact stepper — hidden on desktop */}
+    <div className="stepper-mobile-compact">
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <span style={{
+          width: "26px",
+          height: "26px",
+          borderRadius: "50%",
+          background: "var(--accent)",
+          color: "#fff",
+          display: "grid",
+          placeItems: "center",
+          fontFamily: "var(--font-mono)",
+          fontSize: "12px",
+          fontWeight: 700,
+          flexShrink: 0,
+        }}>
+          {Math.min(currentStep, STEPS.length)}
+        </span>
+        <div>
+          <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "14px", color: "var(--fg)" }}>
+            {STEPS[Math.min(currentStep, STEPS.length) - 1]?.label}
+          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
+            {s.current} · {Math.min(currentStep, STEPS.length)}/{STEPS.length}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+        {STEPS.map((step) => (
+          <div key={step.id} style={{
+            width: step.id === currentStep ? "16px" : "6px",
+            height: "6px",
+            borderRadius: "3px",
+            background: step.id < currentStep ? "var(--ok-fg)" : step.id === currentStep ? "var(--accent)" : "var(--border-strong)",
+            transition: "width 0.2s ease, background 0.2s ease",
+            flexShrink: 0,
+          }} />
+        ))}
+      </div>
+    </div>
+    </>
   )
 }

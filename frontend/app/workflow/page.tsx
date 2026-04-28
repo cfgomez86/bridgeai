@@ -36,7 +36,7 @@ export default function WorkflowPage() {
   }, [])
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: "900px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="page-content" style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "24px" }}>
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
           <span style={{ fontFamily: "var(--font-mono)", color: "var(--muted)", fontSize: "12px" }}>

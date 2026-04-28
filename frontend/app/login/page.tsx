@@ -12,14 +12,9 @@ const PIPELINE_STEPS = [
 
 export default function LoginPage() {
   return (
-    <div style={{
-      minHeight: "100vh",
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      fontFamily: "var(--font-sans)",
-    }}>
-      {/* Left column */}
-      <div style={{
+    <div className="login-page-grid" style={{ fontFamily: "var(--font-sans)" }}>
+      {/* Left column — decorative, hidden on mobile */}
+      <div className="login-left-col" style={{
         background: "var(--surface)",
         borderRight: "1px solid var(--border)",
         padding: "64px 56px",
@@ -119,12 +114,26 @@ export default function LoginPage() {
       </div>
 
       {/* Right column */}
-      <div style={{
+      <div className="login-right-col" style={{
         background: "var(--surface-2)", padding: "64px 56px",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         minHeight: "100vh",
       }}>
         <div style={{ width: "100%", maxWidth: "380px" }}>
+          {/* Mobile brand — shown only when left column is hidden */}
+          <div className="login-mobile-brand">
+            <div style={{
+              width: "30px", height: "30px", borderRadius: "8px",
+              background: "var(--accent-soft)", display: "grid", placeItems: "center",
+              color: "var(--accent-strong)", flexShrink: 0,
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 6L3 12l6 6" /><path d="M15 6l6 6-6 6" /><path d="M14 5l-4 14" />
+              </svg>
+            </div>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "16px", color: "var(--fg)", letterSpacing: "-0.01em" }}>BridgeAI</span>
+          </div>
+
           <h2 style={{ fontFamily: "var(--font-display)", fontSize: "28px", fontWeight: 600, letterSpacing: "-0.02em", margin: "0 0 6px", color: "var(--fg)" }}>
             Bienvenido
           </h2>
@@ -153,7 +162,7 @@ export default function LoginPage() {
             <div style={{ flex: 1, height: "1px", background: "var(--border)" }} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+          <div className="grid-2col" style={{ gap: "10px" }}>
             {/* Conecta tu repo */}
             <div style={{ padding: "12px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "8px" }}>
               <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>

@@ -120,9 +120,9 @@ export default function SettingsPage() {
   ]
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", minHeight: "calc(100vh - 48px)" }}>
-      {/* Left nav */}
-      <nav style={{
+    <div className="grid-connections-layout">
+      {/* Left nav — hidden on mobile */}
+      <nav className="desktop-side-nav" style={{
         background: "var(--surface)",
         borderRight: "1px solid var(--border)",
         padding: "16px 8px",
@@ -158,8 +158,23 @@ export default function SettingsPage() {
         })}
       </nav>
 
-      {/* Main content */}
-      <div style={{ padding: "28px 32px", maxWidth: "760px", display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* Content column */}
+      <div>
+        {/* Mobile tabs — shown only on mobile */}
+        <div className="mobile-nav-tabs">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={item.id === activeSection ? "tab-active" : undefined}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Main content */}
+        <div className="page-content" style={{ maxWidth: "760px", display: "flex", flexDirection: "column", gap: "24px" }}>
         {/* Section title */}
         <div>
           <h1 style={{
@@ -176,6 +191,7 @@ export default function SettingsPage() {
 
         {activeSection === "idioma" && <LanguageSection />}
         {activeSection === "apariencia" && <ThemeSection />}
+        </div>
       </div>
     </div>
   )

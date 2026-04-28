@@ -189,7 +189,15 @@ def make_client_with_story():
         title="User Registration with Email Confirmation",
         story_description="As a user, I want to register with email so I can access the platform.",
         acceptance_criteria=json.dumps(["User can register", "Email is validated", "Confirmation sent"]),
-        subtasks=json.dumps({"frontend": ["Create form"], "backend": ["Create endpoint", "Add validation", "Send email"], "configuration": []}),
+        subtasks=json.dumps({
+            "frontend": [{"title": "Create form", "description": "Build the registration form."}],
+            "backend": [
+                {"title": "Create endpoint", "description": "Define POST /auth/register."},
+                {"title": "Add validation", "description": "Validate email format and password rules."},
+                {"title": "Send email", "description": "Send confirmation email after register."},
+            ],
+            "configuration": [],
+        }),
         definition_of_done=json.dumps(["Code reviewed", "Tests passing", "Deployed"]),
         risk_notes=json.dumps(["External email dependency"]),
         story_points=5,

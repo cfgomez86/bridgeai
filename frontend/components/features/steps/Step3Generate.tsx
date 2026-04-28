@@ -154,7 +154,7 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
                 <FileText size={12} style={{ color: "var(--muted)" }} />
                 <span style={sectionLabel}>{s.description_label}</span>
               </div>
-              <p style={{ fontSize: "12.5px", lineHeight: 1.65, color: "var(--fg-2)", margin: 0 }}>
+              <p style={{ fontSize: "12.5px", lineHeight: 1.65, color: "var(--fg-2)", margin: 0, overflowWrap: "break-word" }}>
                 {story.story_description}
               </p>
             </div>
@@ -177,7 +177,7 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
                     }}>
                       {i + 1}
                     </span>
-                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{item}</span>
+                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5, overflowWrap: "break-word", flex: 1, minWidth: 0 }}>{item}</span>
                   </li>
                 ))}
               </ol>
@@ -195,14 +195,26 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
                     <Code size={12} style={{ color: "var(--muted)" }} />
                     <span style={sectionLabel}>{labels[cat]}</span>
                   </div>
-                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {tasks.map((task, i) => (
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {tasks.map((sub, i) => (
                       <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "12.5px" }}>
                         <span style={{
                           flexShrink: 0, marginTop: "3px", width: "14px", height: "14px",
                           borderRadius: "3px", border: "1px solid var(--border)",
                         }} />
-                        <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{task}</span>
+                        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <span style={{ color: "var(--fg)", fontWeight: 500, lineHeight: 1.4, overflowWrap: "break-word" }}>
+                            {sub.title}
+                          </span>
+                          {sub.description && (
+                            <span style={{
+                              color: "var(--muted)", fontSize: "12px", lineHeight: 1.6,
+                              whiteSpace: "pre-wrap", overflowWrap: "break-word",
+                            }}>
+                              {sub.description}
+                            </span>
+                          )}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -224,7 +236,7 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
                       flexShrink: 0, marginTop: "3px", width: "14px", height: "14px",
                       borderRadius: "3px", border: "1px solid var(--border)",
                     }} />
-                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{item}</span>
+                    <span style={{ color: "var(--fg-2)", lineHeight: 1.5, overflowWrap: "break-word", flex: 1, minWidth: 0 }}>{item}</span>
                   </li>
                 ))}
               </ul>

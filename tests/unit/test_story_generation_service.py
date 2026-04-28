@@ -242,6 +242,10 @@ def _valid_story(subtasks: dict, risk_notes: list[str] | None = None) -> dict:
     }
 
 
+def _sub(title: str, description: str = "Detailed steps to complete this task.") -> dict:
+    return {"title": title, "description": description}
+
+
 def test_generator_detects_hallucinated_path_and_retries():
     from app.core.config import Settings
     settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
@@ -250,8 +254,8 @@ def test_generator_detects_hallucinated_path_and_retries():
         {
             "frontend": [],
             "backend": [
-                "Agregar endpoint en app/api/routes/products.py",
-                "Actualizar NotificationService.java",
+                _sub("Agregar endpoint en app/api/routes/products.py"),
+                _sub("Actualizar NotificationService.java"),
             ],
             "configuration": [],
         }
@@ -259,7 +263,7 @@ def test_generator_detects_hallucinated_path_and_retries():
     clean = _valid_story(
         {
             "frontend": [],
-            "backend": ["Actualizar NotificationService.java"],
+            "backend": [_sub("Actualizar NotificationService.java")],
             "configuration": [],
         }
     )
@@ -274,7 +278,8 @@ def test_generator_detects_hallucinated_path_and_retries():
     assert provider.calls[1].get("hallucinated_last_attempt") == [
         "app/api/routes/products.py"
     ]
-    assert result["subtasks"]["backend"] == ["Actualizar NotificationService.java"]
+    backend_titles = [item["title"] for item in result["subtasks"]["backend"]]
+    assert backend_titles == ["Actualizar NotificationService.java"]
 
 
 def test_generator_strips_invalid_paths_after_max_retries():
@@ -285,8 +290,8 @@ def test_generator_strips_invalid_paths_after_max_retries():
         {
             "frontend": [],
             "backend": [
-                "Agregar endpoint en app/api/routes/products.py",
-                "Actualizar NotificationService.java",
+                _sub("Agregar endpoint en app/api/routes/products.py"),
+                _sub("Actualizar NotificationService.java"),
             ],
             "configuration": [],
         }
@@ -296,7 +301,9 @@ def test_generator_strips_invalid_paths_after_max_retries():
 
     result = gen.generate({"available_file_paths": ["NotificationService.java"]})
 
-    backend_texts = " ".join(result["subtasks"]["backend"])
+    backend_texts = " ".join(
+        f"{item['title']} {item['description']}" for item in result["subtasks"]["backend"]
+    )
     assert "app/api/routes/products.py" not in backend_texts
     assert "NotificationService.java" in backend_texts
 
@@ -308,7 +315,7 @@ def test_generator_empty_whitelist_rejects_any_path():
     bad = _valid_story(
         {
             "frontend": [],
-            "backend": ["Editar src/Foo.java"],
+            "backend": [_sub("Editar src/Foo.java")],
             "configuration": [],
         }
     )
@@ -316,7 +323,9 @@ def test_generator_empty_whitelist_rejects_any_path():
     gen = AIStoryGenerator(provider, settings)
 
     result = gen.generate({"available_file_paths": []})
-    backend_texts = " ".join(result["subtasks"]["backend"])
+    backend_texts = " ".join(
+        f"{item['title']} {item['description']}" for item in result["subtasks"]["backend"]
+    )
     assert "src/Foo.java" not in backend_texts
 
 
@@ -326,7 +335,7 @@ def test_generator_accepts_paths_in_whitelist():
     resp = _valid_story(
         {
             "frontend": [],
-            "backend": ["Actualizar app/services/X.py"],
+            "backend": [_sub("Actualizar app/services/X.py")],
             "configuration": [],
         }
     )
@@ -334,7 +343,8 @@ def test_generator_accepts_paths_in_whitelist():
     gen = AIStoryGenerator(provider, settings)
 
     result = gen.generate({"available_file_paths": ["app/services/X.py"]})
-    assert result["subtasks"]["backend"] == ["Actualizar app/services/X.py"]
+    backend_titles = [item["title"] for item in result["subtasks"]["backend"]]
+    assert backend_titles == ["Actualizar app/services/X.py"]
 
 
 def test_hallucinated_path_error_carries_paths():

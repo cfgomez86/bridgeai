@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import Script from "next/script"
 import "./globals.css"
 import { Auth0Provider } from "@auth0/nextjs-auth0/client"
@@ -10,6 +10,11 @@ import { AppShell } from "@/components/features/AppShell"
 export const metadata: Metadata = {
   title: "BridgeAI",
   description: "Requirement to ticket automation",
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 }
 
 const themeScript = `(function(){try{var t=localStorage.getItem('bridgeai-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`

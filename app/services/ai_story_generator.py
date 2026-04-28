@@ -21,6 +21,8 @@ _PATH_RE = re.compile(
 )
 
 _MIN_SUBTASK_LEN = 15
+_MAX_TITLE_LEN = 150
+_MIN_DESCRIPTION_LEN = 30
 
 
 class HallucinatedPathError(ValueError):
@@ -108,6 +110,33 @@ class AIStoryGenerator:
                 subtasks[cat] = []
             if not isinstance(subtasks[cat], list):
                 raise ValueError(f"subtasks.{cat} must be a list")
+            for idx, item in enumerate(subtasks[cat]):
+                if not isinstance(item, dict):
+                    raise ValueError(
+                        f"subtasks.{cat}[{idx}] must be an object with 'title' and 'description'"
+                    )
+                title = str(item.get("title", "")).strip()
+                description = str(item.get("description", "")).strip()
+                if not title:
+                    raise ValueError(f"subtasks.{cat}[{idx}].title cannot be empty")
+                if len(title) < _MIN_SUBTASK_LEN:
+                    raise ValueError(
+                        f"subtasks.{cat}[{idx}].title must be at least {_MIN_SUBTASK_LEN} characters"
+                    )
+                if len(title) > _MAX_TITLE_LEN:
+                    raise ValueError(
+                        f"subtasks.{cat}[{idx}].title must be at most {_MAX_TITLE_LEN} characters"
+                    )
+                if not description:
+                    raise ValueError(
+                        f"subtasks.{cat}[{idx}].description cannot be empty"
+                    )
+                if len(description) < _MIN_DESCRIPTION_LEN:
+                    raise ValueError(
+                        f"subtasks.{cat}[{idx}].description must be at least {_MIN_DESCRIPTION_LEN} characters"
+                    )
+                item["title"] = title
+                item["description"] = description
         if not any(subtasks[c] for c in _SUBTASK_CATEGORIES):
             raise ValueError("subtasks must have at least one task in any category")
         return raw
@@ -122,7 +151,11 @@ class AIStoryGenerator:
         invalid: list[str] = []
         for cat in _SUBTASK_CATEGORIES:
             for item in raw.get("subtasks", {}).get(cat, []):
-                for path in self._extract_paths(item):
+                if isinstance(item, dict):
+                    combined = f"{item.get('title', '')}\n{item.get('description', '')}"
+                else:
+                    combined = item if isinstance(item, str) else ""
+                for path in self._extract_paths(combined):
                     if path not in whitelist and path not in invalid:
                         invalid.append(path)
         for item in raw.get("risk_notes", []):
@@ -132,7 +165,8 @@ class AIStoryGenerator:
         return invalid
 
     def _strip_invalid_paths(self, raw: dict, whitelist: set[str]) -> dict:
-        def _clean(text: str) -> str:
+        def _clean_inline(text: str) -> str:
+            """Para titles y risk_notes: limpia paths inválidos y colapsa whitespace."""
             if not isinstance(text, str):
                 return text
             for path in self._extract_paths(text):
@@ -141,21 +175,39 @@ class AIStoryGenerator:
                 text = self._remove_path_phrase(text, path)
             return re.sub(r"\s+", " ", text).strip(" .,;:")
 
+        def _clean_multiline(text: str) -> str:
+            """Para descriptions: limpia paths inválidos preservando saltos de línea."""
+            if not isinstance(text, str):
+                return text
+            for path in self._extract_paths(text):
+                if path in whitelist:
+                    continue
+                text = self._remove_path_phrase(text, path)
+            # Colapsa solo espacios/tabs sin tocar \n; recorta espacios laterales por línea
+            lines = [re.sub(r"[ \t]+", " ", ln).strip(" .,;:") for ln in text.split("\n")]
+            return "\n".join(lines).strip()
+
         out = dict(raw)
         subtasks = dict(raw.get("subtasks", {}))
         for cat in _SUBTASK_CATEGORIES:
-            cleaned: list[str] = []
+            cleaned: list[dict] = []
             for item in subtasks.get(cat, []):
-                new_text = _clean(item)
-                if new_text and len(new_text) >= _MIN_SUBTASK_LEN:
-                    cleaned.append(new_text)
+                if not isinstance(item, dict):
+                    continue
+                new_title = _clean_inline(str(item.get("title", "")))
+                new_description = _clean_multiline(str(item.get("description", "")))
+                if new_title and len(new_title) >= _MIN_SUBTASK_LEN and new_description:
+                    cleaned.append({"title": new_title, "description": new_description})
             subtasks[cat] = cleaned
         if not any(subtasks[c] for c in _SUBTASK_CATEGORIES):
             subtasks["backend"] = [
-                "Revisar el codebase indexado y definir tareas concretas (no hubo archivos verificables para referenciar)"
+                {
+                    "title": "Revisar el codebase indexado y definir tareas concretas",
+                    "description": "No hubo archivos verificables para referenciar en el whitelist. Inspeccionar el repo y descomponer la historia en tareas accionables manualmente.",
+                }
             ]
         out["subtasks"] = subtasks
-        out["risk_notes"] = [_clean(n) for n in raw.get("risk_notes", []) if _clean(n)]
+        out["risk_notes"] = [_clean_inline(n) for n in raw.get("risk_notes", []) if _clean_inline(n)]
         return out
 
     @staticmethod

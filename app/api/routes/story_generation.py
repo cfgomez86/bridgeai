@@ -43,10 +43,15 @@ class StoryGenerationResponse(BaseModel):
     request_id: str
 
 
+class SubtaskItem(BaseModel):
+    title: str
+    description: str = ""
+
+
 class SubtasksResponse(BaseModel):
-    frontend: list[str] = []
-    backend: list[str] = []
-    configuration: list[str] = []
+    frontend: list[SubtaskItem] = []
+    backend: list[SubtaskItem] = []
+    configuration: list[SubtaskItem] = []
 
 
 class StoryDetailResponse(BaseModel):

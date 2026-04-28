@@ -34,7 +34,14 @@ def make_story(**kwargs) -> UserStory:
         title="User Registration with Email",
         story_description="As a user I want to register",
         acceptance_criteria=["Email is validated", "Password min 8 chars"],
-        subtasks={"frontend": [], "backend": ["Add endpoint", "Add repository"], "configuration": []},
+        subtasks={
+            "frontend": [],
+            "backend": [
+                {"title": "Add endpoint", "description": "Define POST /auth/register and return 201."},
+                {"title": "Add repository", "description": "Persist users via the repository pattern."},
+            ],
+            "configuration": [],
+        },
         definition_of_done=["Tests pass", "Code reviewed"],
         risk_notes=["No PII in logs"],
         story_points=5,
@@ -44,6 +51,11 @@ def make_story(**kwargs) -> UserStory:
     )
     defaults.update(kwargs)
     return UserStory(**defaults)
+
+
+def _meta(story: UserStory | None = None) -> dict:
+    s = story or make_story()
+    return {"title": s.title, "risk": s.risk_level, "pts": s.story_points}
 
 
 class TestAzureAuth:
@@ -158,11 +170,18 @@ class TestAzureCreateChildTasks:
     async def test_create_child_tasks_returns_ids(self):
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
-        subtasks = {"frontend": ["Build form"], "backend": ["Add endpoint", "Add repo"], "configuration": []}
+        subtasks = {
+            "frontend": [{"title": "Build form", "description": "React form with email and password."}],
+            "backend": [
+                {"title": "Add endpoint", "description": "Define POST /auth/register."},
+                {"title": "Add repo", "description": "Persist users."},
+            ],
+            "configuration": [],
+        }
 
         responses = [{"id": 101}, {"id": 102}, {"id": 103}]
         with patch.object(provider, "_request", new=AsyncMock(side_effect=responses)):
-            ids, urls, titles, failed = await provider.create_child_tasks(42, subtasks)
+            ids, urls, titles, failed = await provider.create_child_tasks(42, subtasks, _meta())
 
         assert ids == ["101", "102", "103"]
         assert all("101" in u or "102" in u or "103" in u for u in urls)
@@ -172,7 +191,9 @@ class TestAzureCreateChildTasks:
     def test_child_task_payload_has_parent_relation(self):
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
-        payload = provider._build_child_task_payload(42, "Add endpoint", "backend")
+        payload = provider._build_child_task_payload(
+            42, "Add endpoint", "backend", "Define POST /auth/register.", _meta(),
+        )
 
         relation_op = next(op for op in payload if op["path"] == "/relations/-")
         assert relation_op["value"]["rel"] == "System.LinkTypes.Hierarchy-Reverse"
@@ -184,17 +205,66 @@ class TestAzureCreateChildTasks:
         tags_op = next(op for op in payload if op["path"] == "/fields/System.Tags")
         assert "backend" in tags_op["value"]
 
+    def test_child_task_payload_description_has_paragraphs_and_parent_meta(self):
+        settings = make_settings()
+        provider = AzureDevOpsTicketProvider(settings)
+        description = "First step.\n\nSecond step.\n\nVerify with pytest."
+        payload = provider._build_child_task_payload(
+            42, "Add endpoint", "backend", description, _meta(),
+        )
+        desc_op = next(op for op in payload if op["path"] == "/fields/System.Description")
+        body = desc_op["value"]
+        assert "<p>First step.</p>" in body
+        assert "<p>Second step.</p>" in body
+        assert "<p>Verify with pytest.</p>" in body
+        assert "Parent story:" in body
+        assert "Risk: MEDIUM" in body
+        assert "5 pts" in body
+
+    def test_child_task_payload_escapes_html_in_title_and_description(self):
+        settings = make_settings()
+        provider = AzureDevOpsTicketProvider(settings)
+        payload = provider._build_child_task_payload(
+            42,
+            "<script>alert('xss')</script> bad title",
+            "backend",
+            "Use <b>bold</b> & special chars.",
+            _meta(),
+        )
+        title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
+        desc_op = next(op for op in payload if op["path"] == "/fields/System.Description")
+        assert "<script>" not in title_op["value"]
+        assert "&lt;script&gt;" in title_op["value"]
+        assert "<b>" not in desc_op["value"]
+        assert "&lt;b&gt;" in desc_op["value"]
+        assert "&amp;" in desc_op["value"]
+
+    def test_child_task_payload_truncates_long_title(self):
+        settings = make_settings()
+        provider = AzureDevOpsTicketProvider(settings)
+        long_title = "x" * 300
+        payload = provider._build_child_task_payload(
+            42, long_title, "backend", "Some description.", _meta(),
+        )
+        title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
+        # html.escape doesn't grow plain "x" chars; "[Backend] " (10) + sliced to 250
+        assert len(title_op["value"]) == 250
+
     def test_child_task_payload_uses_config_prefix_for_configuration(self):
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
-        payload = provider._build_child_task_payload(42, "Add env vars", "configuration")
+        payload = provider._build_child_task_payload(
+            42, "Add env vars", "configuration", "Document SMTP_HOST.", _meta(),
+        )
         title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
         assert title_op["value"] == "[Config] Add env vars"
 
     def test_child_task_payload_uses_frontend_prefix(self):
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
-        payload = provider._build_child_task_payload(42, "Build form", "frontend")
+        payload = provider._build_child_task_payload(
+            42, "Build form", "frontend", "Render inputs.", _meta(),
+        )
         title_op = next(op for op in payload if op["path"] == "/fields/System.Title")
         assert title_op["value"] == "[Frontend] Build form"
 
@@ -203,15 +273,22 @@ class TestAzureCreateChildTasks:
 
         settings = make_settings()
         provider = AzureDevOpsTicketProvider(settings)
-        subtasks = {"frontend": [], "backend": ["Task A", "Task B"], "configuration": []}
+        subtasks = {
+            "frontend": [],
+            "backend": [
+                {"title": "Task A", "description": "Do something useful here."},
+                {"title": "Task B", "description": "Do something else useful here."},
+            ],
+            "configuration": [],
+        }
 
         error = HTTPError(url="", code=400, msg="Bad Request", hdrs=None, fp=None)
         with patch.object(provider, "_request", new=AsyncMock(side_effect=[error, {"id": 55}])):
-            ids, urls, titles, failed = await provider.create_child_tasks(10, subtasks)
+            ids, urls, titles, failed = await provider.create_child_tasks(10, subtasks, _meta())
 
         assert ids == ["55"]
         assert len(titles) == 1
-        assert failed == ["Task A"]
+        assert failed == ["[Backend] Task A"]
 
 
 class TestAzureCreateTicket:
@@ -352,7 +429,9 @@ class TestHealthCheckWithAzure:
         from sqlalchemy.orm import sessionmaker
         from sqlalchemy.pool import StaticPool
         from app.database.session import Base
+        from app.models.source_connection import SourceConnection
         from app.services.ticket_integration_service import TicketIntegrationService
+        from tests.unit.conftest import TEST_TENANT_ID
 
         engine = create_engine(
             "sqlite:///:memory:",
@@ -361,6 +440,22 @@ class TestHealthCheckWithAzure:
         )
         Base.metadata.create_all(bind=engine)
         db = sessionmaker(bind=engine)()
+
+        # Azure DevOps health resolves from the source_connections table — insert an
+        # active connection with boards_project so _resolve_azure_conn() succeeds.
+        conn = SourceConnection(
+            id="azure-conn-test-0000-0000-0000-000000000001",
+            tenant_id=TEST_TENANT_ID,
+            platform="azure_devops",
+            display_name="Azure Test",
+            access_token="pat-token-123",
+            base_url="https://dev.azure.com/test-org",
+            boards_project="test-org/MyProject",
+            is_active=True,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(conn)
+        db.commit()
 
         settings = make_settings()
         service = TicketIntegrationService(db, settings)

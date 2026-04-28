@@ -12,8 +12,14 @@ _VALID_STORY_JSON = """{
     "story_description": "As a user, I want to register so that I can access the platform.",
     "acceptance_criteria": ["Criterion 1", "Criterion 2", "Criterion 3"],
     "subtasks": {
-        "frontend": ["Create form component"],
-        "backend": ["Task 1", "Task 2", "Task 3"],
+        "frontend": [
+            {"title": "Create form component", "description": "Render the form and wire submit handler."}
+        ],
+        "backend": [
+            {"title": "Task 1", "description": "Define the auth route."},
+            {"title": "Task 2", "description": "Validate the email format."},
+            {"title": "Task 3", "description": "Persist the user record."}
+        ],
         "configuration": []
     },
     "definition_of_done": ["Done 1", "Done 2", "Done 3"],
@@ -165,7 +171,15 @@ class _FailThenSucceedStoryProvider(StoryAIProvider):
             "title": "Test Story",
             "story_description": "As a user, I want X so that Y.",
             "acceptance_criteria": ["AC1", "AC2", "AC3"],
-            "subtasks": {"frontend": [], "backend": ["T1", "T2", "T3"], "configuration": []},
+            "subtasks": {
+                "frontend": [],
+                "backend": [
+                    {"title": "Define the API route", "description": "Create the FastAPI handler for this feature."},
+                    {"title": "Add input validation", "description": "Validate request payloads with Pydantic models."},
+                    {"title": "Persist the record", "description": "Use the repository to write the row to the database."},
+                ],
+                "configuration": [],
+            },
             "definition_of_done": ["D1", "D2", "D3"],
             "risk_notes": [],
         }

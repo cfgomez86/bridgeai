@@ -19,6 +19,7 @@ export function StepSummaryCard({ title, icon, children, defaultOpen = false }: 
       border: "1px solid var(--border)",
       background: "var(--surface-2)",
       overflow: "hidden",
+      minWidth: 0,
     }}>
       <button
         type="button"

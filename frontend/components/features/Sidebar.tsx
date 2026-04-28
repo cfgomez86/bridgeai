@@ -54,7 +54,12 @@ function IconSettings() {
   )
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean
+  onClose?: () => void
+}
+
+export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const { t } = useLanguage()
 
@@ -85,18 +90,46 @@ export function Sidebar() {
   }
 
   return (
-    <aside style={{
-      background: "var(--surface-2)",
-      borderRight: "1px solid var(--border)",
-      padding: "14px 10px",
-      display: "flex",
-      flexDirection: "column",
-      height: "100vh",
-      position: "sticky",
-      top: 0,
-      overflow: "hidden",
-      gap: "0",
-    }}>
+    <aside
+      className={`sidebar-mobile${isOpen ? " is-open" : ""}`}
+      style={{
+        background: "var(--surface-2)",
+        borderRight: "1px solid var(--border)",
+        padding: "14px 10px",
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        position: "sticky",
+        top: 0,
+        overflow: "hidden",
+        gap: "0",
+      }}
+    >
+      {/* Close button — mobile only */}
+      <button
+        onClick={onClose}
+        className="sidebar-close-btn"
+        aria-label="Cerrar menú"
+        style={{
+          position: "absolute",
+          top: "10px",
+          right: "10px",
+          width: "28px",
+          height: "28px",
+          border: "none",
+          background: "transparent",
+          color: "var(--muted)",
+          cursor: "pointer",
+          borderRadius: "4px",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "20px",
+          lineHeight: 1,
+          padding: 0,
+        }}
+      >
+        ×
+      </button>
       {/* Brand */}
       <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "2px 6px", marginBottom: "12px" }}>
         <div style={{

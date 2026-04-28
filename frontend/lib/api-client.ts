@@ -120,6 +120,11 @@ export interface IndexStatusResponse {
   last_indexed_at: string | null
 }
 
+export type Subtask = {
+  title: string
+  description: string
+}
+
 export interface StoryDetailResponse {
   story_id: string
   source_connection_id: string
@@ -129,7 +134,7 @@ export interface StoryDetailResponse {
   title: string
   story_description: string
   acceptance_criteria: string[]
-  subtasks: Record<string, string[]>
+  subtasks: Record<"frontend" | "backend" | "configuration", Subtask[]>
   definition_of_done: string[]
   risk_notes: string[]
   story_points: number

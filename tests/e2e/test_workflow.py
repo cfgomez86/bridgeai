@@ -60,8 +60,14 @@ _STORY_DETAIL = {
         "Given I submit a valid email, then I receive a reset link within 5 minutes.",
     ],
     "subtasks": {
-        "frontend": ["Add forgot-password link", "Build reset-password form"],
-        "backend": ["Implement reset token generation", "Send reset email"],
+        "frontend": [
+            {"title": "Add forgot-password link", "description": "Place a link on the login screen."},
+            {"title": "Build reset-password form", "description": "Form receives the reset token from the URL."},
+        ],
+        "backend": [
+            {"title": "Implement reset token generation", "description": "Tokens expire in 15 minutes."},
+            {"title": "Send reset email", "description": "Email contains a single-use link with the token."},
+        ],
         "configuration": [],
     },
     "definition_of_done": ["Unit tests pass", "E2E test covers happy path"],

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import html
 import random
 from urllib.error import HTTPError
 from urllib.parse import quote
@@ -155,26 +156,54 @@ class AzureDevOpsTicketProvider(TicketProvider):
         cap = base_delay * (2 ** attempt)
         return random.uniform(0, cap)
 
-    def _build_child_task_payload(self, parent_id: int, summary: str, category: str, description: str = "") -> list:
-        ops = [
-            {"op": "add", "path": "/fields/System.Title", "value": f"[{_CATEGORY_PREFIX.get(category, category.capitalize())}] {summary}"},
+    def _build_child_task_payload(
+        self,
+        parent_id: int,
+        title: str,
+        category: str,
+        description: str,
+        parent_meta: dict,
+    ) -> list:
+        prefix = _CATEGORY_PREFIX.get(category, category.capitalize())
+        safe_title = html.escape(f"[{prefix}] {title}"[:250])
+        paragraphs = [p.strip() for p in (description or "").split("\n\n") if p.strip()]
+        body_parts = [f"<p>{html.escape(p)}</p>" for p in paragraphs]
+        body_parts.append(
+            "<p><em>"
+            f"Parent story: {html.escape(str(parent_meta['title']))} | "
+            f"Risk: {html.escape(str(parent_meta['risk']))} | "
+            f"{int(parent_meta['pts'])} pts"
+            "</em></p>"
+        )
+        body_html = "".join(body_parts)
+        return [
+            {"op": "add", "path": "/fields/System.Title", "value": safe_title},
+            {"op": "add", "path": "/fields/System.Description", "value": body_html},
             {"op": "add", "path": "/fields/System.Tags", "value": f"BridgeAI; {category}"},
-            {"op": "add", "path": "/relations/-", "value": {
-                "rel": "System.LinkTypes.Hierarchy-Reverse",
-                "url": self._work_item_relation_url(parent_id),
-                "attributes": {"comment": "BridgeAI generated task"},
-            }},
+            {
+                "op": "add",
+                "path": "/relations/-",
+                "value": {
+                    "rel": "System.LinkTypes.Hierarchy-Reverse",
+                    "url": self._work_item_relation_url(parent_id),
+                    "attributes": {"comment": "BridgeAI generated task"},
+                },
+            },
         ]
-        if description:
-            ops.insert(1, {"op": "add", "path": "/fields/System.Description", "value": f"<p>{description}</p>"})
-        return ops
 
     async def _create_one_child_task(
-        self, url: str, parent_id: int, summary: str, category: str, description: str = ""
+        self,
+        url: str,
+        parent_id: int,
+        title: str,
+        category: str,
+        description: str,
+        parent_meta: dict,
     ) -> tuple[str | None, str | None, str | None, str | None]:
         """Returns (id, browse_url, title, error_summary). On success error_summary is None."""
-        payload = self._build_child_task_payload(parent_id, summary, category, description)
-        full_title = f"[{_CATEGORY_PREFIX.get(category, category.capitalize())}] {summary}"
+        payload = self._build_child_task_payload(parent_id, title, category, description, parent_meta)
+        prefix = _CATEGORY_PREFIX.get(category, category.capitalize())
+        full_title = f"[{prefix}] {title}"[:250]
         max_retries = self._settings.AZURE_MAX_RETRIES
         base_delay = self._settings.AZURE_RETRY_DELAY_SECONDS
         last_error: Exception | None = None
@@ -206,23 +235,30 @@ class AzureDevOpsTicketProvider(TicketProvider):
 
         logger.warning(
             "azure_child_task_creation_failed",
-            extra={"parent_id": parent_id, "category": category, "summary": summary},
+            extra={"parent_id": parent_id, "category": category, "title": title},
         )
-        return None, None, None, summary
+        return None, None, None, full_title
 
     async def create_child_tasks(
-        self, parent_id: int, subtasks: dict, description: str = ""
+        self, parent_id: int, subtasks: dict, parent_meta: dict
     ) -> tuple[list[str], list[str], list[str], list[str]]:
-        """Create Azure Repos Tasks in parallel. Returns (ids, urls, titles, failed_summaries)."""
+        """Create Azure Repos Tasks in parallel. Returns (ids, urls, titles, failed_titles)."""
         url = self._work_items_url("Task")
         coros = [
-            self._create_one_child_task(url, parent_id, summary, category, description)
+            self._create_one_child_task(
+                url,
+                parent_id,
+                item["title"],
+                category,
+                item.get("description", ""),
+                parent_meta,
+            )
             for category, tasks in [
                 ("frontend", subtasks.get("frontend") or []),
                 ("backend", subtasks.get("backend") or []),
                 ("configuration", subtasks.get("configuration") or []),
             ]
-            for summary in tasks
+            for item in tasks
         ]
         results = await asyncio.gather(*coros)
         ids = [r[0] for r in results if r[0] is not None]
@@ -234,8 +270,12 @@ class AzureDevOpsTicketProvider(TicketProvider):
     async def create_subtasks_for(
         self, story: UserStory, parent_id: str, project_key: str
     ) -> tuple[list[str], list[str], list[str], list[str]]:
-        description = f"Parent story: {story.title} | Risk: {story.risk_level} | {story.story_points} pts"
-        return await self.create_child_tasks(int(parent_id), story.subtasks or {}, description)
+        parent_meta = {
+            "title": story.title,
+            "risk": story.risk_level,
+            "pts": story.story_points,
+        }
+        return await self.create_child_tasks(int(parent_id), story.subtasks or {}, parent_meta)
 
     async def create_ticket(self, story: UserStory, project_key: str, issue_type: str) -> TicketResult:
         payload_dict = self.build_payload(story, project_key, issue_type)

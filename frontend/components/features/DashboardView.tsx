@@ -69,7 +69,7 @@ export function DashboardView() {
   ]
 
   return (
-    <div style={{ padding: "40px 48px", maxWidth: "1080px" }}>
+    <div className="dashboard-content" style={{ maxWidth: "1080px" }}>
       {/* Greeting */}
       <div style={{ marginBottom: "24px" }}>
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: "26px", fontWeight: 600, letterSpacing: "-0.02em", margin: "0 0 4px", color: "var(--fg)" }}>
@@ -106,7 +106,7 @@ export function DashboardView() {
       </div>
 
       {/* Stats row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px", marginBottom: "24px" }}>
+      <div className="grid-3col" style={{ gap: "14px", marginBottom: "24px" }}>
         {[
           { label: d.stats.requirements, value: "142", meta: d.stats.last30days },
           { label: d.stats.stories,      value: "318", meta: d.stats.last30days },
@@ -121,7 +121,7 @@ export function DashboardView() {
       </div>
 
       {/* Bottom row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: "18px" }}>
+      <div className="grid-dashboard-bottom" style={{ gap: "18px" }}>
 
         {/* Activity */}
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>

@@ -11,7 +11,7 @@ class UserStory:
     title: str
     story_description: str
     acceptance_criteria: list[str]
-    subtasks: dict  # {"frontend": [...], "backend": [...], "configuration": [...]}
+    subtasks: dict  # {"frontend": [{"title": str, "description": str}], "backend": [...], "configuration": [...]}
     definition_of_done: list[str]
     risk_notes: list[str]
     story_points: int
