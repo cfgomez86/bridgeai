@@ -83,16 +83,46 @@ class AzureDevOpsProvider(ScmProvider):
         if not org_url:
             raise ValueError("org_url is required for Azure DevOps PAT validation (e.g. https://dev.azure.com/my-org)")
         org = org_url.rstrip("/").split("/")[-1]
-        url = f"https://dev.azure.com/{org}/_apis/projects?api-version=7.1"
-        req = urllib.request.Request(url, headers={"Authorization": self._auth_header(token)})
+        projects_url = f"https://dev.azure.com/{org}/_apis/projects?api-version=7.1"
+        req = urllib.request.Request(projects_url, headers={"Authorization": self._auth_header(token)})
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
-                json.loads(resp.read())
+                data = json.loads(resp.read())
         except urllib.error.HTTPError as e:
             raise ValueError(f"Azure DevOps PAT invalid or org_url wrong: HTTP {e.code}") from e
         except Exception as exc:
             raise ValueError(f"Azure DevOps PAT validation failed: {exc}") from exc
+        # Probe Work Items scope using the first accessible project
+        projects = data.get("value", [])
+        if projects:
+            first_project = urllib.parse.quote(projects[0]["name"])
+            wi_url = f"https://dev.azure.com/{org}/{first_project}/_apis/wit/workitemtypes?api-version=7.1"
+            wi_req = urllib.request.Request(wi_url, headers={"Authorization": self._auth_header(token)})
+            try:
+                with urllib.request.urlopen(wi_req, timeout=15) as _resp:
+                    pass
+            except urllib.error.HTTPError as e:
+                if e.code in (401, 403):
+                    raise ValueError(
+                        "Azure DevOps PAT is missing 'Work Items: Read & Write' scope. "
+                        "Regenerate the PAT and enable: Work Items › Read & Write."
+                    )
+            except Exception:
+                pass  # network or other transient error — don't block connection
         return {"login": f"PAT@{org}", "display_name": f"PAT@{org}"}
+
+    def get_project_process(self, access_token: str, org_url: str, project_name: str) -> str:
+        """Returns the process template name (e.g. 'Agile', 'Scrum', 'Basic', 'CMMI') for a project."""
+        org = org_url.rstrip("/").split("/")[-1]
+        project_encoded = urllib.parse.quote(project_name, safe="")
+        url = f"https://dev.azure.com/{org}/_apis/projects/{project_encoded}?includeCapabilities=true&api-version=7.1"
+        req = urllib.request.Request(url, headers={"Authorization": self._auth_header(access_token)})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+            return data.get("capabilities", {}).get("processTemplate", {}).get("templateName", "")
+        except Exception:
+            return ""
 
     def list_projects(self, access_token: str, org_url: str | None = None, **_kwargs) -> list[dict]:
         if org_url or not access_token.startswith("eyJ"):
@@ -103,7 +133,7 @@ class AzureDevOpsProvider(ScmProvider):
         return self._list_projects_oauth(access_token)
 
     def _get_org_projects(self, token: str, org: str) -> list[dict]:
-        url = f"https://dev.azure.com/{org}/_apis/projects?api-version=7.1"
+        url = f"https://dev.azure.com/{org}/_apis/projects?$expand=capabilities&api-version=7.1"
         req = urllib.request.Request(url, headers={"Authorization": self._auth_header(token)})
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
@@ -111,7 +141,12 @@ class AzureDevOpsProvider(ScmProvider):
         except Exception:
             return []
         return [
-            {"name": p["name"], "org": org, "full_name": f"{org}/{p['name']}"}
+            {
+                "name": p["name"],
+                "org": org,
+                "full_name": f"{org}/{p['name']}",
+                "process_template": p.get("capabilities", {}).get("processTemplate", {}).get("templateName", ""),
+            }
             for p in data.get("value", [])
         ]
 

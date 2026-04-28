@@ -68,11 +68,23 @@ class GitHubProvider(ScmProvider):
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read())
+                granted_header = resp.getheader("X-OAuth-Scopes") or ""
         except Exception as exc:
             raise ValueError(f"GitHub PAT invalid: {exc}") from exc
         login = data.get("login", "")
         if not login:
             raise ValueError("GitHub PAT did not return a valid user")
+        # Classic PATs expose X-OAuth-Scopes; fine-grained tokens omit it — skip check if absent
+        if granted_header.strip():
+            granted = {s.strip() for s in granted_header.split(",") if s.strip()}
+            required = {"repo", "read:user"}
+            missing = required - granted
+            if missing:
+                raise ValueError(
+                    f"GitHub PAT is missing required scopes: {', '.join(sorted(missing))}. "
+                    f"Required: {', '.join(sorted(required))}. "
+                    f"Currently granted: {', '.join(sorted(granted)) or 'none'}."
+                )
         return {"login": login}
 
     def list_repos(self, access_token: str, base_url: str | None = None, **_kwargs) -> list[dict]:

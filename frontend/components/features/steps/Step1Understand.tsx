@@ -138,7 +138,7 @@ export function Step1Understand({
         .then(([conns, idx]) => {
           const ticket =
             conns.find((c) => c.platform === "jira") ??
-            conns.find((c) => c.platform === "azure_devops" && !SCM_PLATFORMS.has(c.platform))
+            conns.find((c) => c.platform === "azure_devops" && Boolean(c.boards_project))
           const scm = state.sourceConnectionId
             ? conns.find((c) => c.id === state.sourceConnectionId)
             : conns.find((c) => c.is_active && SCM_PLATFORMS.has(c.platform))
@@ -160,7 +160,9 @@ export function Step1Understand({
 
   const hasRepo = Boolean(scmConn ?? state.sourceConnectionId)
   const isIndexed = (indexStatus?.total_files ?? 0) > 0
-  const hasSite = Boolean(ticketConn?.repo_full_name)
+  const hasSite = ticketConn?.platform === "azure_devops"
+    ? Boolean(ticketConn.boards_project)
+    : Boolean(ticketConn?.repo_full_name)
   const isReady = Boolean(ticketConn) && hasSite && hasRepo && isIndexed
   const isValid = state.requirementText.trim().length >= 10 && isReady
 
@@ -194,7 +196,9 @@ export function Step1Understand({
     ? s.ticket_provider_not_configured
     : !hasSite
       ? s.ticket_site_not_selected
-      : [ticketConn.display_name, TICKET_PLATFORM_LABELS[ticketConn.platform] ?? ticketConn.platform].filter(Boolean).join(" · ")
+      : ticketConn.platform === "azure_devops"
+        ? [ticketConn.display_name, ticketConn.boards_project, "Azure DevOps"].filter(Boolean).join(" · ")
+        : [ticketConn.display_name, TICKET_PLATFORM_LABELS[ticketConn.platform] ?? ticketConn.platform].filter(Boolean).join(" · ")
 
   const repoDetail = scmConn?.repo_full_name
     ? `${scmConn.repo_full_name}${scmConn.default_branch ? ` · ${scmConn.default_branch}` : ""}`

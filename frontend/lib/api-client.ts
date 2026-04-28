@@ -9,17 +9,21 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ""
 // On the server side tokens are obtained directly via getAccessToken().
 // ---------------------------------------------------------------------------
 let _getToken: (() => Promise<string | null>) | null = null
+let _inflightToken: Promise<string | null> | null = null
 
 export function setTokenGetter(fn: (() => Promise<string | null>) | null) {
   _getToken = fn
+  _inflightToken = null
 }
 
 async function resolveToken(): Promise<string | null> {
   if (typeof window === "undefined") return null
-  try {
-    if (_getToken) return await _getToken()
-  } catch {}
-  return null
+  if (!_getToken) return null
+  // Deduplicate parallel calls — all share the same in-flight request
+  if (!_inflightToken) {
+    _inflightToken = _getToken().catch(() => null).finally(() => { _inflightToken = null })
+  }
+  return _inflightToken
 }
 
 async function buildHeaders(): Promise<Record<string, string>> {
@@ -98,6 +102,7 @@ export interface AzureProjectResponse {
   name: string
   org: string
   full_name: string
+  process_template: string
 }
 
 export interface IndexResponse {
@@ -236,6 +241,14 @@ export async function listSites(connectionId: string): Promise<JiraSiteResponse[
 
 export async function listAzureProjects(connectionId: string): Promise<AzureProjectResponse[]> {
   return apiFetch<AzureProjectResponse[]>(`/api/v1/connections/${connectionId}/projects`)
+}
+
+export async function getAzureProjectProcess(connectionId: string, projectName: string): Promise<string> {
+  const encoded = encodeURIComponent(projectName)
+  const res = await apiFetch<{ process_template: string }>(
+    `/api/v1/connections/${connectionId}/project-process?project=${encoded}`
+  )
+  return res.process_template ?? ""
 }
 
 export async function listJiraProjects(connectionId: string): Promise<JiraProjectResponse[]> {

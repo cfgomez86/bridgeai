@@ -32,7 +32,7 @@ type TabMethod = "oauth" | "pat"
 const PLATFORM_SCOPES: Record<string, string[]> = {
   github:       ["repo", "read:user"],
   gitlab:       ["read_api", "read_repository", "read_user"],
-  azure_devops: ["Code › Read", "User Profile › Read"],
+  azure_devops: ["Code › Read", "User Profile › Read", "Work Items › Read & Write"],
   bitbucket:    ["Repositories › Read", "Account › Read"],
   jira:         ["read:jira-work", "read:jira-user"],
 }
@@ -77,7 +77,7 @@ export function PlatformCard({ platform, connections, onUpdated, onOpenHelp, boa
     ? s.platform_desc.azure_boards
     : (s.platform_desc[platform.platform as keyof typeof s.platform_desc] ?? s.default_platform_desc)
   const scopes = boardsMode
-    ? ["Work Items › Read", "Work Items › Write"]
+    ? ["Work Items › Read & Write", "User Profile › Read"]
     : (PLATFORM_SCOPES[platform.platform] ?? [])
   const oauthDisabled       = !platform.server_configured
   const showInstanceUrl     = isGitHub || isGitLab || isAzure || isBitbucket || isJira

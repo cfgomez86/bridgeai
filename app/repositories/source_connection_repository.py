@@ -167,6 +167,19 @@ class SourceConnectionRepository:
         self._db.refresh(conn)
         return conn
 
+    def find_by_platform_with_boards_project(self, platform: str) -> Optional[SourceConnection]:
+        """Find a connection with boards_project configured, regardless of is_active state."""
+        return (
+            self._db.query(SourceConnection)
+            .filter(
+                SourceConnection.tenant_id == self._tid(),
+                SourceConnection.platform == platform,
+                SourceConnection.boards_project.isnot(None),
+                SourceConnection.boards_project != "",
+            )
+            .first()
+        )
+
     def activate_boards_project(self, connection_id: str, project_full_name: str) -> Optional[SourceConnection]:
         conn = self.find_by_id(connection_id)
         if not conn:

@@ -74,6 +74,27 @@ class GitLabProvider(ScmProvider):
         username = data.get("username", "")
         if not username:
             raise ValueError("GitLab PAT did not return a valid user")
+        # Check scopes via /personal_access_tokens/self (available GitLab 13.10+)
+        try:
+            scope_req = urllib.request.Request(
+                f"{api_base}/personal_access_tokens/self",
+                headers={"Private-Token": token},
+            )
+            with urllib.request.urlopen(scope_req, timeout=15) as scope_resp:
+                scope_data = json.loads(scope_resp.read())
+            granted = set(scope_data.get("scopes", []))
+            required = {"read_api", "read_repository", "read_user"}
+            missing = required - granted
+            if missing:
+                raise ValueError(
+                    f"GitLab PAT is missing required scopes: {', '.join(sorted(missing))}. "
+                    f"Required: {', '.join(sorted(required))}. "
+                    f"Currently granted: {', '.join(sorted(granted)) or 'none'}."
+                )
+        except ValueError:
+            raise
+        except Exception:
+            pass  # endpoint not available on this instance — skip scope check
         return {"login": username}
 
     def _effective_api_base(self, base_url: str | None) -> str:

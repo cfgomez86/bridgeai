@@ -6,10 +6,13 @@ import {
   getStoryDetail,
   listConnections,
   listJiraProjects,
+  listAzureProjects,
+  getAzureProjectProcess,
   type CreateTicketResponse,
   type StoryDetailResponse,
   type ConnectionResponse,
   type JiraProjectResponse,
+  type AzureProjectResponse,
 } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import type { WorkflowState } from "@/hooks/useWorkflow"
@@ -54,6 +57,44 @@ const labelStyle: React.CSSProperties = {
 
 const SCM_PLATFORMS = new Set(["github", "gitlab", "azure_devops", "bitbucket"])
 
+const AZURE_ITEM_TYPES: Record<string, Array<{ value: string; label: string }>> = {
+  Agile: [
+    { value: "User Story",          label: "User Story" },
+    { value: "Bug",                  label: "Bug" },
+    { value: "Task",                 label: "Task" },
+  ],
+  Scrum: [
+    { value: "Product Backlog Item", label: "Product Backlog Item" },
+    { value: "Bug",                  label: "Bug" },
+    { value: "Task",                 label: "Task" },
+  ],
+  CMMI: [
+    { value: "Requirement",          label: "Requirement" },
+    { value: "Bug",                  label: "Bug" },
+    { value: "Task",                 label: "Task" },
+  ],
+  Basic: [
+    { value: "Issue",                label: "Issue" },
+    { value: "Task",                 label: "Task" },
+  ],
+}
+
+const AZURE_FALLBACK_ITEM_TYPES = [
+  { value: "User Story",          label: "User Story (Agile)" },
+  { value: "Product Backlog Item", label: "Product Backlog Item (Scrum)" },
+  { value: "Issue",                label: "Issue (Basic)" },
+  { value: "Requirement",          label: "Requirement (CMMI)" },
+  { value: "Bug",                  label: "Bug" },
+  { value: "Task",                 label: "Task" },
+]
+
+const AZURE_TEMPLATE_DEFAULTS: Record<string, string> = {
+  Agile: "User Story",
+  Scrum: "Product Backlog Item",
+  CMMI:  "Requirement",
+  Basic: "Issue",
+}
+
 interface Step4Props {
   state: WorkflowState
   setTicketProjectKey: (key: string) => void
@@ -71,21 +112,54 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
   const [story, setStory] = useState<StoryDetailResponse | null>(null)
   const [ticketConn, setTicketConn] = useState<ConnectionResponse | null>(null)
   const [projects, setProjects] = useState<JiraProjectResponse[]>([])
+  const [azureProjects, setAzureProjects] = useState<AzureProjectResponse[]>([])
+  const [azureProcessTemplate, setAzureProcessTemplate] = useState("")
   const [projectsLoading, setProjectsLoading] = useState(false)
   const { t } = useLanguage()
   const s = t.workflow.step4
+
+  const azureItemTypes = azureProcessTemplate
+    ? (AZURE_ITEM_TYPES[azureProcessTemplate] ?? AZURE_FALLBACK_ITEM_TYPES)
+    : AZURE_FALLBACK_ITEM_TYPES
+
+  useEffect(() => {
+    if (provider !== "azure_devops") { setIssueType("Story"); return }
+    setIssueType(AZURE_TEMPLATE_DEFAULTS[azureProcessTemplate] ?? "User Story")
+  }, [provider, azureProcessTemplate])
+
+  // Fetch process template whenever the selected Azure project changes
+  useEffect(() => {
+    if (provider !== "azure_devops" || !ticketConn || !state.ticketProjectKey) {
+      setAzureProcessTemplate("")
+      return
+    }
+    getAzureProjectProcess(ticketConn.id, state.ticketProjectKey)
+      .then(setAzureProcessTemplate)
+      .catch(() => setAzureProcessTemplate(""))
+  }, [provider, ticketConn, state.ticketProjectKey])
 
   useEffect(() => {
     listConnections().then((conns) => {
       const conn =
         conns.find((c) => c.platform === "jira") ??
-        conns.find((c) => c.platform === "azure_devops" && !SCM_PLATFORMS.has(c.platform))
+        conns.find((c) => c.platform === "azure_devops" && Boolean(c.boards_project))
       setTicketConn(conn ?? null)
       if (conn) setProvider(conn.platform)
       if (conn?.platform === "jira") {
         setProjectsLoading(true)
         listJiraProjects(conn.id)
           .then(setProjects)
+          .catch(() => {})
+          .finally(() => setProjectsLoading(false))
+      }
+      if (conn?.platform === "azure_devops") {
+        if (conn.boards_project) {
+          const projectName = conn.boards_project.split("/").pop() ?? conn.boards_project
+          setTicketProjectKey(projectName)
+        }
+        setProjectsLoading(true)
+        listAzureProjects(conn.id)
+          .then(setAzureProjects)
           .catch(() => {})
           .finally(() => setProjectsLoading(false))
       }
@@ -369,7 +443,19 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                 {s.project_key_label}
                 <span style={{ color: "var(--err-fg)", marginLeft: "3px" }}>*</span>
               </label>
-              {projects.length > 0 ? (
+              {provider === "azure_devops" && azureProjects.length > 0 ? (
+                <select
+                  id="project-key"
+                  style={{ ...inputStyle, cursor: "pointer" }}
+                  value={state.ticketProjectKey}
+                  onChange={(e) => setTicketProjectKey(e.target.value)}
+                >
+                  <option value="">{s.project_key_hint}</option>
+                  {azureProjects.map((p) => (
+                    <option key={p.full_name} value={p.name}>{p.name}</option>
+                  ))}
+                </select>
+              ) : provider === "jira" && projects.length > 0 ? (
                 <select
                   id="project-key"
                   style={{ ...inputStyle, cursor: "pointer" }}
@@ -399,15 +485,31 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
             </div>
 
             <div>
-              <label style={labelStyle} htmlFor="issue-type">{s.issue_type_label}</label>
+              <label style={labelStyle} htmlFor="issue-type">
+                {s.issue_type_label}
+                {provider === "azure_devops" && azureProcessTemplate && (
+                  <span style={{ fontSize: "11px", fontWeight: 400, color: "var(--muted)", marginLeft: "6px", fontFamily: "var(--font-mono)" }}>
+                    {azureProcessTemplate}
+                  </span>
+                )}
+              </label>
               <select
                 id="issue-type"
                 style={{ ...inputStyle, cursor: "pointer" }}
                 value={issueType}
                 onChange={(e) => setIssueType(e.target.value)}
               >
-                <option value="Story">Story</option>
-                <option value="Bug">Bug</option>
+                {provider === "azure_devops"
+                  ? azureItemTypes.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))
+                  : (
+                    <>
+                      <option value="Story">Story</option>
+                      <option value="Bug">Bug</option>
+                    </>
+                  )
+                }
               </select>
             </div>
 

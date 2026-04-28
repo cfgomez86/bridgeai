@@ -3,6 +3,7 @@ import time
 import asyncio
 from datetime import datetime, timezone
 from urllib.error import HTTPError
+from urllib.parse import quote
 
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
@@ -45,9 +46,36 @@ class TicketIntegrationService:
         self._integration_repo = TicketIntegrationRepository(db)
         self._conn_repo = SourceConnectionRepository(db)
 
+    def _resolve_azure_conn(self) -> tuple[str, str, str]:
+        """Returns (access_token, org_url, project_name) from the stored connection.
+
+        boards_project is always stored as "{org}/{project_name}".
+        For PAT connections base_url holds the org URL directly.
+        For OAuth connections base_url is NULL — org URL is derived from boards_project.
+        """
+        db_conn = (
+            self._conn_repo.get_active_for_platform("azure_devops")
+            or self._conn_repo.find_by_platform_with_boards_project("azure_devops")
+        )
+        if not (db_conn and db_conn.access_token and db_conn.boards_project):
+            raise ProviderNotConfiguredError(
+                "Azure DevOps is not configured. Connect via PAT or OAuth in "
+                "Conexiones → Herramientas de gestión and select a project."
+            )
+        parts = db_conn.boards_project.split("/", 1)
+        project_name = parts[-1]
+        org_url = db_conn.base_url or ""
+        if not org_url and len(parts) == 2:
+            org_url = f"https://dev.azure.com/{parts[0]}"
+        if not org_url:
+            raise ProviderNotConfiguredError(
+                "Azure DevOps org URL could not be determined. "
+                "Reconnect using PAT with Organization URL."
+            )
+        return db_conn.access_token, org_url, project_name
+
     def _get_provider(self, provider_name: str) -> TicketProvider:
-        cls = _PROVIDERS.get(provider_name)
-        if not cls:
+        if provider_name not in _PROVIDERS:
             raise UnsupportedProviderError(
                 f"Provider '{provider_name}' is not supported. "
                 f"Available: {list(_PROVIDERS.keys())}"
@@ -65,16 +93,14 @@ class TicketIntegrationService:
                 site_url=db_conn.repo_full_name or "",
             )
         if provider_name == "azure_devops":
-            missing = [k for k, v in {
-                "AZURE_ORG_URL": self._settings.AZURE_ORG_URL,
-                "AZURE_DEVOPS_TOKEN": self._settings.AZURE_DEVOPS_TOKEN,
-                "AZURE_PROJECT": self._settings.AZURE_PROJECT,
-            }.items() if not v]
-            if missing:
-                raise ProviderNotConfiguredError(
-                    f"Azure DevOps is not configured. Missing: {', '.join(missing)}"
-                )
-        return cls(self._settings)
+            access_token, org_url, project_name = self._resolve_azure_conn()
+            return AzureDevOpsTicketProvider(
+                self._settings,
+                access_token=access_token,
+                org_url=org_url,
+                project=project_name,
+            )
+        return _PROVIDERS[provider_name](self._settings)
 
     def _audit(
         self,
@@ -109,8 +135,11 @@ class TicketIntegrationService:
             site = db_conn.repo_full_name.rstrip("/") if db_conn and db_conn.repo_full_name else ""
             return f"{site}/browse/{tid}" if site else ""
         if provider_name == "azure_devops" and tid:
-            org = self._settings.AZURE_ORG_URL.rstrip("/")
-            return f"{org}/{self._settings.AZURE_PROJECT}/_workitems/edit/{tid}"
+            try:
+                _, org_url, project_name = self._resolve_azure_conn()
+                return f"{org_url}/{quote(project_name)}/_workitems/edit/{tid}"
+            except ProviderNotConfiguredError:
+                return ""
         return ""
 
     async def create_ticket(
@@ -311,13 +340,18 @@ class TicketIntegrationService:
         else:
             results["jira"] = "not_configured"
 
-        if not self._settings.AZURE_ORG_URL or not self._settings.AZURE_DEVOPS_TOKEN:
+        try:
+            access_token, org_url, project_name = self._resolve_azure_conn()
+            azure = AzureDevOpsTicketProvider(
+                self._settings,
+                access_token=access_token,
+                org_url=org_url,
+                project=project_name,
+            )
+            results["azure_devops"] = "healthy" if await azure.validate_connection() else "unhealthy"
+        except ProviderNotConfiguredError:
             results["azure_devops"] = "not_configured"
-        else:
-            try:
-                azure = AzureDevOpsTicketProvider(self._settings)
-                results["azure_devops"] = "healthy" if await azure.validate_connection() else "unhealthy"
-            except Exception:
-                results["azure_devops"] = "unhealthy"
+        except Exception:
+            results["azure_devops"] = "unhealthy"
 
         return results

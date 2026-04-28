@@ -37,13 +37,35 @@ _PRIORITY_MAP = {
 
 
 class AzureDevOpsTicketProvider(TicketProvider):
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        *,
+        access_token: str = "",
+        org_url: str = "",
+        project: str = "",
+    ) -> None:
         self._settings = settings or get_settings()
+        self._access_token = access_token
+        self._org_url = org_url.rstrip("/") if org_url else ""
+        self._project = project
         self._client = httpx.AsyncClient(timeout=self._settings.AZURE_REQUEST_TIMEOUT_SECONDS)
 
+    @property
+    def _eff_org(self) -> str:
+        return self._org_url or self._settings.AZURE_ORG_URL.rstrip("/")
+
+    @property
+    def _eff_project(self) -> str:
+        return self._project or self._settings.AZURE_PROJECT
+
     def _auth_header(self) -> str:
-        raw = f":{self._settings.AZURE_DEVOPS_TOKEN}"
-        return "Basic " + base64.b64encode(raw.encode()).decode()
+        # Entra ID access tokens are JWTs (always start with "eyJ") — use Bearer auth
+        # Azure DevOps PATs are opaque strings — use HTTP Basic Auth
+        token = self._access_token or self._settings.AZURE_DEVOPS_TOKEN
+        if token.startswith("eyJ"):
+            return f"Bearer {token}"
+        return "Basic " + base64.b64encode(f":{token}".encode()).decode()
 
     def _headers(self, patch: bool = False) -> dict[str, str]:
         content_type = "application/json-patch+json" if patch else "application/json"
@@ -54,29 +76,20 @@ class AzureDevOpsTicketProvider(TicketProvider):
         }
 
     def _work_items_url(self, work_item_type: str) -> str:
-        org = self._settings.AZURE_ORG_URL.rstrip("/")
-        project = quote(self._settings.AZURE_PROJECT)
         wtype = quote(work_item_type)
-        return f"{org}/{project}/_apis/wit/workitems/${wtype}?api-version={_API_VERSION}"
+        return f"{self._eff_org}/{quote(self._eff_project)}/_apis/wit/workitems/${wtype}?api-version={_API_VERSION}"
 
     def _work_item_url(self, work_item_id: int) -> str:
-        org = self._settings.AZURE_ORG_URL.rstrip("/")
-        project = quote(self._settings.AZURE_PROJECT)
-        return f"{org}/{project}/_apis/wit/workitems/{work_item_id}?api-version={_API_VERSION}"
+        return f"{self._eff_org}/{quote(self._eff_project)}/_apis/wit/workitems/{work_item_id}?api-version={_API_VERSION}"
 
     def _projects_url(self) -> str:
-        org = self._settings.AZURE_ORG_URL.rstrip("/")
-        return f"{org}/_apis/projects?api-version={_API_VERSION}"
+        return f"{self._eff_org}/_apis/projects?api-version={_API_VERSION}"
 
     def _work_item_relation_url(self, work_item_id: int) -> str:
-        org = self._settings.AZURE_ORG_URL.rstrip("/")
-        project = quote(self._settings.AZURE_PROJECT)
-        return f"{org}/{project}/_apis/wit/workitems/{work_item_id}"
+        return f"{self._eff_org}/{quote(self._eff_project)}/_apis/wit/workitems/{work_item_id}"
 
     def _browse_url(self, work_item_id: int) -> str:
-        org = self._settings.AZURE_ORG_URL.rstrip("/")
-        project = quote(self._settings.AZURE_PROJECT)
-        return f"{org}/{project}/_workitems/edit/{work_item_id}"
+        return f"{self._eff_org}/{quote(self._eff_project)}/_workitems/edit/{work_item_id}"
 
     def _build_description_html(self, story: UserStory) -> str:
         def ul(items: list[str]) -> str:
@@ -115,8 +128,22 @@ class AzureDevOpsTicketProvider(TicketProvider):
             method, url, json=body, headers=self._headers(patch=patch)
         )
         if response.status_code >= 400:
-            exc = HTTPError(url, response.status_code, response.reason_phrase, {}, None)  # type: ignore[arg-type]
-            raise exc
+            if response.status_code == 401:
+                raise HTTPError(  # type: ignore[arg-type]
+                    url, 401,
+                    "Unauthorized — verify your Azure DevOps PAT includes 'Work Items: Read & Write' scope",
+                    {}, None,
+                )
+            if response.status_code == 404:
+                raise HTTPError(  # type: ignore[arg-type]
+                    url, 404,
+                    "Not Found — verify the project name and work item type. "
+                    "Azure DevOps work item types depend on the project's process template: "
+                    "Agile → 'User Story', Scrum → 'Product Backlog Item', Basic → 'Issue'. "
+                    "'Task' and 'Bug' are available in most templates.",
+                    {}, None,
+                )
+            raise HTTPError(url, response.status_code, response.reason_phrase, {}, None)  # type: ignore[arg-type]
         return response.json()
 
     def _backoff_seconds(self, attempt: int, base_delay: int, retry_after: str | None = None) -> float:
@@ -158,7 +185,7 @@ class AzureDevOpsTicketProvider(TicketProvider):
                 work_item_id = response["id"]
                 return str(work_item_id), self._browse_url(work_item_id), full_title, None
             except HTTPError as exc:
-                if exc.code in (400, 401, 403):
+                if exc.code in (400, 401, 403, 404):
                     break
                 last_error = exc
                 retry_after = (getattr(exc, "headers", None) or {}).get("Retry-After") if exc.code == 429 else None
@@ -234,7 +261,7 @@ class AzureDevOpsTicketProvider(TicketProvider):
                     status="CREATED",
                 )
             except HTTPError as exc:
-                if exc.code in (400, 401, 403):
+                if exc.code in (400, 401, 403, 404):
                     raise
                 last_error = exc
                 retry_after = (getattr(exc, "headers", None) or {}).get("Retry-After") if exc.code == 429 else None
@@ -268,7 +295,7 @@ class AzureDevOpsTicketProvider(TicketProvider):
         )
 
     async def validate_connection(self) -> bool:
-        if not self._settings.AZURE_ORG_URL or not self._settings.AZURE_DEVOPS_TOKEN:
+        if not self._eff_org or not (self._access_token or self._settings.AZURE_DEVOPS_TOKEN):
             return False
         try:
             await self._request("GET", self._projects_url())

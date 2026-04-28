@@ -391,6 +391,24 @@ class AzureProjectResponse(BaseModel):
     name: str
     org: str
     full_name: str
+    process_template: str = ""
+
+
+@router.get("/{connection_id}/project-process")
+def get_project_process(
+    connection_id: str,
+    project: str,
+    service: SourceConnectionService = Depends(get_service),
+    _user: User = Depends(get_current_user),
+):
+    try:
+        template = service.get_project_process(connection_id, project)
+        return {"process_template": template}
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to get project process connection=%s project=%s error=%s", connection_id, project, exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to fetch project process template.")
 
 
 @router.get("/{connection_id}/projects", response_model=list[AzureProjectResponse])

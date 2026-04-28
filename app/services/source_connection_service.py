@@ -284,6 +284,23 @@ class SourceConnectionService:
         provider = get_provider("jira")
         return provider.list_projects(conn.access_token, conn.base_url)  # type: ignore[attr-defined]
 
+    def get_project_process(self, connection_id: str, project_name: str) -> str:
+        """Returns the Azure DevOps process template name for the given project."""
+        conn = self._repo.find_by_id(connection_id)
+        if not conn or not conn.access_token:
+            raise ValueError(f"Connection {connection_id!r} not found or not authenticated.")
+        if conn.platform != "azure_devops":
+            raise ValueError("get_project_process is only supported for azure_devops connections.")
+        # Derive org_url: PAT stores it in base_url; OAuth stores it in boards_project
+        org_url = conn.base_url or ""
+        if not org_url and conn.boards_project:
+            org = conn.boards_project.split("/")[0]
+            org_url = f"https://dev.azure.com/{org}"
+        if not org_url:
+            return ""
+        provider = get_provider(conn.platform)
+        return provider.get_project_process(conn.access_token, org_url, project_name)  # type: ignore[attr-defined]
+
     def activate_boards_project(self, connection_id: str, project_full_name: str) -> SourceConnection:
         orm = self._repo.activate_boards_project(connection_id, project_full_name)
         if not orm:
