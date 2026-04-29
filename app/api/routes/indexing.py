@@ -100,10 +100,10 @@ async def index_repository(
             )
 
     except Exception as exc:
-        logger.error("POST /index failed request_id=%s error=%s", request_id, exc)
+        logger.exception("POST /index failed request_id=%s", request_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Indexing failed: {exc}",
+            detail="Indexing failed due to an internal error.",
         ) from exc
 
     logger.info(

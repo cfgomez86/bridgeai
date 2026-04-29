@@ -302,3 +302,48 @@ class TestJiraValidateConnection:
             new=AsyncMock(side_effect=HTTPError(url="", code=401, msg="Unauthorized", hdrs=None, fp=None)),
         ):
             assert await provider.validate_connection() is False
+
+
+# ---------------------------------------------------------------------------
+# S-2: SSRF validation on base_url / site_url
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("bad_url", [
+    "http://169.254.169.254/latest/meta-data",
+    "http://127.0.0.1/jira",
+    "http://10.0.0.1/jira",
+    "http://192.168.1.1/jira",
+    "ftp://evil.com",
+])
+def test_jira_provider_rejects_ssrf_base_url(bad_url):
+    with pytest.raises(ValueError):
+        JiraTicketProvider(
+            make_settings(),
+            access_token="tok",
+            base_url=bad_url,
+            site_url="https://valid.atlassian.net",
+        )
+
+
+@pytest.mark.parametrize("bad_url", [
+    "http://169.254.169.254",
+    "http://10.10.10.10/jira",
+])
+def test_jira_provider_rejects_ssrf_site_url(bad_url):
+    with pytest.raises(ValueError):
+        JiraTicketProvider(
+            make_settings(),
+            access_token="tok",
+            base_url="https://api.atlassian.com/ex/jira/cloud-id",
+            site_url=bad_url,
+        )
+
+
+def test_jira_provider_accepts_valid_urls():
+    provider = JiraTicketProvider(
+        make_settings(),
+        access_token="tok",
+        base_url="https://api.atlassian.com/ex/jira/cloud-id",
+        site_url="https://myorg.atlassian.net",
+    )
+    assert provider is not None

@@ -96,8 +96,8 @@ async def analyze_impact(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception as exc:
-        logger.error("POST /impact-analysis failed request_id=%s error=%s", request_id, exc)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Analysis failed: {exc}")
+        logger.exception("POST /impact-analysis failed request_id=%s", request_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Impact analysis failed due to an internal error.")
     logger.info(
         "POST /impact-analysis completed request_id=%s files=%d risk=%s duration=%.2fs",
         request_id,

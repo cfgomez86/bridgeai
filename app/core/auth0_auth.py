@@ -1,3 +1,4 @@
+import logging
 import time
 
 import httpx
@@ -9,6 +10,8 @@ from app.core.config import get_settings
 from app.core.context import current_tenant_id, current_user_id
 from app.database.session import get_db
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 _jwks_cache: dict = {}
 _jwks_fetched_at: float = 0.0
@@ -47,15 +50,16 @@ def verify_auth0_jwt(token: str) -> dict:
             issuer=f"https://{settings.AUTH0_DOMAIN}/",
         )
         return payload
-    except JWTError as exc:
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid or expired token: {exc}",
+            detail="Invalid or expired token.",
         )
-    except Exception as exc:
+    except Exception:
+        logger.exception("Unexpected error during token verification")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Token verification failed: {exc}",
+            detail="Token verification failed.",
         )
 
 

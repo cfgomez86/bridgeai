@@ -262,10 +262,10 @@ async def generate_story(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
     except Exception as exc:
-        logger.error("POST /generate-story failed request_id=%s error=%s", request_id, exc)
+        logger.exception("POST /generate-story failed request_id=%s", request_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Story generation failed: {exc}",
+            detail="Story generation failed due to an internal error.",
         )
     logger.info(
         "POST /generate-story completed request_id=%s story_id=%s points=%d duration=%.3fs",
