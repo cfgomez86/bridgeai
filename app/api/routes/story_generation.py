@@ -287,6 +287,7 @@ async def get_story(
     story_id: str,
     request: Request,
     db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ) -> StoryDetailResponse:
     request_id = str(getattr(request.state, "request_id", uuid.uuid4()))
     logger.info("GET /stories/%s request_id=%s", story_id, request_id)

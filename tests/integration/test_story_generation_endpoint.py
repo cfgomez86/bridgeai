@@ -261,3 +261,12 @@ def test_get_story_acceptance_criteria_is_list(story_client):
     criteria = response.json()["acceptance_criteria"]
     assert isinstance(criteria, list)
     assert all(isinstance(item, str) for item in criteria)
+
+
+def test_get_story_requires_authentication():
+    """A-8: GET /stories/{id} must return 401 without a valid auth token."""
+    app = create_app()  # no mock auth applied
+    from fastapi.testclient import TestClient as _TC
+    unauthenticated = _TC(app, raise_server_exceptions=False)
+    response = unauthenticated.get(f"/api/v1/stories/{_KNOWN_STORY_ID}")
+    assert response.status_code == 401
