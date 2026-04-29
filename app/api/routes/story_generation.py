@@ -438,7 +438,7 @@ async def evaluate_quality(
         logger.error("Quality judge failed for story %s: %s", story_id, exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Quality evaluation failed: {exc}",
+            detail="Quality evaluation failed due to an upstream provider error.",
         )
 
     score_record = StoryQualityRepository(db).upsert(story_id, scores)

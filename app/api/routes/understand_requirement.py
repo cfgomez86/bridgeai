@@ -76,7 +76,7 @@ async def understand_requirement(
         logger.error("POST /understand-requirement failed request_id=%s error=%s", request_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Understanding failed: {exc}",
+            detail="Requirement understanding failed due to an internal error.",
         )
     logger.info(
         "POST /understand-requirement completed request_id=%s id=%s complexity=%s duration=%.3fs",

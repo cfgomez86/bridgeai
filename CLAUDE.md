@@ -127,11 +127,13 @@ Specialized Claude Code roles for common development tasks:
 | Agent | When to invoke |
 |---|---|
 | `clean-arch-guardian` | Review any new/modified `app/` file for layer violations |
+| `clean-arch-guardian` | Review any new/modified `app/` file for layer violations |
 | `domain-modeler` | Create a new frozen dataclass in `app/domain/` |
 | `api-route-builder` | Scaffold a full vertical slice (domain → service → route → test) |
 | `test-specialist` | Write or expand tests for any layer |
 | `phase-implementer` | Implement an entire roadmap phase end-to-end |
 | `nextjs-frontend-builder` | Build, extend, or fix any part of the Next.js frontend in `frontend/` |
+| `security-guardian` | Audit, find, and fix security vulnerabilities; apply current best practices |
 
 ## Roadmap phases — status
 

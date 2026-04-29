@@ -144,7 +144,7 @@ async def create_ticket(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ticket creation failed: {exc}",
+            detail="Ticket creation failed due to an internal error.",
         )
 
     response.status_code = status.HTTP_200_OK if is_duplicate else status.HTTP_201_CREATED
@@ -192,7 +192,8 @@ async def create_tickets_bulk(
                 subtask_titles=result.subtask_titles,
                 failed_subtasks=result.failed_subtasks,
             )
-        except Exception as exc:
+        except (StoryNotFoundError, UnsupportedProviderError, ProviderNotConfiguredError) as exc:
+            # These are user-facing errors with safe messages
             logger.warning(
                 "bulk_ticket_item_failed request_id=%s story_id=%s error=%s",
                 request_id, item.story_id, exc,
@@ -201,6 +202,16 @@ async def create_tickets_bulk(
                 story_id=item.story_id,
                 success=False,
                 error=str(exc),
+            )
+        except Exception as exc:
+            logger.warning(
+                "bulk_ticket_item_failed request_id=%s story_id=%s error=%s",
+                request_id, item.story_id, exc,
+            )
+            return BulkTicketResultItem(
+                story_id=item.story_id,
+                success=False,
+                error="Ticket creation failed due to an internal error.",
             )
 
     results = await asyncio.gather(*[_create_one(item) for item in body.tickets])
