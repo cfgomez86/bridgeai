@@ -1,10 +1,12 @@
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.context import get_tenant_id
 from app.models.story_feedback import StoryFeedback
+from app.models.user_story import UserStory
 
 
 class StoryFeedbackRepository:
@@ -57,4 +59,54 @@ class StoryFeedbackRepository:
                 StoryFeedback.user_id == user_id,
             )
             .first()
+        )
+
+    def aggregate_rating_since(self, since: Optional[datetime]) -> dict[str, int]:
+        q = (
+            self._db.query(StoryFeedback.rating, func.count(StoryFeedback.id))
+            .filter(StoryFeedback.tenant_id == self._tid())
+        )
+        if since is not None:
+            q = q.filter(StoryFeedback.created_at >= since)
+        rows = q.group_by(StoryFeedback.rating).all()
+        counts = {"thumbs_up": 0, "thumbs_down": 0}
+        for rating, count in rows:
+            counts[rating] = count
+        counts["total"] = counts["thumbs_up"] + counts["thumbs_down"]
+        return counts
+
+    def list_negative_with_comments(
+        self, limit: int, offset: int
+    ) -> list[tuple[StoryFeedback, str]]:
+        return self.list_with_comments(limit, offset, rating="thumbs_down")
+
+    def list_with_comments(
+        self, limit: int, offset: int, rating: Optional[str] = None
+    ) -> list[tuple[StoryFeedback, str]]:
+        q = (
+            self._db.query(StoryFeedback, UserStory.title)
+            .join(UserStory, UserStory.id == StoryFeedback.story_id)
+            .filter(
+                StoryFeedback.tenant_id == self._tid(),
+                StoryFeedback.comment.isnot(None),
+                func.length(StoryFeedback.comment) > 0,
+            )
+        )
+        if rating:
+            q = q.filter(StoryFeedback.rating == rating)
+        rows = (
+            q.order_by(StoryFeedback.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return [(fb, title) for fb, title in rows]
+
+    def list_recent(self, limit: int) -> list[StoryFeedback]:
+        return (
+            self._db.query(StoryFeedback)
+            .filter(StoryFeedback.tenant_id == self._tid())
+            .order_by(StoryFeedback.created_at.desc())
+            .limit(limit)
+            .all()
         )

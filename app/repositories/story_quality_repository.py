@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.context import get_tenant_id
@@ -76,6 +77,24 @@ class StoryQualityRepository:
             )
             .first()
         )
+
+    def avg_overall_since(self, since: Optional[datetime]) -> Optional[float]:
+        q = (
+            self._db.query(func.avg(StoryQualityScore.overall))
+            .filter(StoryQualityScore.tenant_id == self._tid())
+        )
+        if since is not None:
+            q = q.filter(StoryQualityScore.evaluated_at >= since)
+        result = q.scalar()
+        return float(result) if result is not None else None
+
+    def count_evaluated_since(self, since: Optional[datetime]) -> int:
+        q = self._db.query(StoryQualityScore).filter(
+            StoryQualityScore.tenant_id == self._tid()
+        )
+        if since is not None:
+            q = q.filter(StoryQualityScore.evaluated_at >= since)
+        return q.count()
 
     def delete_by_story(self, story_id: str) -> None:
         (

@@ -493,6 +493,65 @@ export async function getSystemQuality(): Promise<SystemQualityResponse> {
   return apiFetch<SystemQualityResponse>("/api/v1/system/quality")
 }
 
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
+
+export interface DashboardStats {
+  window_days: number | null
+  requirements_count: number
+  stories_count: number
+  impact_analyses_count: number
+  tickets_count: number
+  conversion_rate: number | null
+  feedback_total: number
+  feedback_thumbs_up: number
+  feedback_thumbs_down: number
+  feedback_approval_rate: number | null
+  quality_avg_overall: number | null
+  quality_evaluated_count: number
+  tickets_by_provider: Record<string, number>
+  stories_by_risk: Record<string, number>
+}
+
+export interface DashboardActivityEvent {
+  tone: "ok" | "accent" | "warn" | "neutral"
+  title: string
+  meta: string
+  time: string
+  badge?: string | null
+  link?: string | null
+}
+
+export interface NegativeFeedbackItem {
+  id: string
+  story_id: string
+  story_title: string
+  user_id: string
+  rating: string
+  comment: string
+  created_at: string
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  return apiFetch<DashboardStats>("/api/v1/dashboard/stats")
+}
+
+export async function getDashboardActivity(limit = 10): Promise<DashboardActivityEvent[]> {
+  return apiFetch<DashboardActivityEvent[]>(`/api/v1/dashboard/activity?limit=${limit}`)
+}
+
+export async function getNegativeFeedback(
+  limit = 20,
+  offset = 0,
+  rating?: string | null,
+): Promise<NegativeFeedbackItem[]> {
+  const ratingParam = rating ? `&rating=${encodeURIComponent(rating)}` : ""
+  return apiFetch<NegativeFeedbackItem[]>(
+    `/api/v1/feedback/comments?limit=${limit}&offset=${offset}${ratingParam}`,
+  )
+}
+
 export async function createTicket(
   storyId: string,
   provider: string,

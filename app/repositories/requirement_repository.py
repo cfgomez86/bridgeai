@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -45,6 +46,12 @@ class RequirementRepository:
             )
             .first()
         )
+
+    def count_since(self, since: Optional[datetime]) -> int:
+        q = self._db.query(Requirement).filter(Requirement.tenant_id == self._tid())
+        if since is not None:
+            q = q.filter(Requirement.created_at >= since)
+        return q.count()
 
     def list_by_project(
         self, project_id: str, source_connection_id: str

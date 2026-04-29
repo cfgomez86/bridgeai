@@ -1,6 +1,8 @@
 import json
+from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.context import get_tenant_id
@@ -94,6 +96,36 @@ class UserStoryRepository:
         self._db.commit()
         self._db.refresh(story)
         return story
+
+    def count_since(self, since: Optional[datetime]) -> int:
+        q = self._db.query(UserStory).filter(UserStory.tenant_id == self._tid())
+        if since is not None:
+            q = q.filter(UserStory.created_at >= since)
+        return q.count()
+
+    def list_recent(self, limit: int) -> list[UserStory]:
+        return (
+            self._db.query(UserStory)
+            .filter(UserStory.tenant_id == self._tid())
+            .order_by(UserStory.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def count_by_risk_since(self, since: Optional[datetime]) -> dict[str, int]:
+        q = (
+            self._db.query(UserStory.risk_level, func.count(UserStory.id))
+            .filter(UserStory.tenant_id == self._tid())
+        )
+        if since is not None:
+            q = q.filter(UserStory.created_at >= since)
+        rows = q.group_by(UserStory.risk_level).all()
+        counts = {"LOW": 0, "MEDIUM": 0, "HIGH": 0}
+        for risk, count in rows:
+            key = (risk or "").upper()
+            if key in counts:
+                counts[key] = count
+        return counts
 
     def find_by_requirement_and_analysis(
         self,

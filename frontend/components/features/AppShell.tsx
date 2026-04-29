@@ -57,7 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} />
-      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", minWidth: 0, overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", minWidth: 0, overflow: "clip" }}>
         <Topbar onMenuToggle={() => setSidebarOpen(true)} isMobile={isMobile} />
         <main style={{ flex: 1, background: "var(--bg)" }}>{children}</main>
       </div>

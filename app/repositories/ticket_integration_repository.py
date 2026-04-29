@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.context import current_tenant_id, get_tenant_id
@@ -143,6 +144,43 @@ class TicketIntegrationRepository:
         )
         self._db.add(log)
         self._db.commit()
+
+    def count_successful_since(self, since: Optional[datetime]) -> int:
+        q = (
+            self._db.query(TicketIntegration)
+            .filter(
+                TicketIntegration.tenant_id == self._tid(),
+                TicketIntegration.status == "CREATED",
+            )
+        )
+        if since is not None:
+            q = q.filter(TicketIntegration.created_at >= since)
+        return q.count()
+
+    def count_by_provider_since(self, since: Optional[datetime]) -> dict[str, int]:
+        q = (
+            self._db.query(TicketIntegration.provider, func.count(TicketIntegration.id))
+            .filter(
+                TicketIntegration.tenant_id == self._tid(),
+                TicketIntegration.status == "CREATED",
+            )
+        )
+        if since is not None:
+            q = q.filter(TicketIntegration.created_at >= since)
+        rows = q.group_by(TicketIntegration.provider).all()
+        return {provider: count for provider, count in rows}
+
+    def list_recent_created(self, limit: int) -> list[TicketIntegration]:
+        return (
+            self._db.query(TicketIntegration)
+            .filter(
+                TicketIntegration.tenant_id == self._tid(),
+                TicketIntegration.status == "CREATED",
+            )
+            .order_by(TicketIntegration.created_at.desc())
+            .limit(limit)
+            .all()
+        )
 
     def get_latest_subtask_audit(self, story_id: str, provider: str) -> IntegrationAuditLog | None:
         return (

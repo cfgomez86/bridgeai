@@ -1,13 +1,27 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useUser } from "@auth0/nextjs-auth0/client"
+import { getMe } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 
 interface NavItem {
   href: string
   label: string
   icon: React.ReactNode
+}
+
+function IconDashboard() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="5" height="5" rx="1" />
+      <rect x="9" y="2" width="5" height="3" rx="1" />
+      <rect x="9" y="7" width="5" height="7" rx="1" />
+      <rect x="2" y="9" width="5" height="5" rx="1" />
+    </svg>
+  )
 }
 
 function IconWand() {
@@ -54,6 +68,14 @@ function IconSettings() {
   )
 }
 
+function IconFeedback() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 9a2 2 0 0 1-2 2H6l-3 3V4a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v5z" />
+    </svg>
+  )
+}
+
 interface SidebarProps {
   isOpen?: boolean
   onClose?: () => void
@@ -66,9 +88,26 @@ export function Sidebar({ isOpen = false, onClose, isMobile = false }: SidebarPr
 
   const prefix = ""
 
+  const { user, isLoading: authLoading } = useUser()
+  const [role, setRole] = useState<string | null>(null)
+  useEffect(() => {
+    if (authLoading || !user) return
+    let cancelled = false
+    getMe()
+      .then((u) => { if (!cancelled) setRole(u.role) })
+      .catch(() => { if (!cancelled) setRole(null) })
+    return () => { cancelled = true }
+  }, [user?.sub, authLoading])
+
+  const isAdmin = role === "admin"
+
   const NAV_ITEMS: NavItem[] = [
+    { href: `${prefix}/`, label: t.nav.home, icon: <IconDashboard /> },
     { href: `${prefix}/workflow`, label: t.nav.workflow, icon: <IconWand /> },
     { href: `${prefix}/indexing`, label: t.nav.indexing, icon: <IconDatabase /> },
+    ...(isAdmin
+      ? [{ href: `${prefix}/feedback`, label: t.nav.feedback, icon: <IconFeedback /> }]
+      : []),
     { href: `${prefix}/connections`, label: t.nav.connections, icon: <IconPlug /> },
     { href: `${prefix}/settings`, label: t.nav.settings, icon: <IconSettings /> },
   ]
