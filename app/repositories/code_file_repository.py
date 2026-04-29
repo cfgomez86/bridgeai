@@ -44,12 +44,13 @@ class CodeFileRepository:
         )
 
     def save_batch(
-        self, code_files: list[CodeFile], source_connection_id: Optional[str] = None
+        self, file_data: list[dict], source_connection_id: Optional[str] = None
     ) -> None:
         tid = self._tid()
-        for cf in code_files:
-            cf.tenant_id = tid
-            cf.source_connection_id = source_connection_id
+        code_files = [
+            CodeFile(**d, tenant_id=tid, source_connection_id=source_connection_id)
+            for d in file_data
+        ]
         self._db.add_all(code_files)
         self._db.commit()
 

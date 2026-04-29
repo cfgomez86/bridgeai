@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
-from app.models.code_file import CodeFile
 from app.repositories.code_file_repository import CodeFileRepository
 from app.services.scm_providers.base import ScmProvider
 
@@ -170,20 +169,18 @@ class CodeIndexingService:
         indexed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if existing is None:
-            code_file = CodeFile(
-                file_path=rel_path,
-                file_name=os.path.basename(full_path),
-                extension=ext,
-                language=self._language_map[ext],
-                size=stat.st_size,
-                last_modified=last_modified,
-                hash=file_hash,
-                lines_of_code=lines,
-                indexed_at=indexed_at,
-                source_connection_id=source_connection_id,
-            )
             logger.debug("Indexing new file: %s", rel_path)
-            return "new", code_file
+            return "new", {
+                "file_path": rel_path,
+                "file_name": os.path.basename(full_path),
+                "extension": ext,
+                "language": self._language_map[ext],
+                "size": stat.st_size,
+                "last_modified": last_modified,
+                "hash": file_hash,
+                "lines_of_code": lines,
+                "indexed_at": indexed_at,
+            }
         else:
             existing.hash = file_hash
             existing.size = stat.st_size
@@ -285,19 +282,18 @@ class CodeIndexingService:
                 capped_content = content[:_CONTENT_CAP]
 
                 if existing is None:
-                    new_batch.append(CodeFile(
-                        file_path=entry.path,
-                        file_name=os.path.basename(entry.path),
-                        extension=ext,
-                        language=self._language_map[ext],
-                        size=entry.size or len(content.encode()),
-                        last_modified=now,
-                        hash=entry.sha,
-                        lines_of_code=lines,
-                        indexed_at=now,
-                        source_connection_id=source_connection_id,
-                        content=capped_content,
-                    ))
+                    new_batch.append({
+                        "file_path": entry.path,
+                        "file_name": os.path.basename(entry.path),
+                        "extension": ext,
+                        "language": self._language_map[ext],
+                        "size": entry.size or len(content.encode()),
+                        "last_modified": now,
+                        "hash": entry.sha,
+                        "lines_of_code": lines,
+                        "indexed_at": now,
+                        "content": capped_content,
+                    })
                     files_indexed += 1
                 else:
                     existing.hash = entry.sha

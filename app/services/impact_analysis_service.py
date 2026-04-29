@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
+
 from app.core.context import get_tenant_id
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
@@ -145,24 +145,25 @@ class ImpactAnalysisService:
         analysis_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-        impact_analysis = ImpactAnalysis(
-            id=analysis_id,
-            requirement=requirement,
-            risk_level=risk_level,
-            files_impacted=total_impacted,
-            modules_impacted=len(modules),
-            analysis_summary=f"Analyzed {len(file_analyses)} files, {total_impacted} impacted",
-            created_at=now,
-        )
         module_names = sorted(modules)
 
-        impacted_file_models = [
-            ImpactedFile(analysis_id=analysis_id, file_path=path, reason=reason)
-            for path, reason in impacted_reasons.items()
-        ]
-
         t_save = time.monotonic()
-        self._impact_repo.save(impact_analysis, impacted_file_models, source_connection_id)
+        self._impact_repo.save(
+            {
+                "id": analysis_id,
+                "requirement": requirement,
+                "risk_level": risk_level,
+                "files_impacted": total_impacted,
+                "modules_impacted": len(modules),
+                "analysis_summary": f"Analyzed {len(file_analyses)} files, {total_impacted} impacted",
+                "created_at": now,
+            },
+            [
+                {"analysis_id": analysis_id, "file_path": path, "reason": reason}
+                for path, reason in impacted_reasons.items()
+            ],
+            source_connection_id,
+        )
         logger.info("Persist: %.2fs", time.monotonic() - t_save)
 
         duration = time.monotonic() - start

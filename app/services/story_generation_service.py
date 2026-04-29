@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.domain.user_story import UserStory
-from app.models.user_story import UserStory as UserStoryModel
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.repositories.requirement_repository import RequirementRepository
@@ -106,24 +105,23 @@ class StoryGenerationService:
         story_id = str(uuid.uuid4())
         created_at = datetime.now(timezone.utc)
 
-        orm_story = UserStoryModel(
-            id=story_id,
-            requirement_id=requirement_id,
-            impact_analysis_id=analysis_id,
-            project_id=project_id,
-            language=language,
-            title=parsed["title"],
-            story_description=parsed["story_description"],
-            acceptance_criteria=json.dumps(parsed["acceptance_criteria"]),
-            subtasks=json.dumps(parsed["subtasks"]),
-            definition_of_done=json.dumps(parsed["definition_of_done"]),
-            risk_notes=json.dumps(parsed["risk_notes"]),
-            story_points=story_points,
-            risk_level=analysis.risk_level,
-            generation_time_seconds=generation_time,
-            created_at=created_at,
-        )
-        self._story_repo.save(orm_story, source_connection_id)
+        self._story_repo.save({
+            "id": story_id,
+            "requirement_id": requirement_id,
+            "impact_analysis_id": analysis_id,
+            "project_id": project_id,
+            "language": language,
+            "title": parsed["title"],
+            "story_description": parsed["story_description"],
+            "acceptance_criteria": json.dumps(parsed["acceptance_criteria"]),
+            "subtasks": json.dumps(parsed["subtasks"]),
+            "definition_of_done": json.dumps(parsed["definition_of_done"]),
+            "risk_notes": json.dumps(parsed["risk_notes"]),
+            "story_points": story_points,
+            "risk_level": analysis.risk_level,
+            "generation_time_seconds": generation_time,
+            "created_at": created_at,
+        }, source_connection_id)
         self._logger.info(
             "Story generated id=%s connection=%s points=%d time=%.3fs",
             story_id, source_connection_id, story_points, generation_time,

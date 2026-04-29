@@ -17,7 +17,7 @@ from app.api.routes import connections as connections_router
 from app.api.routes import auth as auth_router
 from app.api.routes import dashboard as dashboard_router
 from app.core.auth0_auth import get_current_user
-from app.core.config import get_settings
+from app.core.config import get_settings, _APP_ENV
 from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.core.security import SecurityMiddleware, add_cors
 import app.models  # noqa: F401 — registers ORM models with Base.metadata
@@ -31,6 +31,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+
+    if _APP_ENV == "prod" and not settings.FIELD_ENCRYPTION_KEY:
+        raise RuntimeError(
+            "FIELD_ENCRYPTION_KEY must be set in production. "
+            "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        )
 
     app = FastAPI(
         title="BridgeAI",

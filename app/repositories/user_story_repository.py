@@ -20,9 +20,12 @@ class UserStoryRepository:
     def _tid(self) -> str:
         return get_tenant_id()
 
-    def save(self, story: UserStory, source_connection_id: str) -> UserStory:
-        story.tenant_id = self._tid()
-        story.source_connection_id = source_connection_id
+    def save(self, data: dict, source_connection_id: str) -> UserStory:
+        story = UserStory(
+            **data,
+            tenant_id=self._tid(),
+            source_connection_id=source_connection_id,
+        )
         self._db.add(story)
         self._db.commit()
         self._db.refresh(story)
