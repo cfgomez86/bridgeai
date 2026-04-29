@@ -242,7 +242,7 @@ def test_feedback_comments_pagination(populated_client):
 
 
 def test_feedback_comments_rejects_invalid_rating(populated_client):
-    r = populated_client.get("/api/v1/feedback/comments?rating=thumbs_up")
+    r = populated_client.get("/api/v1/feedback/comments?rating=invalid_value")
     assert r.status_code == 400
 
 
