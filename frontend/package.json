@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint ."
+    "lint": "next lint .",
+    "test:e2e": "node e2e/auth_check.js"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.18.0",
