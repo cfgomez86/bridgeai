@@ -86,7 +86,6 @@ class StoryFeedbackRepository:
         q = (
             self._db.query(StoryFeedback, UserStory.title)
             .join(UserStory, UserStory.id == StoryFeedback.story_id)
-            .filter(StoryFeedback.tenant_id == self._tid())
         )
         if rating:
             q = q.filter(StoryFeedback.rating == rating)
