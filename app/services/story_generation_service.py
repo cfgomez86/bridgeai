@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.domain.user_story import UserStory
+from app.models.user_story import UserStory as UserStoryModel
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.repositories.requirement_repository import RequirementRepository
