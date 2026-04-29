@@ -256,12 +256,15 @@ def test_full_workflow():
         print("  [OK] Clicked 'Analizar impacto'")
 
         # ── [4] Workflow — Step 3: Generate Story ─────────────────────────
+        # Step 3 auto-triggers story generation on mount; there is no
+        # "Generar historia" button anymore. Wait for the generation to
+        # finish (continue button appears) and click it.
         print("\n[4] Workflow — Step 3")
-        generate_btn = page.locator("button", has_text="Generar historia").first
-        expect(generate_btn).to_be_visible(timeout=8000)
+        continue_btn = page.locator("button", has_text="Continuar al ticket").first
+        expect(continue_btn).to_be_visible(timeout=30000)
         _shot(page, "06_step3")
-        generate_btn.click()
-        print("  [OK] Clicked 'Generar historia'")
+        continue_btn.click()
+        print("  [OK] Story generated; clicked 'Continuar al ticket'")
 
         # ── [5] Workflow — Step 4: Create Ticket ──────────────────────────
         print("\n[5] Workflow — Step 4")

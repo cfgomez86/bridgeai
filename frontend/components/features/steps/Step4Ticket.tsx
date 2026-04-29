@@ -290,7 +290,14 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                   <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
                     {tasks.map((sub, i) => (
                       <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
-                        <span style={{ flexShrink: 0, marginTop: "3px", width: "12px", height: "12px", borderRadius: "3px", border: "1px solid var(--border)" }} />
+                        <span style={{
+                          flexShrink: 0, marginTop: "1px",
+                          width: "18px", height: "18px", borderRadius: "5px",
+                          background: "var(--surface-3)", border: "1px solid var(--border)",
+                          color: "var(--fg-2)", fontFamily: "var(--font-mono)",
+                          fontSize: "10px", fontWeight: 700,
+                          display: "grid", placeItems: "center",
+                        }}>{i + 1}</span>
                         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "3px" }}>
                           <span style={{ color: "var(--fg)", fontWeight: 500, lineHeight: 1.4, overflowWrap: "break-word" }}>
                             {sub.title}

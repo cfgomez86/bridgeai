@@ -130,6 +130,9 @@ class JudgeScoresResponse(BaseModel):
     justification: Optional[str]
     judge_model: Optional[str]
     evaluated_at: Optional[str]
+    dispersion: Optional[float] = None
+    samples_used: Optional[int] = None
+    evidence: Optional[dict] = None
 
 
 class QualityMetricsResponse(BaseModel):
@@ -161,6 +164,15 @@ def get_story_service(
 def _score_model_to_judge_response(score_model) -> Optional[JudgeScoresResponse]:
     if score_model is None:
         return None
+    evidence: Optional[dict] = None
+    raw_evidence = getattr(score_model, "evidence", None)
+    if raw_evidence:
+        try:
+            parsed = json.loads(raw_evidence)
+            if isinstance(parsed, dict):
+                evidence = parsed
+        except (ValueError, TypeError):
+            evidence = None
     return JudgeScoresResponse(
         completeness=score_model.completeness,
         specificity=score_model.specificity,
@@ -171,6 +183,9 @@ def _score_model_to_judge_response(score_model) -> Optional[JudgeScoresResponse]
         justification=score_model.justification,
         judge_model=score_model.judge_model,
         evaluated_at=score_model.evaluated_at.isoformat() if score_model.evaluated_at else None,
+        dispersion=getattr(score_model, "dispersion", None),
+        samples_used=getattr(score_model, "samples_used", None),
+        evidence=evidence,
     )
 
 

@@ -186,6 +186,9 @@ export interface JudgeScores {
   justification?: string | null
   judge_model?: string | null
   evaluated_at?: string | null
+  dispersion?: number | null
+  samples_used?: number | null
+  evidence?: Record<string, string> | null
 }
 
 export interface QualityMetricsResponse {

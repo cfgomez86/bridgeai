@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -5,6 +6,16 @@ from sqlalchemy.orm import Session
 
 from app.core.context import get_tenant_id
 from app.models.story_quality_score import StoryQualityScore
+
+
+def _serialize_evidence(scores: dict) -> Optional[str]:
+    evidence = scores.get("evidence")
+    if not evidence:
+        return None
+    try:
+        return json.dumps(evidence, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return None
 
 
 class StoryQualityRepository:
@@ -27,6 +38,9 @@ class StoryQualityRepository:
             existing.overall = scores["overall"]
             existing.justification = scores.get("justification")
             existing.judge_model = scores.get("judge_model")
+            existing.dispersion = scores.get("dispersion")
+            existing.samples_used = scores.get("samples_used")
+            existing.evidence = _serialize_evidence(scores)
             existing.evaluated_at = now
             self._db.commit()
             self._db.refresh(existing)
@@ -43,6 +57,9 @@ class StoryQualityRepository:
             overall=scores["overall"],
             justification=scores.get("justification"),
             judge_model=scores.get("judge_model"),
+            dispersion=scores.get("dispersion"),
+            samples_used=scores.get("samples_used"),
+            evidence=_serialize_evidence(scores),
             evaluated_at=now,
         )
         self._db.add(record)

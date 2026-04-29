@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { generateStory, getStoryDetail, type StoryDetailResponse } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import type { WorkflowState } from "@/hooks/useWorkflow"
@@ -9,12 +9,12 @@ import { StepSummaryCard } from "@/components/features/StepSummaryCard"
 import { QualityPanel } from "@/components/features/stories/QualityPanel"
 import { StoryCard } from "@/components/features/stories/StoryCard"
 import { StoryFeedback } from "@/components/features/stories/StoryFeedback"
-import { Loader2, GitPullRequest, Search, Zap } from "lucide-react"
+import { Loader2, Search, Zap } from "lucide-react"
 
 const truncate = (text: string, max: number) =>
   text.length > max ? text.slice(0, max) + "…" : text
 
-const chip = (text: string): React.CSSProperties => ({
+const chip = (): React.CSSProperties => ({
   display: "inline-flex", alignItems: "center",
   padding: "1px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 500,
   fontFamily: "var(--font-mono)",
@@ -35,40 +35,38 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
   const [pendingComplete, setPendingComplete] = useState<{ storyId: string; title: string; points: number } | null>(null)
   const { t } = useLanguage()
   const s = t.workflow.step3
+  const triggered = useRef(false)
 
   function showToast(msg: string, tone: "ok" | "err") {
     setToast({ msg, tone })
     setTimeout(() => setToast(null), 3000)
   }
 
-  async function handleGenerate() {
-    if (!state.requirementId || !state.analysisId) return
-    if (!state.sourceConnectionId) {
-      setError("Selecciona un repositorio activo antes de generar.")
-      return
-    }
+  useEffect(() => {
+    if (triggered.current || !state.requirementId || !state.analysisId || !state.sourceConnectionId) return
+    triggered.current = true
     setLoading(true)
     setError(null)
-    try {
-      const genResult = await generateStory(
-        state.requirementId,
-        state.analysisId,
-        state.projectId,
-        state.sourceConnectionId,
-        state.language,
+    generateStory(
+      state.requirementId,
+      state.analysisId,
+      state.projectId,
+      state.sourceConnectionId,
+      state.language,
+    )
+      .then(genResult =>
+        getStoryDetail(genResult.story_id).then(detail => {
+          if (detail.source_connection_id !== state.sourceConnectionId) {
+            throw new Error("La historia devuelta pertenece a otro repositorio. Reiniciá el flujo.")
+          }
+          setStory(detail)
+          setPendingComplete({ storyId: genResult.story_id, title: detail.title, points: detail.story_points })
+        })
       )
-      const detail = await getStoryDetail(genResult.story_id)
-      if (detail.source_connection_id !== state.sourceConnectionId) {
-        throw new Error("La historia devuelta pertenece a otro repositorio. Reiniciá el flujo.")
-      }
-      setStory(detail)
-      setPendingComplete({ storyId: genResult.story_id, title: detail.title, points: detail.story_points })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate story")
-    } finally {
-      setLoading(false)
-    }
-  }
+      .catch(err => setError(err instanceof Error ? err.message : "Failed to generate story"))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.requirementId, state.analysisId, state.sourceConnectionId])
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -77,9 +75,9 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
           &ldquo;{truncate(state.requirementText, 120)}&rdquo;
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
-          {state.featureType && <span style={chip(state.featureType)}>{state.featureType}</span>}
-          {state.complexity && <span style={chip(`${s.complexity} ${state.complexity}`)}>{s.complexity} {state.complexity}</span>}
-          {state.language && <span style={chip(state.language)}>Lang: {state.language}</span>}
+          {state.featureType && <span style={chip()}>{state.featureType}</span>}
+          {state.complexity && <span style={chip()}>{s.complexity} {state.complexity}</span>}
+          {state.language && <span style={chip()}>Lang: {state.language}</span>}
         </div>
         {state.intent && (
           <p style={{ fontSize: "11.5px", color: "var(--muted)", margin: 0 }}>
@@ -88,7 +86,7 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
         )}
         {state.keywords.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
-            {state.keywords.map((kw) => <span key={kw} style={chip(kw)}>{kw}</span>)}
+            {state.keywords.map((kw) => <span key={kw} style={chip()}>{kw}</span>)}
           </div>
         )}
       </StepSummaryCard>
@@ -104,74 +102,25 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
         </div>
         {state.modulesImpacted.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
-            {state.modulesImpacted.map((m) => <span key={m} style={chip(m)}>{m}</span>)}
+            {state.modulesImpacted.map((m) => <span key={m} style={chip()}>{m}</span>)}
           </div>
         )}
       </StepSummaryCard>
 
-      {/* Quality Panel — above the story card */}
+      {loading && (
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--muted)", fontSize: "12px", padding: "4px 0" }}>
+          <Loader2 size={13} className="animate-spin" /> {s.generating}
+        </div>
+      )}
+
+      {error && (
+        <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--err-bg)", color: "var(--err-fg)", fontSize: "12.5px" }}>
+          {error}
+        </div>
+      )}
+
       {story && <QualityPanel storyId={story.story_id} />}
 
-      {/* Generate / story section */}
-      <div style={{
-        background: "var(--surface)", border: "1px solid var(--border)",
-        borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)",
-        padding: "16px 20px", display: "flex", flexDirection: "column", gap: "12px",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <GitPullRequest size={15} style={{ color: "var(--accent)" }} />
-          <h2 style={{ fontSize: "15px", fontWeight: 600, fontFamily: "var(--font-display)", margin: 0, color: "var(--fg)" }}>
-            {s.title}
-          </h2>
-        </div>
-        <p style={{ fontSize: "12.5px", color: "var(--muted)", margin: 0 }}>
-          {s.description}
-        </p>
-
-        {error && (
-          <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--err-bg)", color: "var(--err-fg)", fontSize: "12.5px" }}>
-            {error}
-          </div>
-        )}
-
-        {!story && (
-          <button
-            onClick={handleGenerate}
-            disabled={loading || !state.requirementId || !state.analysisId}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-              padding: "9px 18px", borderRadius: "var(--radius)", border: "none",
-              background: loading || !state.requirementId || !state.analysisId ? "var(--surface-3)" : "var(--accent)",
-              color: loading || !state.requirementId || !state.analysisId ? "var(--muted)" : "var(--accent-fg)",
-              fontSize: "13px", fontWeight: 600, cursor: loading ? "not-allowed" : "pointer",
-              fontFamily: "var(--font-display)",
-            }}
-          >
-            {loading
-              ? <><Loader2 size={14} className="animate-spin" /> {s.generating}</>
-              : s.generate_btn
-            }
-          </button>
-        )}
-
-        {story && (
-          <button
-            onClick={handleGenerate}
-            disabled={loading}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-              padding: "6px 12px", borderRadius: "var(--radius)", border: "1px solid var(--border)",
-              background: "var(--surface-2)", color: "var(--fg-2)",
-              fontSize: "12px", fontWeight: 500, cursor: loading ? "not-allowed" : "pointer",
-              fontFamily: "var(--font-display)", alignSelf: "flex-start",
-            }}
-          >
-            {loading ? <><Loader2 size={13} className="animate-spin" /> {s.regenerating}</> : s.regenerate_btn}
-          </button>
-        )}
-      </div>
-
-      {/* Inline editable story card — key resets state on regenerate */}
       {story && (
         <StoryCard
           key={story.story_id}
@@ -181,7 +130,6 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
         />
       )}
 
-      {/* Feedback and Continue */}
       {story && (
         <>
           <StoryFeedback storyId={story.story_id} onToast={showToast} />
@@ -202,7 +150,6 @@ export function Step3Generate({ state, completeStep3 }: Step3Props) {
         </>
       )}
 
-      {/* Toast */}
       {toast && (
         <div style={{
           position: "fixed", top: "64px", right: "16px", zIndex: 50,

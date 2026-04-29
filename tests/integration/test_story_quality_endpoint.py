@@ -117,6 +117,10 @@ def test_post_evaluate_persists_score(quality_client):
     assert judge["judge_model"] == "stub"
     assert judge["justification"] == "Stub evaluation"
     assert "evaluated_at" in judge
+    # Reliability fields are now part of the contract
+    assert judge["dispersion"] == 0.0
+    assert judge["samples_used"] == 1
+    assert judge["evidence"] is None  # stub has empty evidence → serialized as null
 
 
 def test_get_quality_after_evaluate_has_judge(quality_client):

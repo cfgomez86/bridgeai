@@ -22,9 +22,9 @@ _STUB_STORY_RESPONSE = {
         "so that I can access the platform securely."
     ),
     "acceptance_criteria": [
-        "User can register with a valid email address",
-        "Password must meet minimum security requirements",
-        "System sends a confirmation email after registration",
+        "Given an unauthenticated visitor, When they submit the registration form with a valid email and a password of at least 8 characters, Then the system returns 201 and creates the user account.",
+        "Given a visitor submitting an invalid email or a password shorter than 8 characters, When they press submit, Then the form shows an inline validation error and does not call the API.",
+        "Given a newly registered user, When the registration succeeds, Then the system enqueues a confirmation email containing a token that expires in 24 hours.",
     ],
     "subtasks": {
         "frontend": [
@@ -96,7 +96,12 @@ REGLAS ESTRICTAS — VIOLARLAS INVALIDA LA RESPUESTA:
 2. Si ningún archivo del whitelist encaja con una subtarea, descríbela SIN mencionar archivo específico. Mejor vago que inventado.
 3. NUNCA uses ejemplos genéricos tipo "app/routes/X.py", "src/Foo.java", "app/components/Bar.tsx". Ese tipo de paths son señal de invención.
 4. El whitelist refleja el lenguaje real del repo. Si el repo es Java, no pongas paths .py ni .tsx. Si es Python, no pongas .java. Respeta las extensiones existentes en el whitelist.
-{hallucination_warning}
+5. Cada criterio de aceptación DEBE seguir el formato Given/When/Then verificable, en el idioma de salida (es: "Dado ... Cuando ... Entonces ..."; en: "Given ... When ... Then ..."; pt/fr/de equivalentes). Resultados medibles, sin frases vagas. Mínimo 3 AC.
+   Ejemplo válido (es): "Dado un usuario no autenticado, Cuando envía el formulario de registro con email válido y contraseña ≥8 caracteres, Entonces el sistema responde 201 y muestra el mensaje 'Cuenta creada'."
+   Ejemplo válido (en): "Given an unauthenticated user, When they submit the registration form with a valid email and password ≥8 chars, Then the system returns 201 and displays 'Account created'."
+   Ejemplo INVÁLIDO: "El sistema permite el registro" (vago, sin G/W/T).
+6. Subtareas frontend: solo OBLIGATORIAS si la historia implica interfaz de usuario (formularios, pantallas, listas, dashboards, modales, vistas, botones). En ese caso devuelve ≥2 tareas que cubran (a) estructura del componente o pantalla, (b) validaciones / estados de UI / mensajes de error, (c) integración con la API. Si no hay archivos UI en el whitelist, describe el componente NUEVO a crear sin inventar paths concretos. Si la historia es PURAMENTE backend (endpoint sin UI, job, cron, migración interna), `frontend` debe ser un array vacío [].
+{hallucination_warning}{quality_warning}
 Contexto del requerimiento:
 - Texto: "{requirement_text}"
 - Intención: {intent}
@@ -118,11 +123,11 @@ Archivos disponibles del codebase (whitelist exhaustiva — NO puedes citar nada
 Genera ÚNICAMENTE un JSON válido con estos campos exactos:
 - title: string corto y descriptivo (máximo 80 caracteres)
 - story_description: string en formato de historia de usuario estándar: "Como [tipo de usuario], quiero [acción] para que [beneficio]". Usa el mismo idioma que el texto del requerimiento.
-- acceptance_criteria: array de strings (mínimo 3 criterios verificables)
+- acceptance_criteria: array de strings en formato Given/When/Then (regla 5). Mínimo 3.
 - subtasks: objeto con tres claves obligatorias ("frontend", "backend", "configuration"). Cada una es un array de objetos con dos claves: "title" y "description".
     * "title": string ≤150 caracteres, en imperativo, accionable. Describe la INTENCIÓN de la tarea SIN prefijo de categoría y SIN repetir la ruta de archivo. Ej: "Agregar campo descripción al ProductReadModelMapper".
-    * "description": string multilínea (usa "\n\n" entre párrafos). Debe explicar: (1) QUÉ hacer en detalle, paso a paso si es necesario; (2) POR QUÉ es necesario o cómo conecta con la historia; (3) qué archivos del whitelist tocar (lista los paths exactos); (4) cómo verificarlo (qué tests correr, qué comportamiento observar). Mínimo 30 caracteres.
-    * "frontend": tareas para presentación/UI. Si no hay archivos UI en el whitelist, deja el array vacío.
+    * "description": string multilínea (usa "\n\n" entre párrafos). Debe explicar: (1) QUÉ hacer en detalle, paso a paso si es necesario; (2) POR QUÉ es necesario o cómo conecta con la historia; (3) qué archivos del whitelist tocar (lista los paths exactos), o si es UI nueva qué componente/pantalla crear sin path concreto; (4) cómo verificarlo (qué tests correr, qué comportamiento observar). Mínimo 30 caracteres.
+    * "frontend": ver regla 6. Vacío [] si la historia no tiene UI.
     * "backend": tareas para lógica de negocio, servicios, rutas, base de datos. Mínimo 2 tareas. Si no hay archivos verificables, describe sin path.
     * "configuration": infraestructura, variables de entorno, dependencias, migraciones, CI/CD. Si no aplica, array vacío.
     NUNCA inventes paths en title ni en description. La regla anti-alucinación aplica a ambos campos.
@@ -161,6 +166,13 @@ class StoryAIProvider(ABC):
                 "\nATENCIÓN: tu intento anterior incluyó rutas INVENTADAS que NO existen en el codebase: "
                 f"{joined}. No vuelvas a usarlas; limita los paths estrictamente al whitelist.\n"
             )
+        quality_reason = context.get("quality_warning_reason")
+        quality_warning = ""
+        if quality_reason:
+            quality_warning = (
+                "\nATENCIÓN: tu intento anterior fue rechazado por calidad: "
+                f"{quality_reason}. Corrige específicamente ese punto en esta nueva respuesta.\n"
+            )
         language_names = {
             "es": "español", "en": "English", "fr": "français",
             "de": "Deutsch", "pt": "português",
@@ -180,6 +192,7 @@ class StoryAIProvider(ABC):
             impacted_file_paths_formatted=formatted_paths,
             available_file_paths_formatted=formatted_available,
             hallucination_warning=hallucination_warning,
+            quality_warning=quality_warning,
             language=language_label,
         )
 

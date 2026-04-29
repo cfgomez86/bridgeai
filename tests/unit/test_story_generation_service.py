@@ -235,7 +235,11 @@ def _valid_story(subtasks: dict, risk_notes: list[str] | None = None) -> dict:
     return {
         "title": "T",
         "story_description": "Como X quiero Y para Z",
-        "acceptance_criteria": ["c1", "c2", "c3"],
+        "acceptance_criteria": [
+            "Given X, When the action runs, Then the system returns the expected result.",
+            "Given Y, When the user retries, Then no duplicate is created.",
+            "Given Z, When the operation completes, Then an audit log entry is written.",
+        ],
         "subtasks": subtasks,
         "definition_of_done": ["d1", "d2", "d3"],
         "risk_notes": risk_notes if risk_notes is not None else [],

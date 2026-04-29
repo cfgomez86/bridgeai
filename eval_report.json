@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-28T19:53:50.414041+00:00",
+  "timestamp": "2026-04-29T10:46:05.922826+00:00",
   "results": [
     {
       "id": "REQ_001",
@@ -8,10 +8,10 @@
         "app/core/auth0_auth.py",
         "app/api/routes/auth.py"
       ],
-      "predicted_count": 111,
-      "precision": 0.018,
+      "predicted_count": 66,
+      "precision": 0.0303,
       "recall": 1.0,
-      "f1": 0.0354
+      "f1": 0.0588
     },
     {
       "id": "REQ_002",
@@ -32,10 +32,10 @@
         "app/services/code_indexing_service.py",
         "app/api/routes/indexing.py"
       ],
-      "predicted_count": 74,
-      "precision": 0.027,
+      "predicted_count": 68,
+      "precision": 0.0294,
       "recall": 1.0,
-      "f1": 0.0526
+      "f1": 0.0571
     }
   ]
 }

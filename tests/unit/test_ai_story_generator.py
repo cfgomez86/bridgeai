@@ -14,7 +14,11 @@ def valid_story() -> dict:
     return {
         "title": "User Registration",
         "story_description": "As a user, I want to register so that I can log in.",
-        "acceptance_criteria": ["Email is validated", "Password is hashed"],
+        "acceptance_criteria": [
+            "Given an unauthenticated visitor, When they submit the form with a valid email, Then the system returns 201.",
+            "Given a duplicate email, When the form is submitted, Then the API responds with 409 and the form shows the error.",
+            "Given a successful registration, When it completes, Then the system enqueues a confirmation email with a 24h token.",
+        ],
         "subtasks": {
             "frontend": [
                 {
@@ -255,3 +259,145 @@ def test_hallucinated_path_in_description_triggers_retry():
     # With 0 retries, _strip_invalid_paths runs and removes the fake path
     result = gen.generate({"available_file_paths": ["app/real/known.py"]})
     assert "app/totally/fake.py" not in result["subtasks"]["backend"][0]["description"]
+
+
+# ─── Quality checks: G/W/T acceptance criteria + explicit frontend ────────
+
+
+class CountingProvider(StoryAIProvider):
+    """Returns a different response per call to simulate retry behaviour."""
+
+    def __init__(self, responses: list):
+        self._responses = list(responses)
+        self.calls = 0
+        self.contexts: list[dict] = []
+
+    def generate_story(self, context: dict) -> dict:
+        self.contexts.append(dict(context))
+        idx = min(self.calls, len(self._responses) - 1)
+        self.calls += 1
+        return dict(self._responses[idx])
+
+
+def _ac_legacy() -> list[str]:
+    return ["Email is validated", "Password is hashed", "User receives confirmation"]
+
+
+def test_valid_gwt_ac_passes_quality_check():
+    gen = make_generator(FixedStoryProvider(valid_story()))
+    result = gen.generate({})
+    assert result["title"] == "User Registration"
+
+
+def test_legacy_ac_triggers_retry_then_succeeds():
+    """If the first response has free-form AC but the second has G/W/T, we
+    retry and end up with the good story."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = _ac_legacy()
+    provider = CountingProvider([bad, valid_story()])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.calls == 2
+    assert "Given" in result["acceptance_criteria"][0]
+    # The second prompt must include the quality reason
+    assert "Given/When/Then" in (provider.contexts[1].get("quality_warning_reason") or "")
+
+
+def test_legacy_ac_falls_back_after_max_retries():
+    """If every attempt has bad AC, we don't crash — we return the last
+    shape-valid response and log a warning."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=1)
+    bad = valid_story()
+    bad["acceptance_criteria"] = _ac_legacy()
+    provider = CountingProvider([bad])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.calls == 2  # initial + 1 retry
+    # We get a story back even though AC quality is suboptimal
+    assert result["acceptance_criteria"] == _ac_legacy()
+
+
+def test_ac_check_accepts_spanish_gwt():
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=0)
+    story = valid_story()
+    story["acceptance_criteria"] = [
+        "Dado un usuario nuevo, Cuando se registra, Entonces el sistema responde 201.",
+        "Dado un email duplicado, Cuando envía el formulario, Entonces la API responde 409.",
+        "Dado un registro exitoso, Cuando termina, Entonces se envía un email de confirmación.",
+    ]
+    gen = AIStoryGenerator(FixedStoryProvider(story), settings)
+    result = gen.generate({})
+    assert "Dado" in result["acceptance_criteria"][0]
+
+
+def test_backend_only_story_keeps_frontend_empty():
+    """If the context has NO UI signals, an empty frontend array is allowed
+    and must NOT trigger a quality retry."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    story = valid_story()
+    story["subtasks"]["frontend"] = []
+    provider = CountingProvider([story])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({
+        "requirement_text": "Add a nightly cron job that recomputes statistics",
+        "intent": "schedule recurring backend job",
+        "feature_type": "backend",
+        "keywords": ["cron", "stats", "scheduler"],
+    })
+    assert provider.calls == 1  # no retry
+    assert result["subtasks"]["frontend"] == []
+
+
+def test_ui_story_with_empty_frontend_triggers_retry():
+    """When the requirement clearly involves UI but the response leaves
+    frontend empty, we retry asking explicitly for frontend tasks."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["subtasks"]["frontend"] = []
+    provider = CountingProvider([bad, valid_story()])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({
+        "requirement_text": "Add a registration form for new users",
+        "keywords": ["registro", "formulario"],
+    })
+    assert provider.calls == 2
+    assert len(result["subtasks"]["frontend"]) >= 1
+    # Second prompt got a quality reason about frontend
+    second_reason = provider.contexts[1].get("quality_warning_reason") or ""
+    assert "frontend" in second_reason.lower()
+
+
+def test_ui_story_with_populated_frontend_passes():
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=0)
+    provider = CountingProvider([valid_story()])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({
+        "requirement_text": "Build a dashboard with login form",
+        "keywords": ["dashboard", "login"],
+    })
+    assert provider.calls == 1
+    assert result["subtasks"]["frontend"]
+
+
+def test_ambiguous_text_does_not_trigger_ui_retry():
+    """'lista' / 'list' alone is ambiguous (could be a list of records in a
+    backend report). The conservative pattern must not match it."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    story = valid_story()
+    story["subtasks"]["frontend"] = []
+    provider = CountingProvider([story])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({
+        "requirement_text": "Procesar la lista de pedidos pendientes en background",
+        "keywords": ["lista", "pedidos", "background"],
+    })
+    assert provider.calls == 1
+    assert result["subtasks"]["frontend"] == []

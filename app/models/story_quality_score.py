@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.database.session import Base
@@ -21,4 +21,7 @@ class StoryQualityScore(Base):
     overall = Column(Float, nullable=False)
     justification = Column(Text, nullable=True)
     judge_model = Column(String, nullable=True)
+    dispersion = Column(Float, nullable=True)
+    samples_used = Column(Integer, nullable=True)
+    evidence = Column(Text, nullable=True)
     evaluated_at = Column(DateTime, default=datetime.utcnow)

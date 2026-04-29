@@ -350,6 +350,11 @@ interface Translations {
     add_item: string
     add_subtask: string
     save_changes: string
+    story_ready: string
+    ready_badge: string
+    story_hint: string
+    unsaved: string
+    discard: string
     quality: {
       title: string
       loading: string
@@ -363,6 +368,8 @@ interface Translations {
       cited_paths: string
       no_citations: string
       evaluate_btn: string
+      re_evaluate_btn: string
+      per_dimension: string
       evaluating: string
       completeness: string
       specificity: string
@@ -373,6 +380,9 @@ interface Translations {
       score_good: string
       score_ok: string
       score_low: string
+      dispersion_label: string
+      dispersion_unstable: string
+      evidence_label: string
       help: {
         schema_valid: string
         ac_count: string
@@ -385,6 +395,7 @@ interface Translations {
         risk_coverage: string
         language_consistency: string
         overall: string
+        dispersion: string
       }
     }
     feedback: {
@@ -715,6 +726,11 @@ const es: Translations = {
     add_item: "Agregar elemento",
     add_subtask: "Agregar subtarea",
     save_changes: "Guardar cambios",
+    story_ready: "Historia generada",
+    ready_badge: "LISTA",
+    story_hint: "Editá cualquier campo en línea. Los cambios se guardan en lote al pulsar Guardar.",
+    unsaved: "Cambios sin guardar",
+    discard: "Descartar",
     quality: {
       title: "Calidad de la historia",
       loading: "Cargando metricas...",
@@ -728,6 +744,8 @@ const es: Translations = {
       cited_paths: "Archivos en repo",
       no_citations: "Sin citas externas",
       evaluate_btn: "Evaluar con IA",
+      re_evaluate_btn: "Re-evaluar",
+      per_dimension: "Por dimensión",
       evaluating: "Evaluando...",
       completeness: "Completitud",
       specificity: "Especificidad",
@@ -738,6 +756,9 @@ const es: Translations = {
       score_good: "Bueno",
       score_ok: "Aceptable",
       score_low: "Bajo",
+      dispersion_label: "muestras",
+      dispersion_unstable: "Resultado inestable",
+      evidence_label: "Evidencia",
       help: {
         schema_valid: "La historia tiene titulo, descripcion, al menos 1 criterio de aceptacion y 1 subtarea tecnica",
         ac_count: "Numero de condiciones que deben cumplirse para dar la historia por completada",
@@ -750,6 +771,7 @@ const es: Translations = {
         risk_coverage: "Se identificaron y documentaron todos los riesgos tecnicos relevantes",
         language_consistency: "Toda la historia esta escrita consistentemente en el mismo idioma",
         overall: "Puntuacion integrada que considera todos los criterios de evaluacion",
+        dispersion: "Desviacion entre las muestras del juez. Cerca de 0 indica un juicio estable; valores altos (>=1.0) avisan de que el modelo dudo y conviene re-evaluar",
       },
     },
     feedback: {
@@ -1196,6 +1218,11 @@ const en: Translations = {
     add_item: "Add item",
     add_subtask: "Add subtask",
     save_changes: "Save changes",
+    story_ready: "Story generated",
+    ready_badge: "READY",
+    story_hint: "Edit any field inline. Changes are saved in bulk when you press Save.",
+    unsaved: "Unsaved changes",
+    discard: "Discard",
     quality: {
       title: "Story quality",
       loading: "Loading metrics...",
@@ -1209,6 +1236,8 @@ const en: Translations = {
       cited_paths: "Files in repo",
       no_citations: "No external citations",
       evaluate_btn: "Evaluate with AI",
+      re_evaluate_btn: "Re-evaluate",
+      per_dimension: "By dimension",
       evaluating: "Evaluating...",
       completeness: "Completeness",
       specificity: "Specificity",
@@ -1219,6 +1248,9 @@ const en: Translations = {
       score_good: "Good",
       score_ok: "Acceptable",
       score_low: "Low",
+      dispersion_label: "samples",
+      dispersion_unstable: "Unstable result",
+      evidence_label: "Evidence",
       help: {
         schema_valid: "The story has a title, description, at least 1 acceptance criterion and 1 subtask",
         ac_count: "Number of conditions that must be met for the story to be considered complete",
@@ -1231,6 +1263,7 @@ const en: Translations = {
         risk_coverage: "Were all relevant technical risks identified and documented?",
         language_consistency: "Is the entire story written consistently in the same language?",
         overall: "Integrated score considering all evaluation criteria",
+        dispersion: "Spread across judge samples. Near 0 means a stable judgment; high values (>=1.0) flag uncertainty and suggest re-evaluating",
       },
     },
     feedback: {

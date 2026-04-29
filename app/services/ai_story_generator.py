@@ -25,6 +25,32 @@ _MIN_SUBTASK_LEN = 15
 _MAX_TITLE_LEN = 150
 _MIN_DESCRIPTION_LEN = 30
 
+# Acceptance criteria must follow Given/When/Then. Match across the main supported languages.
+_GWT_PATTERNS = [
+    re.compile(r"\bdado\b.*\bcuando\b.*\bentonces\b", re.IGNORECASE | re.DOTALL),
+    re.compile(r"\bgiven\b.*\bwhen\b.*\bthen\b", re.IGNORECASE | re.DOTALL),
+    re.compile(r"\bdado\b.*\bquando\b.*\bent[aã]o\b", re.IGNORECASE | re.DOTALL),
+    re.compile(r"\b(?:étant donné|etant donne)\b.*\b(?:quand|lorsque)\b.*\balors\b", re.IGNORECASE | re.DOTALL),
+    re.compile(r"\b(?:angenommen|gegeben)\b.*\bwenn\b.*\bdann\b", re.IGNORECASE | re.DOTALL),
+]
+_GWT_MIN_RATIO = 0.6
+
+# Conservative UI signals — only trigger when the story clearly touches an interface.
+# Pure backend / job / cron / migration stories must NOT match here so that
+# subtasks.frontend remains a legitimate empty array.
+_UI_KEYWORD_PATTERN = re.compile(
+    r"\b(?:"
+    r"formulario|formularios|form|forms|"
+    r"pantalla|pantallas|screen|screens|"
+    r"dashboard|dashboards|"
+    r"modal|modales|modals|"
+    r"ui|interfaz|"
+    r"register|signup|registro|registrarse|registrar|login|"
+    r"p[aá]gina|p[aá]ginas|page|pages"
+    r")\b",
+    re.IGNORECASE,
+)
+
 
 class HallucinatedPathError(ValueError):
     """Raised when the AI cites file paths that don't exist in the whitelist."""
@@ -34,6 +60,15 @@ class HallucinatedPathError(ValueError):
             f"Response references paths outside the whitelist: {invalid_paths}"
         )
         self.invalid_paths = invalid_paths
+
+
+class StoryQualityRetryError(ValueError):
+    """Raised when the response is shape-valid but breaks a quality rule
+    (AC not in Given/When/Then, missing frontend on a UI story, etc.)."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 class AIStoryGenerator:
@@ -46,6 +81,7 @@ class AIStoryGenerator:
         last_error: Exception | None = None
         attempt_context = dict(context)
         whitelist = set(context.get("available_file_paths") or [])
+        last_validated: dict | None = None
 
         for attempt in range(self._max_retries + 1):
             try:
@@ -60,6 +96,9 @@ class AIStoryGenerator:
                 invalid = self._find_hallucinated_paths(validated, whitelist)
                 if invalid:
                     raise HallucinatedPathError(invalid)
+                last_validated = validated
+                self._check_ac_format(validated["acceptance_criteria"])
+                self._check_frontend_explicit(validated, context)
                 self._logger.info("Story validation passed")
                 return validated
             except HallucinatedPathError as exc:
@@ -78,6 +117,20 @@ class AIStoryGenerator:
                     "Max retries reached; stripped invalid paths from response"
                 )
                 return self._validate_shape(stripped)
+            except StoryQualityRetryError as exc:
+                last_error = exc
+                self._logger.warning(
+                    "Attempt %d/%d failed quality check: %s",
+                    attempt + 1, self._max_retries + 1, exc.reason,
+                )
+                if attempt < self._max_retries:
+                    attempt_context = dict(context)
+                    attempt_context["quality_warning_reason"] = exc.reason
+                    continue
+                self._logger.warning(
+                    "Max retries reached on quality check; returning best-effort response"
+                )
+                return last_validated  # shape-valid even if quality is suboptimal
             except Exception as exc:
                 last_error = exc
                 if not is_retryable_error(exc):
@@ -93,6 +146,58 @@ class AIStoryGenerator:
                     continue
         raise ValueError(
             f"Story generation failed after {self._max_retries + 1} transient errors: {last_error}"
+        )
+
+    @staticmethod
+    def _ac_uses_gwt(text: str) -> bool:
+        if not isinstance(text, str):
+            return False
+        return any(p.search(text) for p in _GWT_PATTERNS)
+
+    def _check_ac_format(self, criteria: list) -> None:
+        if not criteria:
+            return  # absence already caught by _validate_shape
+        matches = sum(1 for c in criteria if self._ac_uses_gwt(c))
+        ratio = matches / len(criteria)
+        if ratio < _GWT_MIN_RATIO:
+            raise StoryQualityRetryError(
+                "los criterios de aceptación no siguen el formato Given/When/Then verificable "
+                f"(solo {matches} de {len(criteria)} cumplen). Reescribe TODOS los AC en el patrón "
+                "'Dado <contexto>, Cuando <acción>, Entonces <resultado medible>' "
+                "(o 'Given/When/Then' en inglés) con resultados concretos y comprobables."
+            )
+
+    @staticmethod
+    def _context_implies_ui(context: dict) -> bool:
+        keywords = context.get("keywords") or []
+        if not isinstance(keywords, list):
+            keywords = []
+        parts = [
+            str(context.get("requirement_text", "")),
+            str(context.get("intent", "")),
+            str(context.get("feature_type", "")),
+            " ".join(str(k) for k in keywords),
+        ]
+        text = " ".join(parts)
+        return bool(_UI_KEYWORD_PATTERN.search(text))
+
+    def _check_frontend_explicit(self, raw: dict, context: dict) -> None:
+        """Only fire the retry when the context clearly implies UI AND frontend is empty.
+
+        If the story is genuinely backend-only (no UI keywords in requirement/intent/keywords),
+        an empty `frontend` is left untouched per design.
+        """
+        if not self._context_implies_ui(context):
+            return
+        frontend = raw.get("subtasks", {}).get("frontend") or []
+        if frontend:
+            return
+        raise StoryQualityRetryError(
+            "la historia involucra interfaz de usuario (formulario / pantalla / dashboard según el "
+            "contexto) pero subtasks.frontend está vacío. Genera al menos 2 tareas frontend que "
+            "cubran (1) estructura del componente o pantalla, (2) validaciones / estados de UI / "
+            "mensajes de error y (3) integración con la API. Si no hay archivos UI en el whitelist, "
+            "describe el componente NUEVO a crear sin inventar paths concretos."
         )
 
     def _validate_shape(self, raw: dict) -> dict:
