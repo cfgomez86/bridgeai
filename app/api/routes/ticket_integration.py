@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from urllib.error import HTTPError
 
-from app.core.auth0_auth import get_current_user
+from app.api.dependencies import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session

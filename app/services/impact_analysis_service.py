@@ -40,7 +40,7 @@ class ImpactAnalysisService:
         self._code_file_repo = code_file_repo
         self._impact_repo = impact_repo
         self._project_root = os.path.abspath(project_root)
-        self._analyzer = analyzer if analyzer is not None else DependencyAnalyzer(get_tenant_id())
+        self._analyzer = analyzer
         self._semantic_filter = semantic_filter
 
     def analyze(
@@ -57,6 +57,7 @@ class ImpactAnalysisService:
         )
 
         start = time.monotonic()
+        analyzer = self._analyzer if self._analyzer is not None else DependencyAnalyzer(get_tenant_id())
 
         keywords = self._extract_keywords(requirement)
 
@@ -82,9 +83,9 @@ class ImpactAnalysisService:
             quick_text = self._normalize(cf.file_path) + " " + content.lower()
             if any(kw in quick_text for kw in keywords):
                 seed_files.add(cf.file_path)
-                fa = self._analyzer.analyze(cf.file_path, content, cf.language, source_connection_id)
+                fa = analyzer.analyze(cf.file_path, content, cf.language, source_connection_id)
             else:
-                fa = self._analyzer.quick_imports(cf.file_path, content, cf.language)
+                fa = analyzer.quick_imports(cf.file_path, content, cf.language)
             file_analyses[cf.file_path] = fa
 
         logger.info(

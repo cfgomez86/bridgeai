@@ -161,6 +161,128 @@ def test_invalid_connection_returns_404(client):
 
 
 # ---------------------------------------------------------------------------
+# Entity validation: 422 / force / entity_not_found flag
+# ---------------------------------------------------------------------------
+
+from unittest.mock import MagicMock
+from app.services.entity_existence_checker import (
+    EntityCheckResult,
+    EntityExistenceChecker,
+)
+
+
+def make_client_with_checker(check_result: EntityCheckResult) -> TestClient:
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(bind=engine)
+
+    db = Session()
+    seed_source_connection(db)
+    text = "Modify Product description"
+    db.add(Requirement(
+        id="req-endpoint-1",
+        tenant_id=TEST_TENANT_ID,
+        source_connection_id=TEST_CONNECTION_ID,
+        requirement_text=text,
+        requirement_text_hash=hashlib.sha256(text.encode()).hexdigest(),
+        project_id="proj",
+        intent="x",
+        action="update",
+        entity="Product",
+        feature_type="bugfix",
+        priority="medium",
+        business_domain="user_management",
+        technical_scope="backend",
+        estimated_complexity="MEDIUM",
+        keywords='[]',
+        processing_time_seconds=1.0,
+        created_at=datetime.now(timezone.utc),
+    ))
+    db.add(ImpactAnalysis(
+        id="ana-endpoint-1",
+        tenant_id=TEST_TENANT_ID,
+        source_connection_id=TEST_CONNECTION_ID,
+        requirement=text,
+        risk_level="LOW",
+        files_impacted=2,
+        modules_impacted=1,
+        analysis_summary="Two files",
+        created_at=datetime.now(timezone.utc),
+    ))
+    db.commit()
+    db.close()
+
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    checker = MagicMock(spec=EntityExistenceChecker)
+    checker.check.return_value = check_result
+
+    def override_get_db():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    def override() -> StoryGenerationService:
+        db2 = Session()
+        return StoryGenerationService(
+            ai_generator=AIStoryGenerator(StubStoryProvider(), settings),
+            requirement_repo=RequirementRepository(db2),
+            impact_repo=ImpactAnalysisRepository(db2),
+            story_repo=UserStoryRepository(db2),
+            points_calculator=StoryPointsCalculator(),
+            code_file_repo=CodeFileRepository(db2),
+            settings=settings,
+            entity_checker=checker,
+        )
+
+    app = apply_mock_auth(create_app())
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_story_service] = override
+    return TestClient(app)
+
+
+def test_entity_not_found_returns_422_with_suggestions():
+    client = make_client_with_checker(EntityCheckResult(
+        entity="Product", found=False, matched_files=[],
+        suggestions=["ProductModel", "ProductService"],
+    ))
+    response = client.post("/api/v1/generate-story", json=_body())
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["code"] == "ENTITY_NOT_FOUND"
+    assert detail["entity"] == "Product"
+    assert detail["suggestions"] == ["ProductModel", "ProductService"]
+    assert "force" in detail["hint"].lower()
+
+
+def test_entity_not_found_with_force_returns_200_and_flag():
+    client = make_client_with_checker(EntityCheckResult(
+        entity="Product", found=False, matched_files=[], suggestions=[],
+    ))
+    body = _body()
+    body["force"] = True
+    response = client.post("/api/v1/generate-story", json=body)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["entity_not_found"] is True
+
+
+def test_entity_found_returns_200_with_flag_false():
+    client = make_client_with_checker(EntityCheckResult(
+        entity="Product", found=True, matched_files=["a.py"], suggestions=[],
+    ))
+    response = client.post("/api/v1/generate-story", json=_body())
+    assert response.status_code == 200
+    data = response.json()
+    assert data["entity_not_found"] is False
+
+
+# ---------------------------------------------------------------------------
 # GET /stories/{story_id}
 # ---------------------------------------------------------------------------
 

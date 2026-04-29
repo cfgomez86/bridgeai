@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from app.core.encryption import EncryptedText
+from app.database.encrypted_types import EncryptedText
 from app.database.session import Base
 
 

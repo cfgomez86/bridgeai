@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.core.auth0_auth import get_current_user, verify_auth0_jwt, _extract_bearer_token
+from app.api.dependencies import get_current_user
+from app.core.auth0_auth import verify_auth0_jwt, _extract_bearer_token
 from app.database.session import get_db
 from app.models.user import User
 from app.repositories.tenant_repository import TenantRepository
-from app.services.user_provisioning_service import UserProvisioningService
+from app.services.user_provisioning_service import UserProvisioningService, ProvisionedUser
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -43,19 +44,18 @@ def provision(
     if not auth0_user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
 
-    provisioned = UserProvisioningService(db).ensure_user(
+    provisioned: ProvisionedUser = UserProvisioningService(db).ensure_user(
         auth0_user_id=auth0_user_id,
         email=body.user_email,
         name=body.user_name,
     )
-    user, tenant = provisioned.user, provisioned.tenant
     return UserResponse(
-        user_id=user.id,
-        email=user.email,
-        name=user.name,
-        role=user.role,
-        tenant_id=user.tenant_id,
-        tenant_name=tenant.name,
+        user_id=provisioned.user_id,
+        email=provisioned.email,
+        name=provisioned.name,
+        role=provisioned.role,
+        tenant_id=provisioned.tenant_id,
+        tenant_name=provisioned.tenant_name,
     )
 
 

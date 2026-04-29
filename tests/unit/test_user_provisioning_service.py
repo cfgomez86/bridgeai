@@ -43,10 +43,10 @@ def test_ensure_user_creates_tenant_and_user_on_first_call():
         email="user@example.com",
         name="Test User",
     )
-    assert result.user.email == "user@example.com"
-    assert result.user.role == "owner"
-    assert result.tenant.name == "Test User"
-    assert result.user.tenant_id == result.tenant.id
+    assert result.email == "user@example.com"
+    assert result.role == "owner"
+    assert result.tenant_name == "Test User"
+    assert result.tenant_id is not None
 
 
 def test_ensure_user_is_idempotent():
@@ -56,8 +56,8 @@ def test_ensure_user_is_idempotent():
     first = svc.ensure_user("auth0|user-2", "user2@example.com", "User Two")
     second = svc.ensure_user("auth0|user-2", "user2@example.com", "User Two")
 
-    assert first.user.id == second.user.id
-    assert first.tenant.id == second.tenant.id
+    assert first.user_id == second.user_id
+    assert first.tenant_id == second.tenant_id
 
 
 def test_ensure_user_falls_back_to_email_when_name_is_none():
@@ -67,15 +67,15 @@ def test_ensure_user_falls_back_to_email_when_name_is_none():
         email="noname@example.com",
         name=None,
     )
-    assert result.tenant.name == "noname@example.com"
+    assert result.tenant_name == "noname@example.com"
 
 
 def test_tenant_repo_finds_created_tenant_by_id():
     db = make_db()
     result = UserProvisioningService(db).ensure_user("auth0|u4", "u4@x.com", "U4")
-    found = TenantRepository(db).find_by_id(result.tenant.id)
+    found = TenantRepository(db).find_by_id(result.tenant_id)
     assert found is not None
-    assert found.id == result.tenant.id
+    assert found.id == result.tenant_id
 
 
 def test_tenant_repo_finds_created_tenant_by_auth0_user_id():
@@ -83,4 +83,4 @@ def test_tenant_repo_finds_created_tenant_by_auth0_user_id():
     result = UserProvisioningService(db).ensure_user("auth0|u5", "u5@x.com", "U5")
     found = TenantRepository(db).find_by_auth0_user_id("auth0|u5")
     assert found is not None
-    assert found.id == result.tenant.id
+    assert found.id == result.tenant_id

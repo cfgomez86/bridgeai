@@ -101,7 +101,7 @@ REGLAS ESTRICTAS — VIOLARLAS INVALIDA LA RESPUESTA:
    Ejemplo válido (en): "Given an unauthenticated user, When they submit the registration form with a valid email and password ≥8 chars, Then the system returns 201 and displays 'Account created'."
    Ejemplo INVÁLIDO: "El sistema permite el registro" (vago, sin G/W/T).
 6. Subtareas frontend: solo OBLIGATORIAS si la historia implica interfaz de usuario (formularios, pantallas, listas, dashboards, modales, vistas, botones). En ese caso devuelve ≥2 tareas que cubran (a) estructura del componente o pantalla, (b) validaciones / estados de UI / mensajes de error, (c) integración con la API. Si no hay archivos UI en el whitelist, describe el componente NUEVO a crear sin inventar paths concretos. Si la historia es PURAMENTE backend (endpoint sin UI, job, cron, migración interna), `frontend` debe ser un array vacío [].
-{hallucination_warning}{quality_warning}
+{hallucination_warning}{quality_warning}{entity_creation_instruction}
 Contexto del requerimiento:
 - Texto: "{requirement_text}"
 - Intención: {intent}
@@ -173,6 +173,16 @@ class StoryAIProvider(ABC):
                 "\nATENCIÓN: tu intento anterior fue rechazado por calidad: "
                 f"{quality_reason}. Corrige específicamente ese punto en esta nueva respuesta.\n"
             )
+        entity_not_found = context.get("entity_not_found", False)
+        entity_name = context.get("entity", "")
+        entity_creation_instruction = ""
+        if entity_not_found and entity_name:
+            entity_creation_instruction = (
+                f"\nIMPORTANTE: La entidad '{entity_name}' NO existe en el codebase indexado. "
+                f"Esta historia DEBE incluir como primera tarea backend la creación completa de "
+                f"'{entity_name}' (modelo/clase, repositorio, migración si aplica). "
+                f"El resto de tareas asume que '{entity_name}' se creará en esta misma implementación.\n"
+            )
         language_names = {
             "es": "español", "en": "English", "fr": "français",
             "de": "Deutsch", "pt": "português",
@@ -193,6 +203,7 @@ class StoryAIProvider(ABC):
             available_file_paths_formatted=formatted_available,
             hallucination_warning=hallucination_warning,
             quality_warning=quality_warning,
+            entity_creation_instruction=entity_creation_instruction,
             language=language_label,
         )
 

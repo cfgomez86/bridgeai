@@ -11,9 +11,14 @@ from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.repositories.requirement_repository import RequirementRepository
 from app.repositories.user_story_repository import UserStoryRepository
 from app.services.ai_story_generator import AIStoryGenerator
+from app.services.entity_existence_checker import (
+    EntityExistenceChecker,
+    EntityNotFoundError,
+)
 from app.services.story_points_calculator import StoryPointsCalculator
 
 _WHITELIST_CAP = 300
+_CREATION_VERBS = {"create", "add", "crear", "añadir", "anadir", "agregar"}
 
 
 class StoryGenerationService:
@@ -26,6 +31,7 @@ class StoryGenerationService:
         points_calculator: StoryPointsCalculator,
         code_file_repo: CodeFileRepository,
         settings: Settings = None,
+        entity_checker: EntityExistenceChecker | None = None,
     ) -> None:
         self._generator = ai_generator
         self._requirement_repo = requirement_repo
@@ -34,6 +40,7 @@ class StoryGenerationService:
         self._points_calculator = points_calculator
         self._code_file_repo = code_file_repo
         self._settings = settings or get_settings()
+        self._entity_checker = entity_checker
         self._logger = get_logger(__name__)
 
     def generate(
@@ -43,7 +50,8 @@ class StoryGenerationService:
         project_id: str,
         source_connection_id: str,
         language: str = "es",
-    ) -> UserStory:
+        force: bool = False,
+    ) -> tuple[UserStory, bool]:
         if not source_connection_id:
             raise ValueError("source_connection_id is required")
 
@@ -55,7 +63,7 @@ class StoryGenerationService:
                 "Cache hit for requirement_id=%s analysis_id=%s connection=%s",
                 requirement_id, analysis_id, source_connection_id,
             )
-            return self._to_domain(cached)
+            return self._to_domain(cached), False
 
         requirement = self._requirement_repo.find_by_id(requirement_id, source_connection_id)
         if not requirement:
@@ -70,6 +78,26 @@ class StoryGenerationService:
             raise ValueError(
                 f"ImpactAnalysis {analysis_id} not found for connection {source_connection_id}"
             )
+
+        entity_not_found = False
+        if (
+            self._entity_checker is not None
+            and self._settings.ENTITY_VALIDATION_MODE != "off"
+        ):
+            check = self._entity_checker.check(requirement.entity, source_connection_id)
+            if not check.found:
+                intentional_creation = (
+                    (requirement.action or "").lower() in _CREATION_VERBS
+                    and requirement.feature_type == "feature"
+                )
+                if force or intentional_creation:
+                    entity_not_found = True
+                    self._logger.info(
+                        "Entity '%s' not found, proceeding (force=%s, intentional_creation=%s)",
+                        requirement.entity, force, intentional_creation,
+                    )
+                else:
+                    raise EntityNotFoundError(requirement.entity, check.suggestions)
 
         impacted_file_paths = self._impact_repo.find_file_paths(analysis_id, source_connection_id)
         all_paths = self._code_file_repo.get_all_paths(source_connection_id)
@@ -90,6 +118,8 @@ class StoryGenerationService:
             "impacted_file_paths": impacted_file_paths,
             "available_file_paths": available_file_paths,
             "language": language,
+            "entity": requirement.entity,
+            "entity_not_found": entity_not_found,
         }
 
         start = datetime.now(timezone.utc)
@@ -127,21 +157,24 @@ class StoryGenerationService:
             story_id, source_connection_id, story_points, generation_time,
         )
 
-        return UserStory(
-            story_id=story_id,
-            requirement_id=requirement_id,
-            impact_analysis_id=analysis_id,
-            project_id=project_id,
-            title=parsed["title"],
-            story_description=parsed["story_description"],
-            acceptance_criteria=parsed["acceptance_criteria"],
-            subtasks=parsed["subtasks"],
-            definition_of_done=parsed["definition_of_done"],
-            risk_notes=parsed["risk_notes"],
-            story_points=story_points,
-            risk_level=analysis.risk_level,
-            created_at=created_at,
-            generation_time_seconds=generation_time,
+        return (
+            UserStory(
+                story_id=story_id,
+                requirement_id=requirement_id,
+                impact_analysis_id=analysis_id,
+                project_id=project_id,
+                title=parsed["title"],
+                story_description=parsed["story_description"],
+                acceptance_criteria=parsed["acceptance_criteria"],
+                subtasks=parsed["subtasks"],
+                definition_of_done=parsed["definition_of_done"],
+                risk_notes=parsed["risk_notes"],
+                story_points=story_points,
+                risk_level=analysis.risk_level,
+                created_at=created_at,
+                generation_time_seconds=generation_time,
+            ),
+            entity_not_found,
         )
 
     @staticmethod

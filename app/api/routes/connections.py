@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.core.auth0_auth import get_current_user
+from app.api.dependencies import get_current_user
 from app.core.config import Settings, get_settings
 from app.database.session import get_db
 from app.models.user import User

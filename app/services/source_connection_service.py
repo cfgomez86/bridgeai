@@ -4,7 +4,6 @@ import uuid
 
 from app.core.config import Settings, get_settings
 from app.domain.source_connection import Repository, SourceConnection
-from app.models.source_connection import SourceConnection as SourceConnectionORM
 from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.scm_providers import SUPPORTED_PLATFORMS, get_provider
 
@@ -18,21 +17,6 @@ _PLATFORM_LABELS = {
     "jira": "Jira",
 }
 
-
-def _to_domain_connection(orm: SourceConnectionORM) -> SourceConnection:
-    return SourceConnection(
-        id=orm.id,
-        platform=orm.platform,
-        display_name=orm.display_name,
-        repo_full_name=orm.repo_full_name,
-        repo_name=orm.repo_name,
-        owner=orm.owner,
-        default_branch=orm.default_branch,
-        is_active=orm.is_active,
-        created_at=orm.created_at,
-        boards_project=orm.boards_project,
-        auth_method=orm.auth_method,
-    )
 
 
 class SourceConnectionService:
@@ -102,7 +86,7 @@ class SourceConnectionService:
                 existing = self._repo.find_latest_for_platform(platform)
                 if existing:
                     logger.info("OAuth duplicate callback platform=%s — returning existing connection", platform)
-                    return _to_domain_connection(existing)
+                    return SourceConnectionRepository.to_domain(existing)
             raise ValueError("Invalid or expired OAuth state. Please start the connection flow again.")
 
         # The callback arrives from GitHub without Auth0 auth, so current_tenant_id is not set.
@@ -136,7 +120,7 @@ class SourceConnectionService:
             actor=user_info["login"],
         )
         logger.info("OAuth callback success platform=%s user=%s", platform, user_info["login"])
-        return _to_domain_connection(orm)
+        return SourceConnectionRepository.to_domain(orm)
 
     # ── PAT connection ──────────────────────────────────────────────────────
 
@@ -172,12 +156,12 @@ class SourceConnectionService:
             actor=display_name,
         )
         logger.info("PAT connection created platform=%s user=%s", platform, display_name)
-        return _to_domain_connection(orm)
+        return SourceConnectionRepository.to_domain(orm)
 
     # ── Connections ─────────────────────────────────────────────────────────
 
     def list_connections(self) -> list[SourceConnection]:
-        return [_to_domain_connection(c) for c in self._repo.list_connected()]
+        return [SourceConnectionRepository.to_domain(c) for c in self._repo.list_connected()]
 
     def delete_connection(self, connection_id: str) -> bool:
         conn = self._repo.find_by_id(connection_id)
@@ -232,11 +216,11 @@ class SourceConnectionService:
             detail=_json.dumps({"repo": repo_full_name, "branch": default_branch}),
         )
         logger.info("Repo activated connection=%s repo=%s", connection_id, repo_full_name)
-        return _to_domain_connection(orm)
+        return SourceConnectionRepository.to_domain(orm)
 
     def get_active_connection(self) -> SourceConnection | None:
         orm = self._repo.get_active()
-        return _to_domain_connection(orm) if orm else None
+        return SourceConnectionRepository.to_domain(orm) if orm else None
 
     def list_audit_logs(self, connection_id: str | None = None) -> list[dict]:
         if connection_id:
@@ -330,7 +314,7 @@ class SourceConnectionService:
         if not orm:
             raise ValueError(f"Connection {connection_id!r} not found.")
         logger.info("Azure Boards project activated connection=%s project=%s", connection_id, project_full_name)
-        return _to_domain_connection(orm)
+        return SourceConnectionRepository.to_domain(orm)
 
     def activate_site(
         self, connection_id: str, cloud_id: str, api_base_url: str, site_url: str, site_name: str
@@ -339,4 +323,4 @@ class SourceConnectionService:
         if not orm:
             raise ValueError(f"Connection {connection_id!r} not found.")
         logger.info("Jira site activated connection=%s site=%s", connection_id, site_name)
-        return _to_domain_connection(orm)
+        return SourceConnectionRepository.to_domain(orm)

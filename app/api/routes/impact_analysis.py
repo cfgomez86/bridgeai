@@ -1,18 +1,16 @@
 import asyncio
 import logging
 import uuid
-from app.core.auth0_auth import get_current_user
+from app.api.dependencies import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
-from app.core.context import get_tenant_id
 from app.database.session import get_db
 from app.models.impact_analysis import ImpactAnalysis, ImpactedFile  # noqa: F401
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.repositories.source_connection_repository import SourceConnectionRepository
-from app.services.dependency_analyzer import DependencyAnalyzer
 from app.services.impact_analysis_service import ImpactAnalysisService
 from app.services.semantic_impact_filter import get_semantic_filter
 
@@ -65,8 +63,7 @@ def get_impact_service(
         code_repo,
         impact_repo,
         settings.PROJECT_ROOT,
-        DependencyAnalyzer(get_tenant_id()),
-        get_semantic_filter(settings),
+        semantic_filter=get_semantic_filter(settings),
     )
 
 

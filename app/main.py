@@ -16,7 +16,7 @@ from app.api.routes import ticket_integration as ticket_integration_router
 from app.api.routes import connections as connections_router
 from app.api.routes import auth as auth_router
 from app.api.routes import dashboard as dashboard_router
-from app.core.auth0_auth import get_current_user
+from app.api.dependencies import get_current_user
 from app.core.config import get_settings, _APP_ENV
 from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.core.security import SecurityMiddleware, add_cors

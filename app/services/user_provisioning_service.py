@@ -1,25 +1,27 @@
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Optional
-from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from app.models.tenant import Tenant
-from app.models.user import User
 from app.repositories.tenant_repository import TenantRepository
+from app.repositories.user_repository import UserRepository
 
 
 @dataclass(frozen=True)
 class ProvisionedUser:
-    user: User
-    tenant: Tenant
+    user_id: str
+    tenant_id: str
+    email: str
+    name: Optional[str]
+    role: str
+    tenant_name: str
 
 
 class UserProvisioningService:
     def __init__(self, db: Session) -> None:
+        self._tenant_repo = TenantRepository(db)
+        self._user_repo = UserRepository(db)
         self._db = db
-        self._tenants = TenantRepository(db)
 
     def ensure_user(
         self,
@@ -28,31 +30,30 @@ class UserProvisioningService:
         name: Optional[str],
     ) -> ProvisionedUser:
         """Idempotent upsert of tenant + user. Safe to call on every login."""
-        tenant = self._tenants.find_by_auth0_user_id(auth0_user_id)
+        tenant = self._tenant_repo.find_by_auth0_user_id(auth0_user_id)
         if not tenant:
-            tenant = Tenant(
-                id=str(uuid4()),
+            tenant = self._tenant_repo.create(
                 auth0_user_id=auth0_user_id,
                 name=name or email,
-                plan="free",
-                created_at=datetime.utcnow(),
             )
-            self._db.add(tenant)
             self._db.flush()
 
-        user = self._db.query(User).filter_by(auth0_user_id=auth0_user_id).first()
+        user = self._user_repo.find_by_auth0_user_id(auth0_user_id)
         if not user:
-            user = User(
-                id=str(uuid4()),
+            user = self._user_repo.create(
                 auth0_user_id=auth0_user_id,
                 tenant_id=tenant.id,
                 email=email,
                 name=name,
-                role="owner",
-                created_at=datetime.utcnow(),
             )
-            self._db.add(user)
 
         self._db.commit()
         self._db.refresh(user)
-        return ProvisionedUser(user=user, tenant=tenant)
+        return ProvisionedUser(
+            user_id=user.id,
+            tenant_id=tenant.id,
+            email=user.email,
+            name=user.name,
+            role=user.role,
+            tenant_name=tenant.name,
+        )

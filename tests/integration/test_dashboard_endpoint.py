@@ -255,7 +255,7 @@ def test_feedback_comments_empty_tenant_returns_empty_list(empty_client):
 def test_feedback_comments_non_admin_returns_403(populated_client):
     """Owner/member roles must NOT access feedback review — admin-only."""
     from datetime import datetime
-    from app.core.auth0_auth import get_current_user
+    from app.api.dependencies import get_current_user
     from app.core.context import current_tenant_id, current_user_id
     from app.models.user import User
 

@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from app.core.auth0_auth import get_current_user
+from app.api.dependencies import get_current_user
 from app.core.context import get_user_id
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -22,7 +22,13 @@ from app.repositories.story_feedback_repository import StoryFeedbackRepository
 from app.repositories.story_quality_repository import StoryQualityRepository
 from app.repositories.ticket_integration_repository import TicketIntegrationRepository
 from app.repositories.user_story_repository import UserStoryRepository
+from app.core.context import get_tenant_id
 from app.services.ai_story_generator import AIStoryGenerator
+from app.services.dependency_analyzer import DependencyAnalyzer
+from app.services.entity_existence_checker import (
+    EntityExistenceChecker,
+    EntityNotFoundError,
+)
 from app.services.story_ai_provider import get_story_ai_provider
 from app.services.story_generation_service import StoryGenerationService
 from app.services.story_points_calculator import StoryPointsCalculator
@@ -41,6 +47,7 @@ class StoryGenerationRequest(BaseModel):
     project_id: str
     source_connection_id: str
     language: str = "es"
+    force: bool = False
 
 
 class StoryGenerationResponse(BaseModel):
@@ -51,6 +58,7 @@ class StoryGenerationResponse(BaseModel):
     risk_level: str
     generation_time_seconds: float
     request_id: str
+    entity_not_found: bool = False
 
 
 class SubtaskItem(BaseModel):
@@ -150,14 +158,19 @@ def get_story_service(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> StoryGenerationService:
+    code_file_repo = CodeFileRepository(db)
     return StoryGenerationService(
         ai_generator=AIStoryGenerator(get_story_ai_provider(settings), settings),
         requirement_repo=RequirementRepository(db),
         impact_repo=ImpactAnalysisRepository(db),
         story_repo=UserStoryRepository(db),
         points_calculator=StoryPointsCalculator(),
-        code_file_repo=CodeFileRepository(db),
+        code_file_repo=code_file_repo,
         settings=settings,
+        entity_checker=EntityExistenceChecker(
+            code_file_repo=code_file_repo,
+            analyzer=DependencyAnalyzer(get_tenant_id()),
+        ),
     )
 
 
@@ -248,13 +261,29 @@ async def generate_story(
         )
 
     try:
-        result = await asyncio.to_thread(
+        result, entity_not_found = await asyncio.to_thread(
             service.generate,
             body.requirement_id,
             body.impact_analysis_id,
             body.project_id,
             body.source_connection_id,
             body.language,
+            body.force,
+        )
+    except EntityNotFoundError as exc:
+        logger.info(
+            "POST /generate-story entity not found request_id=%s entity=%s suggestions=%s",
+            request_id, exc.entity, exc.suggestions,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "ENTITY_NOT_FOUND",
+                "entity": exc.entity,
+                "message": str(exc),
+                "suggestions": exc.suggestions,
+                "hint": "Envía force=true para generar la historia de creación, o usa una de las sugerencias.",
+            },
         )
     except ValueError as exc:
         msg = str(exc)
@@ -268,8 +297,8 @@ async def generate_story(
             detail="Story generation failed due to an internal error.",
         )
     logger.info(
-        "POST /generate-story completed request_id=%s story_id=%s points=%d duration=%.3fs",
-        request_id, result.story_id, result.story_points, result.generation_time_seconds,
+        "POST /generate-story completed request_id=%s story_id=%s points=%d duration=%.3fs entity_not_found=%s",
+        request_id, result.story_id, result.story_points, result.generation_time_seconds, entity_not_found,
     )
     return StoryGenerationResponse(
         story_id=result.story_id,
@@ -279,6 +308,7 @@ async def generate_story(
         risk_level=result.risk_level,
         generation_time_seconds=result.generation_time_seconds,
         request_id=request_id,
+        entity_not_found=entity_not_found,
     )
 
 

@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     AI_MAX_RETRIES: int = 2
     AI_MAX_OUTPUT_TOKENS: int = 8192
 
+    # Story entity existence validation
+    ENTITY_VALIDATION_MODE: str = "warn"  # "warn" | "off"
+
     # Jira integration
     JIRA_REQUEST_TIMEOUT_SECONDS: int = 10
     JIRA_MAX_RETRIES: int = 3
