@@ -201,29 +201,33 @@ export function FeedbackReview() {
                 </div>
               </div>
 
-              <div style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "10px",
-                fontWeight: 600,
-                color: "var(--muted)",
-                textTransform: "uppercase" as const,
-                letterSpacing: "0.14em",
-              }}>
-                {f.comment_label}
-              </div>
-              <blockquote style={{
-                margin: 0,
-                padding: "10px 14px",
-                background: "var(--surface-2)",
-                borderLeft: `3px solid ${item.rating === "thumbs_up" ? "var(--ok-fg, oklch(0.55 0.14 145))" : "var(--warn-fg)"}`,
-                borderRadius: "var(--radius)",
-                fontSize: "13px",
-                color: "var(--fg)",
-                lineHeight: 1.55,
-                whiteSpace: "pre-wrap" as const,
-              }}>
-                {item.comment}
-              </blockquote>
+              {item.comment && item.comment.trim().length > 0 && (
+                <>
+                  <div style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "10px",
+                    fontWeight: 600,
+                    color: "var(--muted)",
+                    textTransform: "uppercase" as const,
+                    letterSpacing: "0.14em",
+                  }}>
+                    {f.comment_label}
+                  </div>
+                  <blockquote style={{
+                    margin: 0,
+                    padding: "10px 14px",
+                    background: "var(--surface-2)",
+                    borderLeft: `3px solid ${item.rating === "thumbs_up" ? "var(--ok-fg, oklch(0.55 0.14 145))" : "var(--warn-fg)"}`,
+                    borderRadius: "var(--radius)",
+                    fontSize: "13px",
+                    color: "var(--fg)",
+                    lineHeight: 1.55,
+                    whiteSpace: "pre-wrap" as const,
+                  }}>
+                    {item.comment}
+                  </blockquote>
+                </>
+              )}
 
               <div style={{ fontSize: "11.5px", color: "var(--muted)", fontFamily: "var(--font-mono)" }}>
                 {item.user_id}

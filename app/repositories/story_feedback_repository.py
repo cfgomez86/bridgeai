@@ -86,11 +86,7 @@ class StoryFeedbackRepository:
         q = (
             self._db.query(StoryFeedback, UserStory.title)
             .join(UserStory, UserStory.id == StoryFeedback.story_id)
-            .filter(
-                StoryFeedback.tenant_id == self._tid(),
-                StoryFeedback.comment.isnot(None),
-                func.length(StoryFeedback.comment) > 0,
-            )
+            .filter(StoryFeedback.tenant_id == self._tid())
         )
         if rating:
             q = q.filter(StoryFeedback.rating == rating)
