@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { Sun, Moon } from "lucide-react"
 import { useLanguage } from "@/lib/i18n"
 import type { Locale } from "@/lib/i18n"
@@ -12,9 +12,45 @@ const THEME_ICONS: Record<Theme, React.ReactNode> = {
   dark:  <Moon size={20} />,
 }
 
-const LOCALE_META: Record<Locale, { flag: string; name: string }> = {
-  es: { flag: "🇪🇸", name: "Español" },
-  en: { flag: "🇬🇧", name: "English" },
+const FLAG_STYLE: React.CSSProperties = { width: 28, height: 20, borderRadius: 2, display: "block" }
+
+const SpainFlag = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2" style={FLAG_STYLE}>
+    <rect width="3" height="2" fill="#AA151B"/>
+    <rect y="0.5" width="3" height="1" fill="#F1BF00"/>
+  </svg>
+)
+
+const UKFlag = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30" style={FLAG_STYLE}>
+    <rect width="60" height="30" fill="#012169"/>
+    <line x1="0" y1="0" x2="60" y2="30" stroke="white" strokeWidth="6"/>
+    <line x1="60" y1="0" x2="0" y2="30" stroke="white" strokeWidth="6"/>
+    <polygon points="0,0 0,2 29,15 30,12" fill="#C8102E"/>
+    <polygon points="60,30 60,28 31,15 30,18" fill="#C8102E"/>
+    <polygon points="60,0 58,0 30,12 32,15" fill="#C8102E"/>
+    <polygon points="0,30 2,30 30,18 28,15" fill="#C8102E"/>
+    <rect x="24" y="0" width="12" height="30" fill="white"/>
+    <rect x="0" y="12" width="60" height="6" fill="white"/>
+    <rect x="26" y="0" width="8" height="30" fill="#C8102E"/>
+    <rect x="0" y="13" width="60" height="4" fill="#C8102E"/>
+  </svg>
+)
+
+const CatalanFlag = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 60" style={FLAG_STYLE}>
+    <rect width="90" height="60" fill="#FCDD09"/>
+    <rect y="6.667" width="90" height="6.667" fill="#DA121A"/>
+    <rect y="20" width="90" height="6.667" fill="#DA121A"/>
+    <rect y="33.333" width="90" height="6.667" fill="#DA121A"/>
+    <rect y="46.667" width="90" height="6.667" fill="#DA121A"/>
+  </svg>
+)
+
+const LOCALE_META: Record<Locale, { flag: React.ReactNode; name: string }> = {
+  es: { flag: <SpainFlag />, name: "Español" },
+  en: { flag: <UKFlag />, name: "English" },
+  ca: { flag: <CatalanFlag />, name: "Català" },
 }
 
 function ThemeSection() {

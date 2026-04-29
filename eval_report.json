@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-29T10:52:25.777486+00:00",
+  "timestamp": "2026-04-29T15:17:53.644577+00:00",
   "results": [
     {
       "id": "REQ_001",
@@ -8,10 +8,10 @@
         "app/core/auth0_auth.py",
         "app/api/routes/auth.py"
       ],
-      "predicted_count": 66,
-      "precision": 0.0303,
+      "predicted_count": 117,
+      "precision": 0.0171,
       "recall": 1.0,
-      "f1": 0.0588
+      "f1": 0.0336
     },
     {
       "id": "REQ_002",
@@ -20,10 +20,10 @@
         "app/api/routes/story_generation.py",
         "app/services/story_generation_service.py"
       ],
-      "predicted_count": 33,
-      "precision": 0.0606,
+      "predicted_count": 35,
+      "precision": 0.0571,
       "recall": 1.0,
-      "f1": 0.1143
+      "f1": 0.1081
     },
     {
       "id": "REQ_003",
@@ -32,10 +32,10 @@
         "app/services/code_indexing_service.py",
         "app/api/routes/indexing.py"
       ],
-      "predicted_count": 68,
-      "precision": 0.0294,
+      "predicted_count": 76,
+      "precision": 0.0263,
       "recall": 1.0,
-      "f1": 0.0571
+      "f1": 0.0513
     }
   ]
 }
