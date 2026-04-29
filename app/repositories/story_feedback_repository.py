@@ -85,6 +85,7 @@ class StoryFeedbackRepository:
     ) -> list[tuple[StoryFeedback, str]]:
         q = (
             self._db.query(StoryFeedback, UserStory.title)
+            .filter(StoryFeedback.tenant_id == self._tid())
             .join(UserStory, UserStory.id == StoryFeedback.story_id)
         )
         if rating:
