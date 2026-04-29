@@ -109,6 +109,21 @@ class AzureDevOpsProvider(ScmProvider):
                     )
             except Exception:
                 pass  # network or other transient error — don't block connection
+        # Probe Code scope — required for repository indexing.
+        # Azure returns 404 (not 401) when this scope is missing, so check that too.
+        code_url = f"https://dev.azure.com/{org}/_apis/git/repositories?api-version=7.1"
+        code_req = urllib.request.Request(code_url, headers={"Authorization": self._auth_header(token)})
+        try:
+            with urllib.request.urlopen(code_req, timeout=15) as _resp:
+                pass
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403, 404):
+                raise ValueError(
+                    "Azure DevOps PAT is missing 'Code: Read' scope. "
+                    "Regenerate the PAT and enable: Code › Read."
+                )
+        except Exception:
+            pass  # network or other transient error — don't block connection
         return {"login": f"PAT@{org}", "display_name": f"PAT@{org}"}
 
     def get_project_process(self, access_token: str, org_url: str, project_name: str) -> str:
@@ -231,14 +246,27 @@ class AzureDevOpsProvider(ScmProvider):
     ) -> list[RemoteFileEntry]:
         parts = repo_full_name.split("/", 2)
         org, project, repo = parts[0], parts[1], parts[2] if len(parts) > 2 else parts[-1]
+        org_e = urllib.parse.quote(org, safe="")
+        project_e = urllib.parse.quote(project, safe="")
+        repo_e = urllib.parse.quote(repo, safe="")
         url = (
-            f"https://dev.azure.com/{org}/{project}/_apis/git/repositories/{repo}/items"
+            f"https://dev.azure.com/{org_e}/{project_e}/_apis/git/repositories/{repo_e}/items"
             f"?recursionLevel=Full&versionDescriptor.version={urllib.parse.quote(branch, safe='')}"
             f"&versionDescriptor.versionType=branch&api-version=7.1"
         )
         req = urllib.request.Request(url, headers={"Authorization": self._auth_header(access_token)})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read())
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            # Azure returns 404 with this specific message when the repo has no commits/branches.
+            if "Cannot find any branches" in body or "VS403403" in body:
+                raise RuntimeError(
+                    f"Azure DevOps repository '{repo}' has no branches yet. "
+                    f"Push at least one commit to branch '{branch}' before indexing."
+                ) from e
+            raise RuntimeError(f"Azure DevOps {e.code} on {url}: {body[:200]}") from e
         entries: list[RemoteFileEntry] = []
         for item in data.get("value", []):
             if item.get("gitObjectType") == "blob":
@@ -254,13 +282,20 @@ class AzureDevOpsProvider(ScmProvider):
     ) -> str:
         parts = repo_full_name.split("/", 2)
         org, project, repo = parts[0], parts[1], parts[2] if len(parts) > 2 else parts[-1]
+        org_e = urllib.parse.quote(org, safe="")
+        project_e = urllib.parse.quote(project, safe="")
+        repo_e = urllib.parse.quote(repo, safe="")
         url = (
-            f"https://dev.azure.com/{org}/{project}/_apis/git/repositories/{repo}/items"
+            f"https://dev.azure.com/{org_e}/{project_e}/_apis/git/repositories/{repo_e}/items"
             f"?path={urllib.parse.quote('/' + path.lstrip('/'), safe='/')}&api-version=7.1"
         )
         req = urllib.request.Request(
             url,
             headers={"Authorization": self._auth_header(access_token), "Accept": "text/plain"},
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return resp.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")[:200]
+            raise RuntimeError(f"Azure DevOps {e.code} on {url}: {body}") from e

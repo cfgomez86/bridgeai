@@ -15,6 +15,7 @@ interface Translations {
     indexing: string
     connections: string
     settings: string
+    feedback: string
   }
   connections: {
     title: string
@@ -304,7 +305,6 @@ interface Translations {
     }
     greeting: string
     greetingNoName: string
-    summary: string
     quickStartTitle: string
     quickStartLead: string
     startWorkflow: string
@@ -312,21 +312,50 @@ interface Translations {
       requirements: string
       stories: string
       tickets: string
+      approval: string
+      approvalMeta: string
+      quality: string
+      qualityMeta: string
+      qualityEmpty: string
+      conversion: string
+      conversionMeta: string
+      conversionEmpty: string
+      riskTitle: string
+      riskLow: string
+      riskMedium: string
+      riskHigh: string
+      riskMeta: string
+      riskEmpty: string
       last30days: string
+      allTime: string
       jiraAzure: string
+      jiraOnly: string
+      azureOnly: string
+      noFeedback: string
     }
     activity: {
       title: string
       meta: string
-      viewAll: string
+      empty: string
     }
-    howItWorks: {
+    empty: {
       title: string
-      step1: { title: string; desc: string }
-      step2: { title: string; desc: string }
-      step3: { title: string; desc: string }
-      step4: { title: string; desc: string }
+      desc: string
+      cta: string
     }
+  }
+  feedbackPage: {
+    title: string
+    subtitle: string
+    empty: string
+    load_more: string
+    loading_more: string
+    open_story: string
+    comment_label: string
+    error_load: string
+    filter_all: string
+    filter_positive: string
+    filter_negative: string
   }
   stories: {
     edit_title: string
@@ -424,11 +453,12 @@ interface Translations {
 
 const es: Translations = {
   nav: {
-    home: "Inicio",
+    home: "Dashboard",
     workflow: "Workflow",
     indexing: "Indexacion",
     connections: "Conexiones",
     settings: "Ajustes",
+    feedback: "Feedback",
   },
   connections: {
     title: "Conexiones",
@@ -826,29 +856,57 @@ const es: Translations = {
     },
     greeting: "Buenas tardes,",
     greetingNoName: "Buenas tardes",
-    summary: "Tienes 1 repo activo y 3 requerimientos esperando análisis.",
-    quickStartTitle: "Empieza una historia desde un requerimiento",
-    quickStartLead: "Pega tu requisito, BridgeAI lo entiende, calcula el impacto en tu código indexado y genera la historia con criterios de aceptación.",
+    quickStartTitle: "Nueva historia desde un requerimiento",
+    quickStartLead: "Pega el requisito, BridgeAI calcula el impacto y genera la historia con criterios de aceptación.",
     startWorkflow: "Iniciar workflow →",
     stats: {
       requirements: "Requerimientos",
       stories: "Historias generadas",
       tickets: "Tickets creados",
+      approval: "Aprobación",
+      approvalMeta: "{n} valoraciones",
+      quality: "Calidad media",
+      qualityMeta: "{n} evaluadas",
+      qualityEmpty: "Sin evaluar",
+      conversion: "Conversión",
+      conversionMeta: "{n} historias",
+      conversionEmpty: "sin historias",
+      riskTitle: "Distribución de riesgo",
+      riskLow: "LOW",
+      riskMedium: "MEDIUM",
+      riskHigh: "HIGH",
+      riskMeta: "total de historias",
+      riskEmpty: "sin historias aún",
       last30days: "últimos 30 días",
+      allTime: "total",
       jiraAzure: "Jira · Azure DevOps",
+      jiraOnly: "Jira",
+      azureOnly: "Azure DevOps",
+      noFeedback: "sin feedback aún",
     },
     activity: {
       title: "Actividad reciente",
-      meta: "últimas 24h",
-      viewAll: "Ver todo",
+      meta: "últimos eventos",
+      empty: "Sin actividad aún. Empieza un workflow para verla aquí.",
     },
-    howItWorks: {
-      title: "Cómo funciona",
-      step1: { title: "Entiende", desc: "Extrae intención, complejidad y términos" },
-      step2: { title: "Impacta", desc: "Cruza tu codebase indexado" },
-      step3: { title: "Genera", desc: "Historias + criterios + story points" },
-      step4: { title: "Entrega", desc: "Crea ticket en Jira o Azure DevOps" },
+    empty: {
+      title: "Aún no hay actividad",
+      desc: "Pega un requerimiento y crea tu primera historia con criterios de aceptación, subtareas y ticket.",
+      cta: "Iniciar primer workflow →",
     },
+  },
+  feedbackPage: {
+    title: "Feedback",
+    subtitle: "Comentarios de los usuarios para revisar y mejorar el sistema.",
+    empty: "Sin comentarios por ahora.",
+    load_more: "Cargar más",
+    loading_more: "Cargando...",
+    open_story: "Abrir historia →",
+    comment_label: "Comentario",
+    error_load: "No se pudo cargar el feedback.",
+    filter_all: "Todos",
+    filter_positive: "👍 Positivos",
+    filter_negative: "👎 Negativos",
   },
 }
 
@@ -858,11 +916,12 @@ const es: Translations = {
 
 const en: Translations = {
   nav: {
-    home: "Home",
+    home: "Dashboard",
     workflow: "Workflow",
     indexing: "Indexing",
     connections: "Connections",
     settings: "Settings",
+    feedback: "Feedback",
   },
   connections: {
     title: "Connections",
@@ -1172,29 +1231,57 @@ const en: Translations = {
     },
     greeting: "Good afternoon,",
     greetingNoName: "Good afternoon",
-    summary: "You have 1 active repo and 3 requirements awaiting analysis.",
-    quickStartTitle: "Start a story from a requirement",
-    quickStartLead: "Paste your requirement, BridgeAI understands it, calculates the impact on your indexed code, and generates the story with acceptance criteria.",
+    quickStartTitle: "New story from a requirement",
+    quickStartLead: "Paste the requirement, BridgeAI computes the impact and generates the story with acceptance criteria.",
     startWorkflow: "Start workflow →",
     stats: {
       requirements: "Requirements",
       stories: "Stories generated",
       tickets: "Tickets created",
+      approval: "Approval rate",
+      approvalMeta: "{n} ratings",
+      quality: "Average quality",
+      qualityMeta: "{n} evaluated",
+      qualityEmpty: "Not evaluated yet",
+      conversion: "Conversion",
+      conversionMeta: "{n} stories",
+      conversionEmpty: "no stories yet",
+      riskTitle: "Risk distribution",
+      riskLow: "LOW",
+      riskMedium: "MEDIUM",
+      riskHigh: "HIGH",
+      riskMeta: "total stories",
+      riskEmpty: "no stories yet",
       last30days: "last 30 days",
+      allTime: "all time",
       jiraAzure: "Jira · Azure DevOps",
+      jiraOnly: "Jira",
+      azureOnly: "Azure DevOps",
+      noFeedback: "no feedback yet",
     },
     activity: {
       title: "Recent activity",
-      meta: "last 24h",
-      viewAll: "View all",
+      meta: "latest events",
+      empty: "No activity yet. Start a workflow to see it here.",
     },
-    howItWorks: {
-      title: "How it works",
-      step1: { title: "Understand", desc: "Extracts intent, complexity and terms" },
-      step2: { title: "Impact", desc: "Crosses your indexed codebase" },
-      step3: { title: "Generate", desc: "Stories + criteria + story points" },
-      step4: { title: "Deliver", desc: "Creates ticket in Jira or Azure DevOps" },
+    empty: {
+      title: "Nothing here yet",
+      desc: "Paste a requirement and create your first story with acceptance criteria, subtasks and ticket.",
+      cta: "Start first workflow →",
     },
+  },
+  feedbackPage: {
+    title: "Feedback",
+    subtitle: "User comments to review and improve the system.",
+    empty: "No comments yet.",
+    load_more: "Load more",
+    loading_more: "Loading...",
+    open_story: "Open story →",
+    comment_label: "Comment",
+    error_load: "Could not load feedback.",
+    filter_all: "All",
+    filter_positive: "👍 Positive",
+    filter_negative: "👎 Negative",
   },
   stories: {
     edit_title: "Edit story",

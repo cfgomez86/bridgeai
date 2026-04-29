@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -62,6 +63,21 @@ class ImpactAnalysisRepository:
         total = base.count()
         files = base.offset(offset).limit(limit).all()
         return files, total
+
+    def count_since(self, since: Optional[datetime]) -> int:
+        q = self._db.query(ImpactAnalysis).filter(ImpactAnalysis.tenant_id == self._tid())
+        if since is not None:
+            q = q.filter(ImpactAnalysis.created_at >= since)
+        return q.count()
+
+    def list_recent(self, limit: int) -> list[ImpactAnalysis]:
+        return (
+            self._db.query(ImpactAnalysis)
+            .filter(ImpactAnalysis.tenant_id == self._tid())
+            .order_by(ImpactAnalysis.created_at.desc())
+            .limit(limit)
+            .all()
+        )
 
     def find_file_paths(
         self, analysis_id: str, source_connection_id: str, limit: int = 20
