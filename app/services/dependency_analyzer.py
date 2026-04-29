@@ -3,7 +3,6 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from app.core.context import get_tenant_id
 
 # Key: (tenant_id, source_connection_id, file_path, content_hash).
 # El scope incluye connection porque dos repos del mismo tenant pueden tener
@@ -21,17 +20,12 @@ class FileAnalysis:
 
 
 class DependencyAnalyzer:
-    def __init__(self) -> None:
+    def __init__(self, tenant_id: str) -> None:
         self._parsers: dict[str, Callable[[str, str], FileAnalysis]] = {
             "Python": self._analyze_python,
             "Java": self._analyze_java,
         }
-        # Resolve tenant once per instance — all analyze() calls for a given request
-        # share the same tenant context, so a single lookup suffices.
-        try:
-            self._tid: str = get_tenant_id()
-        except RuntimeError:
-            self._tid = ""
+        self._tid: str = tenant_id
 
     def analyze(
         self, file_path: str, content: str, language: str, source_connection_id: str

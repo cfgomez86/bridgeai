@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
+from app.core.context import get_tenant_id
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.services.dependency_analyzer import DependencyAnalyzer, FileAnalysis
@@ -39,7 +40,7 @@ class ImpactAnalysisService:
         self._code_file_repo = code_file_repo
         self._impact_repo = impact_repo
         self._project_root = os.path.abspath(project_root)
-        self._analyzer = analyzer if analyzer is not None else DependencyAnalyzer()
+        self._analyzer = analyzer if analyzer is not None else DependencyAnalyzer(get_tenant_id())
         self._semantic_filter = semantic_filter
 
     def analyze(

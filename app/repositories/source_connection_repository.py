@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from app.core.context import current_tenant_id, get_tenant_id
+from app.core.context import get_tenant_id
 
 _SCM_PLATFORMS = {"github", "gitlab", "azure_devops", "bitbucket"}
 from app.models.code_file import CodeFile

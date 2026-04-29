@@ -39,10 +39,10 @@ class SourceConnectionService:
     def __init__(
         self,
         repo: SourceConnectionRepository,
-        settings: Settings = get_settings(),  # type: ignore[assignment]
+        settings: Settings | None = None,
     ) -> None:
         self._repo = repo
-        self._settings = settings
+        self._settings = settings or get_settings()
 
     def _get_server_credentials(self, platform: str) -> dict | None:
         mapping = {

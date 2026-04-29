@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.core.auth0_auth import get_current_user
-from app.core.context import current_user_id
+from app.core.context import get_user_id
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -371,7 +371,7 @@ async def submit_feedback(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Story {story_id!r} not found",
         )
-    user_id = current_user_id.get()
+    user_id = get_user_id()
     record = StoryFeedbackRepository(db).upsert(story_id, user_id, body.rating, body.comment)
     return _feedback_record_to_response(record)
 
@@ -382,7 +382,7 @@ async def get_feedback(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> Optional[FeedbackResponse]:
-    user_id = current_user_id.get()
+    user_id = get_user_id()
     record = StoryFeedbackRepository(db).find_by_user(story_id, user_id)
     if record is None:
         return None

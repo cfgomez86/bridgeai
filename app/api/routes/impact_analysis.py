@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
+from app.core.context import get_tenant_id
 from app.database.session import get_db
 from app.models.impact_analysis import ImpactAnalysis, ImpactedFile  # noqa: F401
 from app.repositories.code_file_repository import CodeFileRepository
@@ -64,7 +65,7 @@ def get_impact_service(
         code_repo,
         impact_repo,
         settings.PROJECT_ROOT,
-        DependencyAnalyzer(),
+        DependencyAnalyzer(get_tenant_id()),
         get_semantic_filter(settings),
     )
 
