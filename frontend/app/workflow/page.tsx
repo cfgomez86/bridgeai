@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { useUser } from "@auth0/nextjs-auth0/client"
 import { useWorkflow } from "@/hooks/useWorkflow"
 import { useLanguage } from "@/lib/i18n"
 import { getActiveConnection } from "@/lib/api-client"
@@ -15,15 +16,21 @@ export default function WorkflowPage() {
   const { state } = workflow
   const { t } = useLanguage()
   const w = t.workflow
+  const { user, isLoading: authLoading } = useUser()
 
   // Resuelve el repo activo al entrar y cada vez que la pestaña vuelve a foco.
   // Si cambia la conexión, syncSourceConnection resetea el workflow para
   // evitar mezclar requirement/analysis/historia de repos distintos.
   useEffect(() => {
+    if (authLoading) return
     let cancelled = false
     async function sync() {
-      const conn = await getActiveConnection()
-      if (!cancelled) workflow.syncSourceConnection(conn?.id ?? null, conn?.repo_full_name ?? null)
+      try {
+        const conn = await getActiveConnection()
+        if (!cancelled) workflow.syncSourceConnection(conn?.id ?? null, conn?.repo_full_name ?? null)
+      } catch {
+        // No active connection or unauthenticated — leave state unchanged
+      }
     }
     sync()
     const onFocus = () => sync()
@@ -33,7 +40,7 @@ export default function WorkflowPage() {
       window.removeEventListener("focus", onFocus)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [authLoading, user])
 
   return (
     <div className="page-content" style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "24px" }}>

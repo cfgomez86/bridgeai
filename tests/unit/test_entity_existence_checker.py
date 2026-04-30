@@ -184,3 +184,50 @@ def test_suggestions_top_5_only():
     result = checker.check("ProductoZZZZ", TEST_CONNECTION_ID)
     assert result.found is False
     assert len(result.suggestions) <= 5
+
+
+def test_underscore_variant_matches_camelcase_class():
+    """user_story (snake_case from AI) debe matchear class UserStory."""
+    repo, db = make_repo()
+    add_code_file(db, file_path="m.py", content="class UserStory:\n    pass\n")
+    checker = make_checker(repo)
+    result = checker.check("user_story", TEST_CONNECTION_ID)
+    assert result.found is True
+
+
+def test_underscore_variant_matches_camelcase_with_suffix():
+    """user_story debe matchear class UserStoryModel (CamelCase boundary tras underscore-strip)."""
+    repo, db = make_repo()
+    add_code_file(db, file_path="m.py", content="class UserStoryModel:\n    pass\n")
+    checker = make_checker(repo)
+    result = checker.check("user_story", TEST_CONNECTION_ID)
+    assert result.found is True
+
+
+def test_meta_app_entities_are_generic():
+    """Términos meta del propio app (historia, story, requerimiento, ticket, formulario...)
+    deben tratarse como genéricos para no bloquear historias válidas."""
+    repo, _db = make_repo()
+    checker = make_checker(repo)
+    for entity in (
+        "historia", "story", "user_story",
+        "requerimiento", "requirement",
+        "ticket", "tiquet",
+        "formulario", "form",
+        "pantalla", "screen",
+        "página", "pagina", "page",
+        "detalle", "detalles", "detail", "details",
+    ):
+        result = checker.check(entity, TEST_CONNECTION_ID)
+        assert result.found is True, f"'{entity}' debería ser genérico"
+
+
+def test_historia_maps_to_story_via_equivalences():
+    """Cuando la AI extrae 'historia' y existe class Story, debe encontrarla."""
+    repo, db = make_repo()
+    add_code_file(db, file_path="m.py", content="class Story:\n    pass\n")
+    checker = make_checker(repo)
+    # historia está en _GENERIC_ENTITIES, pero también en equivalencias.
+    # Si en el futuro se quita de genéricos, este test cubre el mapping.
+    result = checker.check("historia", TEST_CONNECTION_ID)
+    assert result.found is True

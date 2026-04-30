@@ -33,4 +33,5 @@ class UserStory(Base):
     risk_level: Mapped[str] = mapped_column(String(10), nullable=False)
     generation_time_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     entity_not_found: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    generator_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

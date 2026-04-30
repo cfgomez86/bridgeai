@@ -181,7 +181,7 @@ def test_gemini_provider_uses_default_model():
         provider.parse_requirement("test")
 
     call_kwargs = MockClient.return_value.models.generate_content.call_args
-    assert call_kwargs.kwargs["model"] == "gemini-2.0-flash"
+    assert call_kwargs.kwargs["model"] == "gemini-2.5-flash"
 
 
 def test_gemini_provider_uses_custom_model():

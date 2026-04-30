@@ -89,7 +89,6 @@ class StoryGenerationService:
             if not check.found:
                 intentional_creation = (
                     (requirement.action or "").lower() in _CREATION_VERBS
-                    and requirement.feature_type == "feature"
                 )
                 if force or intentional_creation:
                     entity_not_found = True
@@ -135,6 +134,7 @@ class StoryGenerationService:
 
         story_id = str(uuid.uuid4())
         created_at = datetime.now(timezone.utc)
+        generator_model = self._generator.model_name
 
         self._story_repo.save({
             "id": story_id,
@@ -152,6 +152,7 @@ class StoryGenerationService:
             "risk_level": analysis.risk_level,
             "generation_time_seconds": generation_time,
             "entity_not_found": entity_not_found,
+            "generator_model": generator_model,
             "created_at": created_at,
         }, source_connection_id)
         self._logger.info(
@@ -176,6 +177,7 @@ class StoryGenerationService:
                 created_at=created_at,
                 generation_time_seconds=generation_time,
                 entity_not_found=entity_not_found,
+                generator_model=generator_model,
             ),
             entity_not_found,
         )
@@ -221,4 +223,5 @@ class StoryGenerationService:
             created_at=orm.created_at,
             generation_time_seconds=orm.generation_time_seconds,
             entity_not_found=bool(getattr(orm, "entity_not_found", False)),
+            generator_model=getattr(orm, "generator_model", None),
         )

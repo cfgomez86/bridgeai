@@ -94,7 +94,20 @@ _QUALITY_METRICS = {
 
 
 def _setup_routes(page) -> None:
-    """Intercept all /api/v1/* requests and return deterministic stub data."""
+    """Intercept all /api/v1/* requests and return deterministic stub data.
+
+    Also intercepts the Auth0 SWR profile endpoint (/auth/profile) so that
+    useUser() resolves immediately with "no session" (204). Without this,
+    SWR's inflight request keeps networkidle pending and the 5-second
+    resolveToken wait fires *after* the test fills the form, causing
+    syncSourceConnection to reset requirementText to "".
+    """
+
+    # Auth0 SWR profile route — return 204 (no session) immediately.
+    def handle_auth_profile(route: Route) -> None:
+        route.fulfill(status=204, body="")
+
+    page.route("**/auth/profile", handle_auth_profile)
 
     def handle(route: Route) -> None:
         url = route.request.url

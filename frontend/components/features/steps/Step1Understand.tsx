@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useUser } from "@auth0/nextjs-auth0/client"
 import {
   understandRequirement,
   listConnections,
@@ -131,8 +132,10 @@ export function Step1Understand({
   const [configLoading, setConfigLoading] = useState(true)
   const { t } = useLanguage()
   const s = t.workflow.step1
+  const { isLoading: authLoading } = useUser()
 
   useEffect(() => {
+    if (authLoading) return
     function loadConfig() {
       setConfigLoading(true)
       Promise.all([listConnections(), getIndexStatus()])
@@ -157,7 +160,7 @@ export function Step1Understand({
     loadConfig()
     window.addEventListener("focus", loadConfig)
     return () => window.removeEventListener("focus", loadConfig)
-  }, [state.sourceConnectionId, state.repoFullName])
+  }, [state.sourceConnectionId, state.repoFullName, authLoading])
 
   const hasRepo = Boolean(scmConn ?? state.sourceConnectionId)
   const isIndexed = (indexStatus?.total_files ?? 0) > 0

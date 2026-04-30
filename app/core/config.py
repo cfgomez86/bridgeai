@@ -33,14 +33,30 @@ class Settings(BaseSettings):
     INDEXING_MAX_WORKERS: int = 20
 
     # AI Provider
-    AI_PROVIDER: str = "stub"   # stub | anthropic | openai | gemini
-    ANTHROPIC_API_KEY: str = ""
-    OPENAI_API_KEY: str = ""
-    GEMINI_API_KEY: str = ""
-    AI_MODEL: str = ""
-    AI_TIMEOUT_SECONDS: int = 60
+    AI_PROVIDER: str = "stub"   # stub | anthropic | openai | groq | gemini
+    AI_MODEL: str = ""          # universal override — if set, all providers use this model
+    AI_TIMEOUT_SECONDS: int = 120
     AI_MAX_RETRIES: int = 2
-    AI_MAX_OUTPUT_TOKENS: int = 8192
+    AI_MAX_OUTPUT_TOKENS: int = 8192   # Story generation (largest output)
+    AI_PARSE_MAX_TOKENS: int = 512     # Requirement parsing (small JSON)
+    AI_JUDGE_MAX_TOKENS: int = 1024    # Quality judge (5 dims + evidence + alignment)
+
+    # Anthropic
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
+
+    # OpenAI
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o-mini"
+
+    # Groq (OpenAI-compatible)
+    GROQ_API_KEY: str = ""
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # Gemini
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
 
     # Story entity existence validation
     ENTITY_VALIDATION_MODE: str = "warn"  # "warn" | "off"

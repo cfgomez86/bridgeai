@@ -150,7 +150,7 @@ export function ConnectionCard({ connection, onUpdated, boardsMode = false }: Co
             <span style={{ fontSize: "11px", color: "var(--muted)", flexShrink: 0 }}>{connection.default_branch}</span>
           </div>
         )}
-        {isTicket && connection.active_repo && (
+        {isTicket && connection.repo_name && (
           <div style={{
             display: "flex", alignItems: "center", gap: "6px",
             padding: "6px 10px", borderRadius: "var(--radius)",
@@ -159,7 +159,7 @@ export function ConnectionCard({ connection, onUpdated, boardsMode = false }: Co
           }}>
             <Globe size={12} style={{ color: "var(--muted)", flexShrink: 0 }} />
             <span style={{ fontSize: "12px", color: "var(--fg-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-              {connection.active_repo}
+              {connection.repo_name}
             </span>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 1, minWidth: 0, maxWidth: "55%" }}>
               {connection.repo_full_name}

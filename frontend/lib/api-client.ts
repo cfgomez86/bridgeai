@@ -9,21 +9,24 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ""
 // On the server side tokens are obtained directly via getAccessToken().
 // ---------------------------------------------------------------------------
 let _getToken: (() => Promise<string | null>) | null = null
+let _authSettled = false  // true once setTokenGetter is called for the first time
 let _inflightToken: Promise<string | null> | null = null
 const _tokenWaiters: Array<() => void> = []
 
 export function setTokenGetter(fn: (() => Promise<string | null>) | null) {
   _getToken = fn
+  _authSettled = true
   _inflightToken = null
-  if (fn) {
-    for (const cb of _tokenWaiters.splice(0)) cb()
-  }
+  // Notify waiters whether we got a getter or null — both states are actionable.
+  for (const cb of _tokenWaiters.splice(0)) cb()
 }
 
 async function resolveToken(): Promise<string | null> {
   if (typeof window === "undefined") return null
-  if (!_getToken) {
-    // Auth0TokenSync hasn't set the getter yet — wait up to 5s before giving up
+  if (!_getToken && !_authSettled) {
+    // Auth0TokenSync hasn't settled yet — wait up to 5s before giving up.
+    // Once _authSettled is true (even with a null getter), skip this wait
+    // so subsequent calls return immediately instead of re-waiting.
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
         const idx = _tokenWaiters.indexOf(resolve)
@@ -110,7 +113,7 @@ export interface ConnectionResponse {
   id: string
   platform: string
   display_name: string
-  active_repo?: string | null
+  repo_name?: string | null
   repo_full_name?: string | null
   boards_project?: string | null
   default_branch?: string | null
@@ -183,6 +186,7 @@ export interface StoryDetailResponse {
   created_at: string
   generation_time_seconds: number
   is_locked?: boolean
+  generator_model?: string | null
 }
 
 export interface StoryUpdateRequest {

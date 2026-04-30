@@ -102,14 +102,15 @@ class AnthropicAIProvider(AIProvider):
         if _anthropic_lib is None:
             raise ImportError("anthropic package is required")
         self._client = _anthropic_lib.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self._model = settings.AI_MODEL or "claude-haiku-4-5-20251001"
+        self._model = settings.AI_MODEL or settings.ANTHROPIC_MODEL
         self._timeout = settings.AI_TIMEOUT_SECONDS
+        self._max_tokens = settings.AI_PARSE_MAX_TOKENS
 
     def parse_requirement(self, requirement_text: str) -> dict:
         prompt = self._build_prompt(requirement_text)
         response = self._client.messages.create(
             model=self._model,
-            max_tokens=512,
+            max_tokens=self._max_tokens,
             temperature=0,
             timeout=self._timeout,
             messages=[{"role": "user", "content": prompt}],
@@ -119,17 +120,29 @@ class AnthropicAIProvider(AIProvider):
 
 
 class OpenAIAIProvider(AIProvider):
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        default_model: str = "gpt-4o-mini",
+    ) -> None:
         if _openai_lib is None:
             raise ImportError("openai package is required")
-        self._client = _openai_lib.OpenAI(api_key=settings.OPENAI_API_KEY)
-        self._model = settings.AI_MODEL or "gpt-4o-mini"
+        self._client = _openai_lib.OpenAI(
+            api_key=api_key or settings.OPENAI_API_KEY,
+            base_url=base_url,
+        )
+        self._model = settings.AI_MODEL or default_model
         self._timeout = settings.AI_TIMEOUT_SECONDS
+        self._max_tokens = settings.AI_PARSE_MAX_TOKENS
 
     def parse_requirement(self, requirement_text: str) -> dict:
         prompt = self._build_prompt(requirement_text)
         response = self._client.chat.completions.create(
             model=self._model,
+            max_tokens=self._max_tokens,
             temperature=0,
             timeout=self._timeout,
             response_format={"type": "json_object"},
@@ -144,7 +157,8 @@ class GeminiAIProvider(AIProvider):
         if _genai_lib is None:
             raise ImportError("google-genai package is required")
         self._client = _genai_lib.Client(api_key=settings.GEMINI_API_KEY)
-        self._model = settings.AI_MODEL or "gemini-2.0-flash"
+        self._model = settings.AI_MODEL or settings.GEMINI_MODEL
+        self._max_tokens = settings.AI_PARSE_MAX_TOKENS
 
     def parse_requirement(self, requirement_text: str) -> dict:
         prompt = self._build_prompt(requirement_text)
@@ -153,8 +167,9 @@ class GeminiAIProvider(AIProvider):
             contents=prompt,
             config=_genai_types.GenerateContentConfig(
                 temperature=0,
-                max_output_tokens=512,
+                max_output_tokens=self._max_tokens,
                 response_mime_type="application/json",
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
             ),
         )
         return extract_json(response.text)
@@ -166,7 +181,14 @@ def get_ai_provider(settings: Settings) -> AIProvider:
         if key == "anthropic":
             _provider_cache[key] = AnthropicAIProvider(settings)
         elif key == "openai":
-            _provider_cache[key] = OpenAIAIProvider(settings)
+            _provider_cache[key] = OpenAIAIProvider(settings, default_model=settings.OPENAI_MODEL)
+        elif key == "groq":
+            _provider_cache[key] = OpenAIAIProvider(
+                settings,
+                api_key=settings.GROQ_API_KEY,
+                base_url=settings.GROQ_BASE_URL,
+                default_model=settings.GROQ_MODEL,
+            )
         elif key == "gemini":
             _provider_cache[key] = GeminiAIProvider(settings)
         else:

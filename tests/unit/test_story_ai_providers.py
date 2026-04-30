@@ -283,7 +283,8 @@ def test_story_generator_retries_on_failure_then_succeeds():
 
 
 def test_story_generator_raises_after_max_retries():
+    from app.services.ai_story_generator import TransientGenerationError
     provider = _AlwaysFailStoryProvider()
     generator = AIStoryGenerator(provider=provider, settings=_make_settings_with_retries(0))
-    with pytest.raises(ValueError, match="Story generation failed after"):
+    with pytest.raises(TransientGenerationError, match="Story generation failed after"):
         generator.generate(_CONTEXT)

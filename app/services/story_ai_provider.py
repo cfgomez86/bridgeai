@@ -168,6 +168,11 @@ class StoryAIProvider(ABC):
     def generate_story(self, context: dict) -> dict:
         ...
 
+    @property
+    def model_name(self) -> str:
+        """Resolved model identifier persisted with each generated story."""
+        return getattr(self, "_model", None) or "stub"
+
     def _build_prompt_parts(self, context: dict) -> tuple[str, str]:
         """Returns (static_part, dynamic_part) for use with prompt caching.
 
@@ -256,7 +261,7 @@ class AnthropicStoryProvider(StoryAIProvider):
             api_key=settings.ANTHROPIC_API_KEY,
             max_retries=0,
         )
-        self._model = settings.AI_MODEL or "claude-haiku-4-5-20251001"
+        self._model = settings.AI_MODEL or settings.ANTHROPIC_MODEL
         self._timeout = settings.AI_TIMEOUT_SECONDS
         self._max_output_tokens = settings.AI_MAX_OUTPUT_TOKENS
 
@@ -294,11 +299,21 @@ class AnthropicStoryProvider(StoryAIProvider):
 
 
 class OpenAIStoryProvider(StoryAIProvider):
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        default_model: str = "gpt-4o-mini",
+    ) -> None:
         if _openai_lib is None:
             raise ImportError("openai package is required")
-        self._client = _openai_lib.OpenAI(api_key=settings.OPENAI_API_KEY)
-        self._model = settings.AI_MODEL or "gpt-4o-mini"
+        self._client = _openai_lib.OpenAI(
+            api_key=api_key or settings.OPENAI_API_KEY,
+            base_url=base_url,
+        )
+        self._model = settings.AI_MODEL or default_model
         self._timeout = settings.AI_TIMEOUT_SECONDS
         self._max_output_tokens = settings.AI_MAX_OUTPUT_TOKENS
 
@@ -327,7 +342,7 @@ class GeminiStoryProvider(StoryAIProvider):
         if _genai_lib is None:
             raise ImportError("google-genai package is required")
         self._client = _genai_lib.Client(api_key=settings.GEMINI_API_KEY)
-        self._model = settings.AI_MODEL or "gemini-2.0-flash"
+        self._model = settings.AI_MODEL or settings.GEMINI_MODEL
         self._max_output_tokens = settings.AI_MAX_OUTPUT_TOKENS
 
     def generate_story(self, context: dict) -> dict:
@@ -341,6 +356,7 @@ class GeminiStoryProvider(StoryAIProvider):
                 temperature=0,
                 max_output_tokens=self._max_output_tokens,
                 response_mime_type="application/json",
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
             ),
         )
         if response.candidates[0].finish_reason.name == "MAX_TOKENS":
@@ -357,7 +373,14 @@ def get_story_ai_provider(settings: Settings) -> StoryAIProvider:
         if key == "anthropic":
             _provider_cache[key] = AnthropicStoryProvider(settings)
         elif key == "openai":
-            _provider_cache[key] = OpenAIStoryProvider(settings)
+            _provider_cache[key] = OpenAIStoryProvider(settings, default_model=settings.OPENAI_MODEL)
+        elif key == "groq":
+            _provider_cache[key] = OpenAIStoryProvider(
+                settings,
+                api_key=settings.GROQ_API_KEY,
+                base_url=settings.GROQ_BASE_URL,
+                default_model=settings.GROQ_MODEL,
+            )
         elif key == "gemini":
             _provider_cache[key] = GeminiStoryProvider(settings)
         else:

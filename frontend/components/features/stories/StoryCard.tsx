@@ -314,6 +314,15 @@ export function StoryCard({ story, onSaved, onToast }: StoryCardProps) {
             <option value="MEDIUM">MEDIUM</option>
             <option value="HIGH">HIGH</option>
           </select>
+          {story.generator_model && (
+            <span style={{
+              fontSize: "11px",
+              color: "var(--muted)",
+              fontFamily: "var(--font-mono)",
+            }}>
+              · {story.generator_model}
+            </span>
+          )}
         </div>
 
         <div style={divider} />

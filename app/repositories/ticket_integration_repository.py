@@ -157,6 +157,20 @@ class TicketIntegrationRepository:
             q = q.filter(TicketIntegration.created_at >= since)
         return q.count()
 
+    def count_stories_with_tickets_since(self, since: Optional[datetime]) -> int:
+        """Count distinct stories that have at least one successful ticket."""
+        q = (
+            self._db.query(TicketIntegration.story_id)
+            .filter(
+                TicketIntegration.tenant_id == self._tid(),
+                TicketIntegration.status == "CREATED",
+            )
+            .distinct()
+        )
+        if since is not None:
+            q = q.filter(TicketIntegration.created_at >= since)
+        return q.count()
+
     def count_by_provider_since(self, since: Optional[datetime]) -> dict[str, int]:
         q = (
             self._db.query(TicketIntegration.provider, func.count(TicketIntegration.id))

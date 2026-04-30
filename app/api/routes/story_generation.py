@@ -90,6 +90,7 @@ class StoryDetailResponse(BaseModel):
     generation_time_seconds: float
     created_at: str
     is_locked: bool = False
+    generator_model: Optional[str] = None
 
 
 class StoryUpdateRequest(BaseModel):
@@ -239,6 +240,7 @@ def _story_to_detail_response(story, is_locked: bool = False) -> StoryDetailResp
         generation_time_seconds=story.generation_time_seconds,
         created_at=story.created_at.isoformat(),
         is_locked=is_locked,
+        generator_model=getattr(story, "generator_model", None),
     )
 
 
@@ -296,7 +298,7 @@ async def generate_story(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=(
                 "El proveedor de IA no respondió a tiempo tras varios intentos. "
-                "Probá de nuevo en unos segundos o aumentá AI_TIMEOUT_SECONDS si esto persiste."
+                "Probá de nuevo en unos segundos o aumentá AI TIMEOUT si esto persiste."
             ),
         )
     except ValueError as exc:
@@ -490,11 +492,39 @@ async def evaluate_quality(
             requirement_intent=requirement_intent,
             entity_not_found=domain_story.entity_not_found,
         )
+    except (ValueError, KeyError) as exc:
+        # Schema/JSON parsing failures from the judge — modelo devolvió algo
+        # que no podemos interpretar (campos faltantes, JSON inválido, truncado).
+        # No es un fallo del proveedor: es una respuesta inutilizable.
+        logger.warning(
+            "Quality judge returned unparseable response for story %s",
+            story_id, exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "JUDGE_UNPARSEABLE",
+                "message": (
+                    "The quality judge returned a response we could not parse. "
+                    "Try again, increase AI_JUDGE_MAX_TOKENS, or switch judge provider."
+                ),
+                "reason": str(exc)[:200],
+            },
+        )
     except Exception as exc:
-        logger.error("Quality judge failed for story %s: %s", story_id, exc)
+        # Genuine upstream failures: timeouts, 5xx, network errors, rate limits
+        # not handled by the provider's internal retry.
+        logger.error(
+            "Quality judge upstream failure for story %s",
+            story_id, exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Quality evaluation failed due to an upstream provider error.",
+            detail={
+                "code": "JUDGE_UPSTREAM_ERROR",
+                "message": "Quality evaluation failed due to an upstream provider error.",
+                "error_type": type(exc).__name__,
+            },
         )
 
     score_record = StoryQualityRepository(db).upsert(story_id, scores)
