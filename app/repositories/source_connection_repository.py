@@ -10,11 +10,9 @@ from app.domain.source_connection import SourceConnection as DomainSourceConnect
 _SCM_PLATFORMS = {"github", "gitlab", "azure_devops", "bitbucket"}
 from app.models.code_file import CodeFile
 from app.models.connection_audit_log import ConnectionAuditLog
-from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
+from app.models.impact_analysis import ImpactedFile
 from app.models.oauth_state import OAuthState
-from app.models.requirement import Requirement
 from app.models.source_connection import SourceConnection
-from app.models.user_story import UserStory
 
 _OAUTH_STATE_TTL_MINUTES = 10
 
@@ -68,11 +66,19 @@ class SourceConnectionRepository:
             .first()
         )
 
+    def _alive(self):
+        """Filter clause that excludes soft-deleted connections."""
+        return SourceConnection.deleted_at.is_(None)
+
     def find_latest_for_platform(self, platform: str) -> Optional[SourceConnection]:
         """Return the most recently created connection for a platform, any status."""
         return (
             self._db.query(SourceConnection)
-            .filter(SourceConnection.tenant_id == get_tenant_id(), SourceConnection.platform == platform)
+            .filter(
+                SourceConnection.tenant_id == get_tenant_id(),
+                SourceConnection.platform == platform,
+                self._alive(),
+            )
             .order_by(SourceConnection.created_at.desc())
             .first()
         )
@@ -114,7 +120,11 @@ class SourceConnectionRepository:
     def find_by_id(self, connection_id: str) -> Optional[SourceConnection]:
         return (
             self._db.query(SourceConnection)
-            .filter(SourceConnection.id == connection_id, SourceConnection.tenant_id == self._tid())
+            .filter(
+                SourceConnection.id == connection_id,
+                SourceConnection.tenant_id == self._tid(),
+                self._alive(),
+            )
             .first()
         )
 
@@ -125,6 +135,7 @@ class SourceConnectionRepository:
                 SourceConnection.tenant_id == self._tid(),
                 SourceConnection.display_name != "",
                 SourceConnection.access_token != "",
+                self._alive(),
             )
             .order_by(SourceConnection.created_at.desc())
             .all()
@@ -138,6 +149,7 @@ class SourceConnectionRepository:
                 SourceConnection.tenant_id == self._tid(),
                 SourceConnection.platform.in_(_SCM_PLATFORMS),
                 SourceConnection.is_active == True,  # noqa: E712
+                self._alive(),
             )
             .first()
         )
@@ -149,6 +161,7 @@ class SourceConnectionRepository:
                 SourceConnection.tenant_id == self._tid(),
                 SourceConnection.platform == platform,
                 SourceConnection.is_active == True,  # noqa: E712
+                self._alive(),
             )
             .first()
         )
@@ -161,6 +174,7 @@ class SourceConnectionRepository:
             SourceConnection.tenant_id == self._tid(),
             SourceConnection.platform.in_(_SCM_PLATFORMS),
             SourceConnection.is_active == True,  # noqa: E712
+            self._alive(),
         ).update({"is_active": False}, synchronize_session=False)
         conn = self.find_by_id(connection_id)
         if not conn:
@@ -184,6 +198,7 @@ class SourceConnectionRepository:
                 SourceConnection.platform == platform,
                 SourceConnection.boards_project.isnot(None),
                 SourceConnection.boards_project != "",
+                self._alive(),
             )
             .first()
         )
@@ -205,6 +220,7 @@ class SourceConnectionRepository:
             SourceConnection.tenant_id == self._tid(),
             SourceConnection.platform == "jira",
             SourceConnection.is_active == True,  # noqa: E712
+            self._alive(),
         ).update({"is_active": False}, synchronize_session=False)
         conn = self.find_by_id(connection_id)
         if not conn:
@@ -223,13 +239,17 @@ class SourceConnectionRepository:
         conn = self.find_by_id(connection_id)
         if not conn:
             return False
-        # Delete in FK-safe order: children before parents
-        self._db.query(UserStory).filter(UserStory.source_connection_id == connection_id).delete(synchronize_session=False)
-        self._db.query(ImpactedFile).filter(ImpactedFile.source_connection_id == connection_id).delete(synchronize_session=False)
-        self._db.query(ImpactAnalysis).filter(ImpactAnalysis.source_connection_id == connection_id).delete(synchronize_session=False)
-        self._db.query(Requirement).filter(Requirement.source_connection_id == connection_id).delete(synchronize_session=False)
-        self._db.query(CodeFile).filter(CodeFile.source_connection_id == connection_id).delete(synchronize_session=False)
-        self._db.delete(conn)
+        # Wipe the code index so the next repo starts clean
+        self._db.query(ImpactedFile).filter(
+            ImpactedFile.source_connection_id == connection_id
+        ).delete(synchronize_session=False)
+        self._db.query(CodeFile).filter(
+            CodeFile.source_connection_id == connection_id
+        ).delete(synchronize_session=False)
+        # Soft-delete: keep the row so stories, requirements, analyses and
+        # ticket_integrations retain their source_connection_id and stay fully
+        # traceable (which repo they came from, when, etc.).
+        conn.deleted_at = datetime.now(timezone.utc)
         self._db.commit()
         return True
 

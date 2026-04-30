@@ -1,7 +1,7 @@
 """Integration tests for story quality endpoints."""
 import json
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +13,7 @@ from app.core.config import Settings, get_settings
 from app.database.session import Base, get_db
 from app.main import create_app
 from app.models.user_story import UserStory
-from app.services.story_quality_judge import StubQualityJudge, get_quality_judge
+from app.services.story_quality_judge import StoryQualityJudge, StubQualityJudge, get_quality_judge
 from tests.integration.auth_helpers import (
     TEST_CONNECTION_ID,
     TEST_TENANT_ID,
@@ -135,3 +135,46 @@ def test_get_quality_after_evaluate_has_judge(quality_client):
 def test_get_quality_not_found_story(quality_client):
     response = quality_client.get("/api/v1/stories/nonexistent-story-yyy/quality")
     assert response.status_code == 404
+
+
+class _RaisingJudge(StoryQualityJudge):
+    """Test-only judge that raises a configured exception on every call."""
+
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    def evaluate(self, story, requirement_text=None, requirement_intent=None,
+                 entity_not_found=False):
+        raise self._exc
+
+
+def test_evaluate_returns_422_when_judge_response_unparseable(quality_client):
+    """ValueError/KeyError from the judge → 422 with JUDGE_UNPARSEABLE code."""
+    with patch(
+        "app.api.routes.story_generation.get_quality_judge",
+        return_value=_RaisingJudge(ValueError("Judge response missing fields: {'completeness'}")),
+    ):
+        response = quality_client.post(
+            f"/api/v1/stories/{_STORY_ID}/quality/evaluate",
+            headers={"Content-Type": "application/json"},
+        )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["code"] == "JUDGE_UNPARSEABLE"
+    assert "missing fields" in detail["reason"]
+
+
+def test_evaluate_returns_502_on_genuine_upstream_error(quality_client):
+    """Other exceptions (timeouts, 5xx, network) → 502 with JUDGE_UPSTREAM_ERROR."""
+    with patch(
+        "app.api.routes.story_generation.get_quality_judge",
+        return_value=_RaisingJudge(RuntimeError("503 Service Unavailable")),
+    ):
+        response = quality_client.post(
+            f"/api/v1/stories/{_STORY_ID}/quality/evaluate",
+            headers={"Content-Type": "application/json"},
+        )
+    assert response.status_code == 502
+    detail = response.json()["detail"]
+    assert detail["code"] == "JUDGE_UPSTREAM_ERROR"
+    assert detail["error_type"] == "RuntimeError"

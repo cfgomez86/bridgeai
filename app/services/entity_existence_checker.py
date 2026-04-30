@@ -25,6 +25,15 @@ _LANGUAGE_EQUIVALENCES = {
     "tarea": "task",
     "proyecto": "project",
     "equipo": "team",
+    "historia": "story",
+    "requerimiento": "requirement",
+    "tiquet": "ticket",
+    "tique": "ticket",
+    "boleto": "ticket",
+    "formulario": "form",
+    "pantalla": "screen",
+    "página": "page",
+    "pagina": "page",
 }
 
 _GENERIC_ENTITIES = {
@@ -32,6 +41,15 @@ _GENERIC_ENTITIES = {
     "info", "module", "modulo", "módulo", "app", "application", "aplicacion",
     "code", "codigo", "código", "function", "funcion", "función",
     "method", "metodo", "método", "class", "clase", "object", "objeto",
+    # Meta-domain terms that describe the app itself (BridgeAI surfaces stories,
+    # requirements, tickets, forms and screens as first-class concepts) — they
+    # are not entities the indexed business code is expected to expose as classes.
+    "story", "user_story", "userstory", "historia",
+    "requirement", "requerimiento",
+    "ticket", "tiquet", "tique", "boleto",
+    "form", "formulario", "screen", "pantalla", "page", "página", "pagina",
+    "detail", "detalle", "details", "detalles",
+    "settings", "ajustes", "preferences", "preferencias",
 }
 
 
@@ -109,12 +127,15 @@ class EntityExistenceChecker:
     def _cls_matches(cls: str, variants: set[str]) -> bool:
         cls_lower = cls.lower()
         for v in variants:
-            if cls_lower == v:
+            v_norm = v.replace("_", "")
+            if not v_norm:
+                continue
+            if cls_lower == v_norm:
                 return True
             if (
-                cls_lower.startswith(v)
-                and len(cls) > len(v)
-                and cls[len(v)].isupper()
+                cls_lower.startswith(v_norm)
+                and len(cls) > len(v_norm)
+                and cls[len(v_norm)].isupper()
             ):
                 return True
         return False

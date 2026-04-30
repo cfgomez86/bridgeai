@@ -77,8 +77,9 @@ class DashboardService:
         )
         stories_count = self._story_repo.count_since(since)
         tickets_count = self._ticket_repo.count_successful_since(since)
+        stories_with_tickets = self._ticket_repo.count_stories_with_tickets_since(since)
         conversion_rate = (
-            tickets_count / stories_count if stories_count > 0 else None
+            stories_with_tickets / stories_count if stories_count > 0 else None
         )
         return DashboardStats(
             window_days=self._window_days,

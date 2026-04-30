@@ -75,6 +75,7 @@ class UserStoryRepository:
             created_at=model.created_at,
             generation_time_seconds=model.generation_time_seconds,
             entity_not_found=bool(model.entity_not_found),
+            generator_model=getattr(model, "generator_model", None),
         )
 
     def find_domain_by_id(self, story_id: str) -> Optional[DomainUserStory]:

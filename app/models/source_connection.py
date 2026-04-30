@@ -25,3 +25,4 @@ class SourceConnection(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     oauth_state: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -2,6 +2,7 @@
 
 import logging
 import statistics
+import time
 from abc import ABC, abstractmethod
 
 from app.core.config import Settings, get_settings
@@ -313,9 +314,10 @@ class AnthropicQualityJudge(StoryQualityJudge):
         if _anthropic_lib is None:
             raise ImportError("anthropic package is required")
         self._client = _anthropic_lib.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self._model = settings.AI_JUDGE_MODEL or settings.AI_MODEL or "claude-haiku-4-5-20251001"
+        self._model = settings.AI_JUDGE_MODEL or settings.ANTHROPIC_MODEL
         self._n_samples = max(1, int(settings.AI_JUDGE_SAMPLES))
         self._temperature = float(settings.AI_JUDGE_TEMPERATURE)
+        self._max_tokens = settings.AI_JUDGE_MAX_TOKENS
 
     def evaluate(
         self,
@@ -329,7 +331,7 @@ class AnthropicQualityJudge(StoryQualityJudge):
         def call_once() -> str:
             response = self._client.messages.create(
                 model=self._model,
-                max_tokens=512,
+                max_tokens=self._max_tokens,
                 temperature=self._temperature,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -342,13 +344,24 @@ class AnthropicQualityJudge(StoryQualityJudge):
 
 
 class OpenAIQualityJudge(StoryQualityJudge):
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        default_model: str = "gpt-4o-mini",
+    ) -> None:
         if _openai_lib is None:
             raise ImportError("openai package is required")
-        self._client = _openai_lib.OpenAI(api_key=settings.OPENAI_API_KEY)
-        self._model = settings.AI_JUDGE_MODEL or settings.AI_MODEL or "gpt-4o-mini"
+        self._client = _openai_lib.OpenAI(
+            api_key=api_key or settings.OPENAI_API_KEY,
+            base_url=base_url,
+        )
+        self._model = settings.AI_JUDGE_MODEL or default_model
         self._n_samples = max(1, int(settings.AI_JUDGE_SAMPLES))
         self._temperature = float(settings.AI_JUDGE_TEMPERATURE)
+        self._max_tokens = settings.AI_JUDGE_MAX_TOKENS
 
     def evaluate(
         self,
@@ -362,7 +375,7 @@ class OpenAIQualityJudge(StoryQualityJudge):
         def call_once() -> str:
             response = self._client.chat.completions.create(
                 model=self._model,
-                max_tokens=512,
+                max_tokens=self._max_tokens,
                 temperature=self._temperature,
                 response_format={"type": "json_object"},
                 messages=[{"role": "user", "content": prompt}],
@@ -380,9 +393,10 @@ class GeminiQualityJudge(StoryQualityJudge):
         if _genai_lib is None:
             raise ImportError("google-genai package is required")
         self._client = _genai_lib.Client(api_key=settings.GEMINI_API_KEY)
-        self._model = settings.AI_JUDGE_MODEL or settings.AI_MODEL or "gemini-2.0-flash"
+        self._model = settings.AI_JUDGE_MODEL or settings.GEMINI_MODEL
         self._n_samples = max(1, int(settings.AI_JUDGE_SAMPLES))
         self._temperature = float(settings.AI_JUDGE_TEMPERATURE)
+        self._max_tokens = settings.AI_JUDGE_MAX_TOKENS
 
     def evaluate(
         self,
@@ -392,18 +406,53 @@ class GeminiQualityJudge(StoryQualityJudge):
         entity_not_found: bool = False,
     ) -> dict:
         prompt = _build_prompt(story, requirement_text, requirement_intent, entity_not_found)
+        _max_retries = 3
+        _retry_delays = [5, 10, 20]
 
         def call_once() -> str:
-            response = self._client.models.generate_content(
-                model=self._model,
-                contents=prompt,
-                config=_genai_types.GenerateContentConfig(
-                    temperature=self._temperature,
-                    max_output_tokens=512,
-                    response_mime_type="application/json",
-                ),
-            )
-            return response.text
+            last_exc: Exception | None = None
+            for attempt in range(_max_retries):
+                try:
+                    response = self._client.models.generate_content(
+                        model=self._model,
+                        contents=prompt,
+                        config=_genai_types.GenerateContentConfig(
+                            temperature=self._temperature,
+                            max_output_tokens=self._max_tokens,
+                            response_mime_type="application/json",
+                            thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+                        ),
+                    )
+                    # Detect MAX_TOKENS / SAFETY truncations explicitly. Cuando el
+                    # finish_reason no es STOP/MODEL_LENGTH-OK, response.text suele
+                    # venir vacío y el SDK lanza una excepción opaca al accederlo.
+                    finish_reason = None
+                    candidates = getattr(response, "candidates", None) or []
+                    if candidates:
+                        finish_reason = getattr(candidates[0], "finish_reason", None)
+                    text = getattr(response, "text", None)
+                    if not text:
+                        reason = str(finish_reason) if finish_reason else "unknown"
+                        raise ValueError(
+                            f"Gemini judge returned empty text (finish_reason={reason}); "
+                            f"raise AI_JUDGE_MAX_TOKENS (current={self._max_tokens})."
+                        )
+                    return text
+                except ValueError:
+                    raise
+                except Exception as exc:
+                    code = str(exc)[:3]
+                    if code in ("429", "503") and attempt < _max_retries - 1:
+                        wait = _retry_delays[attempt]
+                        logger.warning(
+                            "Gemini judge transient error %s (attempt %d/%d), retrying in %ds",
+                            code, attempt + 1, _max_retries, wait,
+                        )
+                        time.sleep(wait)
+                        last_exc = exc
+                        continue
+                    raise
+            raise last_exc  # type: ignore[misc]
 
         samples = _collect_samples(call_once, self._n_samples)
         scores = _aggregate_samples(samples)
@@ -420,7 +469,14 @@ def get_quality_judge(settings: Settings = None) -> StoryQualityJudge:
     if provider == "anthropic":
         return AnthropicQualityJudge(settings)
     if provider == "openai":
-        return OpenAIQualityJudge(settings)
+        return OpenAIQualityJudge(settings, default_model=settings.OPENAI_MODEL)
+    if provider == "groq":
+        return OpenAIQualityJudge(
+            settings,
+            api_key=settings.GROQ_API_KEY,
+            base_url=settings.GROQ_BASE_URL,
+            default_model=settings.GROQ_MODEL,
+        )
     if provider == "gemini":
         return GeminiQualityJudge(settings)
     return StubQualityJudge()

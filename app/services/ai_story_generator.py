@@ -91,6 +91,10 @@ class AIStoryGenerator:
         self._max_retries = (settings or get_settings()).AI_MAX_RETRIES
         self._logger = get_logger(__name__)
 
+    @property
+    def model_name(self) -> str:
+        return self._provider.model_name
+
     def generate(self, context: dict) -> dict:
         last_error: Exception | None = None
         attempt_context = dict(context)

@@ -500,6 +500,28 @@ def test_entity_found_proceeds_normally():
     assert story.story_id
 
 
+def test_entity_not_found_proceeds_for_creation_verb_with_enhancement_type():
+    """Bypass debe activarse con verbo de creación aunque feature_type sea 'enhancement'.
+
+    Caso real: 'quiero agregar un campo de detalles técnicos…' la IA suele clasificar
+    action='add'/'agregar' y feature_type='enhancement'. Antes el bypass exigía
+    feature_type=='feature' y bloqueaba historias válidas.
+    """
+    engine = make_engine()
+    checker = MagicMock(spec=EntityExistenceChecker)
+    checker.check.return_value = EntityCheckResult(
+        entity="DetalleTecnico", found=False, matched_files=[], suggestions=[],
+    )
+    svc, db = make_service_with_checker(engine, checker)
+    insert_requirement_custom(db, action="agregar", feature_type="enhancement")
+    insert_analysis(db)
+    story, entity_not_found = svc.generate(
+        "req-1", "ana-1", "proj", TEST_CONNECTION_ID
+    )
+    assert entity_not_found is True
+    assert story.story_id
+
+
 def test_entity_validation_mode_off_skips_checker():
     engine = make_engine()
     checker = MagicMock(spec=EntityExistenceChecker)
