@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from app.core.auth0_auth import get_current_user
+from app.api.dependencies import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -76,7 +76,7 @@ async def understand_requirement(
         logger.error("POST /understand-requirement failed request_id=%s error=%s", request_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Understanding failed: {exc}",
+            detail="Requirement understanding failed due to an internal error.",
         )
     logger.info(
         "POST /understand-requirement completed request_id=%s id=%s complexity=%s duration=%.3fs",

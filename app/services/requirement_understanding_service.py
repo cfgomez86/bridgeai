@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.domain.requirement_understanding import RequirementUnderstanding
-from app.models.requirement import Requirement
 from app.repositories.requirement_repository import RequirementRepository
 from app.services.ai_requirement_parser import AIRequirementParser
 
@@ -75,24 +74,23 @@ class RequirementUnderstandingService:
         requirement_id = str(uuid.uuid4())
         created_at = datetime.now(timezone.utc)
 
-        orm_model = Requirement(
-            id=requirement_id,
-            requirement_text=requirement_text,
-            requirement_text_hash=text_hash,
-            project_id=project_id,
-            intent=parsed["intent"],
-            action=parsed["action"],
-            entity=parsed["entity"],
-            feature_type=parsed["feature_type"],
-            priority=parsed["priority"],
-            business_domain=parsed["business_domain"],
-            technical_scope=parsed["technical_scope"],
-            estimated_complexity=parsed["estimated_complexity"],
-            keywords=json.dumps(parsed["keywords"]),
-            processing_time_seconds=processing_time,
-            created_at=created_at,
-        )
-        self._repo.save(orm_model, source_connection_id)
+        self._repo.save({
+            "id": requirement_id,
+            "requirement_text": requirement_text,
+            "requirement_text_hash": text_hash,
+            "project_id": project_id,
+            "intent": parsed["intent"],
+            "action": parsed["action"],
+            "entity": parsed["entity"],
+            "feature_type": parsed["feature_type"],
+            "priority": parsed["priority"],
+            "business_domain": parsed["business_domain"],
+            "technical_scope": parsed["technical_scope"],
+            "estimated_complexity": parsed["estimated_complexity"],
+            "keywords": json.dumps(parsed["keywords"]),
+            "processing_time_seconds": processing_time,
+            "created_at": created_at,
+        }, source_connection_id)
         self._logger.info("Requirement persisted with id=%s in %.3fs", requirement_id, processing_time)
 
         return RequirementUnderstanding(

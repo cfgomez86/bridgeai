@@ -9,6 +9,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.domain.ticket_integration import TicketResult
 from app.domain.user_story import UserStory
+from app.services.scm_providers.base import validate_instance_url
 from app.services.ticket_providers.base import TicketProvider
 
 logger = get_logger(__name__)
@@ -41,6 +42,10 @@ class JiraTicketProvider(TicketProvider):
         self._oauth_token = access_token
         self._oauth_base_url = base_url.rstrip("/") if base_url else ""
         self._site_url = site_url.rstrip("/") if site_url else ""
+        if self._oauth_base_url:
+            validate_instance_url(self._oauth_base_url)
+        if self._site_url:
+            validate_instance_url(self._site_url)
         self._issue_type_map = self._parse_issue_type_map()
         self._client = httpx.AsyncClient(timeout=self._settings.JIRA_REQUEST_TIMEOUT_SECONDS)
 

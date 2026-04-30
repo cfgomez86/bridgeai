@@ -5,7 +5,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database.session import Base
-from app.models.user_story import UserStory
 from app.repositories.user_story_repository import UserStoryRepository
 from tests.unit.conftest import TEST_CONNECTION_ID, TEST_CONNECTION_ID_B
 
@@ -26,23 +25,23 @@ def make_story(
     requirement_id: str = "req-1",
     analysis_id: str = "ana-1",
     project_id: str = "proj-a",
-) -> UserStory:
-    return UserStory(
-        id=story_id,
-        requirement_id=requirement_id,
-        impact_analysis_id=analysis_id,
-        project_id=project_id,
-        title="Test Story",
-        story_description="As a user, I want to test so that coverage is met.",
-        acceptance_criteria='["Criterion 1"]',
-        subtasks='{"frontend": [], "backend": [{"title": "Task 1", "description": "Do the work."}], "configuration": []}',
-        definition_of_done='["Done 1"]',
-        risk_notes='[]',
-        story_points=3,
-        risk_level="LOW",
-        generation_time_seconds=0.5,
-        created_at=datetime.now(timezone.utc),
-    )
+) -> dict:
+    return {
+        "id": story_id,
+        "requirement_id": requirement_id,
+        "impact_analysis_id": analysis_id,
+        "project_id": project_id,
+        "title": "Test Story",
+        "story_description": "As a user, I want to test so that coverage is met.",
+        "acceptance_criteria": '["Criterion 1"]',
+        "subtasks": '{"frontend": [], "backend": [{"title": "Task 1", "description": "Do the work."}], "configuration": []}',
+        "definition_of_done": '["Done 1"]',
+        "risk_notes": '[]',
+        "story_points": 3,
+        "risk_level": "LOW",
+        "generation_time_seconds": 0.5,
+        "created_at": datetime.now(timezone.utc),
+    }
 
 
 def test_save_inserts_record():

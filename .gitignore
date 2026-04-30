@@ -30,6 +30,9 @@ share/python-wheels/
 *.egg-info/
 .eggs/
 
+# Evaluation reports
+eval_report.json
+
 # Testing
 .pytest_cache/
 .coverage

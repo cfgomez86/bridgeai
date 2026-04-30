@@ -15,3 +15,13 @@ def get_tenant_id() -> str:
             "explicitly from a trusted source such as a stored OAuth state record."
         )
     return tid
+
+
+def get_user_id() -> str:
+    uid = current_user_id.get()
+    if not uid:
+        raise RuntimeError(
+            "User context not set. "
+            "Authenticated routes must use Depends(get_current_user)."
+        )
+    return uid

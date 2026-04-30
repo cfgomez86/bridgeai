@@ -99,8 +99,9 @@ def test_generate_returns_user_story():
     svc, db = make_service(engine)
     insert_requirement(db)
     insert_analysis(db)
-    result = svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
+    result, entity_not_found = svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
     assert isinstance(result, UserStory)
+    assert entity_not_found is False
 
 
 def test_generate_populates_all_fields():
@@ -108,7 +109,7 @@ def test_generate_populates_all_fields():
     svc, db = make_service(engine)
     insert_requirement(db)
     insert_analysis(db)
-    result = svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
+    result, _ = svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
     assert result.story_id
     assert result.title
     assert result.story_description
@@ -124,7 +125,7 @@ def test_generate_persists_story():
     svc, db = make_service(engine)
     insert_requirement(db)
     insert_analysis(db)
-    result = svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
+    result, _ = svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
     story_repo = UserStoryRepository(db)
     persisted = story_repo.find_by_id(result.story_id)
     assert persisted is not None
@@ -137,12 +138,12 @@ def test_cache_hit_returns_without_calling_ai():
     svc, db = make_service(engine)
     insert_requirement(db)
     insert_analysis(db)
-    first = svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
+    first, _ = svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
 
     mock_provider = MagicMock(spec=StubStoryProvider)
     svc._generator._provider = mock_provider
 
-    second = svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
+    second, _ = svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
     mock_provider.generate_story.assert_not_called()
     assert second.story_id == first.story_id
 
@@ -375,3 +376,139 @@ def test_build_whitelist_prioritizes_impacted_and_siblings():
     assert "src/NotificationService.java" in result
     assert "src/OtherService.java" in result
     assert len(result) == 3
+
+
+# ---------------------------------------------------------------------------
+# Entity existence validation
+# ---------------------------------------------------------------------------
+
+from app.services.entity_existence_checker import (
+    EntityCheckResult,
+    EntityExistenceChecker,
+    EntityNotFoundError,
+)
+
+
+def make_service_with_checker(engine, checker, validation_mode: str = "warn"):
+    db = sessionmaker(bind=engine)()
+    from app.core.config import Settings
+    settings = Settings(
+        DATABASE_URL="sqlite:///:memory:",
+        AI_MAX_RETRIES=2,
+        ENTITY_VALIDATION_MODE=validation_mode,
+    )
+    return StoryGenerationService(
+        ai_generator=AIStoryGenerator(StubStoryProvider(), settings),
+        requirement_repo=RequirementRepository(db),
+        impact_repo=ImpactAnalysisRepository(db),
+        story_repo=UserStoryRepository(db),
+        points_calculator=StoryPointsCalculator(),
+        code_file_repo=CodeFileRepository(db),
+        settings=settings,
+        entity_checker=checker,
+    ), db
+
+
+def insert_requirement_custom(
+    db, *, action: str = "update", feature_type: str = "bugfix", entity: str = "Product",
+):
+    text = "Some requirement"
+    req = Requirement(
+        id="req-1",
+        tenant_id=TEST_TENANT_ID,
+        source_connection_id=TEST_CONNECTION_ID,
+        requirement_text=text,
+        requirement_text_hash=hashlib.sha256(text.encode()).hexdigest(),
+        project_id="proj",
+        intent="x",
+        action=action,
+        entity=entity,
+        feature_type=feature_type,
+        priority="medium",
+        business_domain="user_management",
+        technical_scope="backend",
+        estimated_complexity="MEDIUM",
+        keywords='[]',
+        processing_time_seconds=1.0,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(req)
+    db.commit()
+
+
+def test_entity_not_found_blocks_without_force():
+    engine = make_engine()
+    checker = MagicMock(spec=EntityExistenceChecker)
+    checker.check.return_value = EntityCheckResult(
+        entity="Product", found=False, matched_files=[],
+        suggestions=["ProductModel"],
+    )
+    svc, db = make_service_with_checker(engine, checker)
+    insert_requirement_custom(db, action="update", feature_type="bugfix")
+    insert_analysis(db)
+    with pytest.raises(EntityNotFoundError) as exc_info:
+        svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
+    assert exc_info.value.entity == "Product"
+    assert exc_info.value.suggestions == ["ProductModel"]
+
+
+def test_entity_not_found_proceeds_with_force():
+    engine = make_engine()
+    checker = MagicMock(spec=EntityExistenceChecker)
+    checker.check.return_value = EntityCheckResult(
+        entity="Product", found=False, matched_files=[], suggestions=[],
+    )
+    svc, db = make_service_with_checker(engine, checker)
+    insert_requirement_custom(db, action="update", feature_type="bugfix")
+    insert_analysis(db)
+    story, entity_not_found = svc.generate(
+        "req-1", "ana-1", "proj", TEST_CONNECTION_ID, force=True
+    )
+    assert entity_not_found is True
+    assert story.story_id
+
+
+def test_entity_not_found_proceeds_for_intentional_creation():
+    engine = make_engine()
+    checker = MagicMock(spec=EntityExistenceChecker)
+    checker.check.return_value = EntityCheckResult(
+        entity="Product", found=False, matched_files=[], suggestions=[],
+    )
+    svc, db = make_service_with_checker(engine, checker)
+    insert_requirement_custom(db, action="create", feature_type="feature")
+    insert_analysis(db)
+    story, entity_not_found = svc.generate(
+        "req-1", "ana-1", "proj", TEST_CONNECTION_ID
+    )
+    assert entity_not_found is True
+    assert story.story_id
+
+
+def test_entity_found_proceeds_normally():
+    engine = make_engine()
+    checker = MagicMock(spec=EntityExistenceChecker)
+    checker.check.return_value = EntityCheckResult(
+        entity="Product", found=True, matched_files=["a.py"], suggestions=[],
+    )
+    svc, db = make_service_with_checker(engine, checker)
+    insert_requirement_custom(db, action="update", feature_type="bugfix")
+    insert_analysis(db)
+    story, entity_not_found = svc.generate(
+        "req-1", "ana-1", "proj", TEST_CONNECTION_ID
+    )
+    assert entity_not_found is False
+    assert story.story_id
+
+
+def test_entity_validation_mode_off_skips_checker():
+    engine = make_engine()
+    checker = MagicMock(spec=EntityExistenceChecker)
+    svc, db = make_service_with_checker(engine, checker, validation_mode="off")
+    insert_requirement_custom(db, action="update", feature_type="bugfix")
+    insert_analysis(db)
+    story, entity_not_found = svc.generate(
+        "req-1", "ana-1", "proj", TEST_CONNECTION_ID
+    )
+    checker.check.assert_not_called()
+    assert entity_not_found is False
+    assert story.story_id

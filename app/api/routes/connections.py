@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.core.auth0_auth import get_current_user
+from app.api.dependencies import get_current_user
 from app.core.config import Settings, get_settings
 from app.database.session import get_db
 from app.models.user import User
@@ -190,8 +190,11 @@ def connect_pat(
             boards_project=conn.boards_project,
             auth_method=conn.auth_method,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="PAT validation failed — check the token, URL, and try again.",
+        )
     except Exception as exc:
         logger.error("PAT connection failed platform=%s error=%s", body.platform, exc)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="PAT validation failed — check the token and try again.")

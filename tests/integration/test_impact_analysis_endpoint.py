@@ -14,6 +14,7 @@ from app.database.session import Base, get_db
 from app.api.routes.impact_analysis import get_impact_service
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
+from app.core.context import get_tenant_id
 from app.services.dependency_analyzer import DependencyAnalyzer
 from app.services.impact_analysis_service import ImpactAnalysisService
 from app.api.routes.indexing import get_indexing_service
@@ -46,7 +47,7 @@ def make_client(project_root: str) -> TestClient:
             CodeFileRepository(db),
             ImpactAnalysisRepository(db),
             project_root,
-            DependencyAnalyzer(),
+            DependencyAnalyzer(get_tenant_id()),
         )
 
     app = apply_mock_auth(create_app())
@@ -84,7 +85,7 @@ def make_client_with_indexing(project_root: str) -> TestClient:
             CodeFileRepository(db),
             ImpactAnalysisRepository(db),
             project_root,
-            DependencyAnalyzer(),
+            DependencyAnalyzer(get_tenant_id()),
         )
 
     def override_index() -> CodeIndexingService:

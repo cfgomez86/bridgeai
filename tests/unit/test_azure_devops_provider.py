@@ -463,3 +463,36 @@ class TestHealthCheckWithAzure:
             result = await service.health_check()
 
         assert result["azure_devops"] == "healthy"
+
+
+# ---------------------------------------------------------------------------
+# S-2: SSRF validation on org_url
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("bad_url", [
+    "http://169.254.169.254/latest/meta-data",
+    "http://127.0.0.1/azure",
+    "http://10.0.0.1/azure",
+    "http://192.168.1.1/azure",
+    "ftp://evil.com",
+])
+def test_azure_provider_rejects_ssrf_org_url(bad_url):
+    from app.services.ticket_providers.azure_devops import AzureDevOpsTicketProvider
+    with pytest.raises(ValueError):
+        AzureDevOpsTicketProvider(
+            make_settings(),
+            access_token="tok",
+            org_url=bad_url,
+            project="MyProject",
+        )
+
+
+def test_azure_provider_accepts_valid_org_url():
+    from app.services.ticket_providers.azure_devops import AzureDevOpsTicketProvider
+    provider = AzureDevOpsTicketProvider(
+        make_settings(),
+        access_token="tok",
+        org_url="https://dev.azure.com/myorg",
+        project="MyProject",
+    )
+    assert provider is not None

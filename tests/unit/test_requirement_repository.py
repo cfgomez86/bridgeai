@@ -6,7 +6,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database.session import Base
-from app.models.requirement import Requirement
 from app.repositories.requirement_repository import RequirementRepository
 from tests.unit.conftest import TEST_CONNECTION_ID, TEST_CONNECTION_ID_B
 
@@ -27,24 +26,24 @@ def make_requirement(
     req_id: str = "test-id-1",
     project_id: str = "proj-a",
     text: str = "Add user registration",
-) -> Requirement:
-    return Requirement(
-        id=req_id,
-        requirement_text=text,
-        requirement_text_hash=hashlib.sha256(text.encode()).hexdigest(),
-        project_id=project_id,
-        intent="create_user_account",
-        action="create",
-        entity="user",
-        feature_type="feature",
-        priority="medium",
-        business_domain="user_management",
-        technical_scope="backend",
-        estimated_complexity="MEDIUM",
-        keywords='["user", "registration"]',
-        processing_time_seconds=0.5,
-        created_at=datetime.now(timezone.utc),
-    )
+) -> dict:
+    return {
+        "id": req_id,
+        "requirement_text": text,
+        "requirement_text_hash": hashlib.sha256(text.encode()).hexdigest(),
+        "project_id": project_id,
+        "intent": "create_user_account",
+        "action": "create",
+        "entity": "user",
+        "feature_type": "feature",
+        "priority": "medium",
+        "business_domain": "user_management",
+        "technical_scope": "backend",
+        "estimated_complexity": "MEDIUM",
+        "keywords": '["user", "registration"]',
+        "processing_time_seconds": 0.5,
+        "created_at": datetime.now(timezone.utc),
+    }
 
 
 def test_save_inserts_record():

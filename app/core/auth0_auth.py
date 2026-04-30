@@ -1,28 +1,25 @@
-import time
+import logging
 
-import httpx
-from fastapi import Depends, HTTPException, Request, status
-from jose import JWTError, jwt
-from sqlalchemy.orm import Session
+import jwt
+from fastapi import HTTPException, Request, status
+from jwt import PyJWKClient
 
 from app.core.config import get_settings
-from app.core.context import current_tenant_id, current_user_id
-from app.database.session import get_db
-from app.models.user import User
 
-_jwks_cache: dict = {}
-_jwks_fetched_at: float = 0.0
-_JWKS_TTL_SECONDS = 3600
+logger = logging.getLogger(__name__)
+
+_jwks_client: PyJWKClient | None = None
 
 
-def _get_jwks(domain: str) -> dict:
-    global _jwks_cache, _jwks_fetched_at
-    if time.time() - _jwks_fetched_at > _JWKS_TTL_SECONDS:
-        resp = httpx.get(f"https://{domain}/.well-known/jwks.json", timeout=10)
-        resp.raise_for_status()
-        _jwks_cache = resp.json()
-        _jwks_fetched_at = time.time()
-    return _jwks_cache
+def _get_jwks_client(domain: str) -> PyJWKClient:
+    global _jwks_client
+    if _jwks_client is None:
+        _jwks_client = PyJWKClient(
+            f"https://{domain}/.well-known/jwks.json",
+            cache_keys=True,
+            max_cached_keys=16,
+        )
+    return _jwks_client
 
 
 def _extract_bearer_token(request: Request) -> str:
@@ -36,47 +33,30 @@ def _extract_bearer_token(request: Request) -> str:
 
 
 def verify_auth0_jwt(token: str) -> dict:
+    """Validate an Auth0 JWT and return its payload.
+
+    PyJWKClient fetches JWKS on first call, caches keys, and automatically
+    refreshes when the token's kid is not in the cache (key rotation).
+    """
     settings = get_settings()
     try:
-        jwks = _get_jwks(settings.AUTH0_DOMAIN)
-        payload = jwt.decode(
+        client = _get_jwks_client(settings.AUTH0_DOMAIN)
+        signing_key = client.get_signing_key_from_jwt(token)
+        return jwt.decode(
             token,
-            jwks,
+            signing_key.key,
             algorithms=["RS256"],
             audience=settings.AUTH0_AUDIENCE,
             issuer=f"https://{settings.AUTH0_DOMAIN}/",
         )
-        return payload
-    except JWTError as exc:
+    except jwt.exceptions.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid or expired token: {exc}",
+            detail="Invalid or expired token.",
         )
-    except Exception as exc:
+    except Exception:
+        logger.exception("Unexpected error during token verification")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Token verification failed: {exc}",
+            detail="Token verification failed.",
         )
-
-
-async def get_current_user(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> User:
-    token = _extract_bearer_token(request)
-    payload = verify_auth0_jwt(token)
-
-    auth0_user_id = payload.get("sub")
-    if not auth0_user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
-
-    user = db.query(User).filter_by(auth0_user_id=auth0_user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User not provisioned. Call POST /api/v1/auth/provision first.",
-        )
-
-    current_tenant_id.set(user.tenant_id)
-    current_user_id.set(user.id)
-    return user

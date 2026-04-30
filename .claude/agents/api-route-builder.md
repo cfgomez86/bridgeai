@@ -34,11 +34,15 @@ You are the API Route Builder for BridgeAI. You produce a complete vertical slic
 - Return domain objects, never SQLAlchemy models or dicts.
 - Log start/end with `get_logger(__name__)`.
 - AI calls via `app/services/ai_provider.py`, never `import anthropic` directly.
+- **MUST NOT import from `app.models.*`**. Pass dicts to repositories; receive domain objects back. ORM classes belong only in `repositories/` and `models/`.
+- **Never call `get_tenant_id()` or `get_user_id()` in `__init__`**. Context is request-scoped — call these lazily inside the method that needs them.
 
 ### Repository (`app/repositories/<name>_repository.py`)
 - Must implement `_tid()` calling `get_tenant_id()` from `app.core.context`.
 - Use `_base_query(source_connection_id=None)` pattern to scope by tenant (and optionally connection).
 - Accept `source_connection_id: Optional[str] = None` in any method that touches repo-scoped data.
+- **`save()` and `save_batch()` accept `dict` / `list[dict]`, never ORM instances.** Construct the ORM object internally: `Model(**data, tenant_id=self._tid(), source_connection_id=...)`. This keeps `app.models.*` imports out of the service layer.
+- **Cross-tenant JOIN safety**: any query that calls `.join()` must apply `.filter(Model.tenant_id == self._tid())` on the primary table BEFORE the join. A join without a prior tenant filter is a cross-tenant data leak.
 
 ### Route (`app/api/routes/<name>.py`)
 - `router = APIRouter(prefix="/<resource>", tags=["<resource>"])`.

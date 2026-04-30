@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import uuid
-from app.core.auth0_auth import get_current_user
+from app.api.dependencies import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -11,7 +11,6 @@ from app.models.impact_analysis import ImpactAnalysis, ImpactedFile  # noqa: F40
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.repositories.source_connection_repository import SourceConnectionRepository
-from app.services.dependency_analyzer import DependencyAnalyzer
 from app.services.impact_analysis_service import ImpactAnalysisService
 from app.services.semantic_impact_filter import get_semantic_filter
 
@@ -64,8 +63,7 @@ def get_impact_service(
         code_repo,
         impact_repo,
         settings.PROJECT_ROOT,
-        DependencyAnalyzer(),
-        get_semantic_filter(settings),
+        semantic_filter=get_semantic_filter(settings),
     )
 
 
@@ -95,8 +93,8 @@ async def analyze_impact(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception as exc:
-        logger.error("POST /impact-analysis failed request_id=%s error=%s", request_id, exc)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Analysis failed: {exc}")
+        logger.exception("POST /impact-analysis failed request_id=%s", request_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Impact analysis failed due to an internal error.")
     logger.info(
         "POST /impact-analysis completed request_id=%s files=%d risk=%s duration=%.2fs",
         request_id,

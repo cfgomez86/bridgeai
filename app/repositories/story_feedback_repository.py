@@ -83,9 +83,15 @@ class StoryFeedbackRepository:
     def list_with_comments(
         self, limit: int, offset: int, rating: Optional[str] = None
     ) -> list[tuple[StoryFeedback, str]]:
+        tid = self._tid()
         q = (
             self._db.query(StoryFeedback, UserStory.title)
-            .join(UserStory, UserStory.id == StoryFeedback.story_id)
+            .filter(StoryFeedback.tenant_id == tid)
+            .join(
+                UserStory,
+                (UserStory.id == StoryFeedback.story_id)
+                & (UserStory.tenant_id == tid),
+            )
         )
         if rating:
             q = q.filter(StoryFeedback.rating == rating)

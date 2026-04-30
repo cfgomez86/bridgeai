@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.context import current_tenant_id, get_tenant_id
+from app.core.context import get_tenant_id
 from app.models.ticket_integration import IntegrationAuditLog, TicketIntegration
 
 

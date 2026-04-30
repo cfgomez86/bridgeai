@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from app.models.impact_analysis import ImpactAnalysis, ImpactedFile
+
+from app.core.context import get_tenant_id
 from app.repositories.code_file_repository import CodeFileRepository
 from app.repositories.impact_analysis_repository import ImpactAnalysisRepository
 from app.services.dependency_analyzer import DependencyAnalyzer, FileAnalysis
@@ -39,7 +40,7 @@ class ImpactAnalysisService:
         self._code_file_repo = code_file_repo
         self._impact_repo = impact_repo
         self._project_root = os.path.abspath(project_root)
-        self._analyzer = analyzer if analyzer is not None else DependencyAnalyzer()
+        self._analyzer = analyzer
         self._semantic_filter = semantic_filter
 
     def analyze(
@@ -56,6 +57,7 @@ class ImpactAnalysisService:
         )
 
         start = time.monotonic()
+        analyzer = self._analyzer if self._analyzer is not None else DependencyAnalyzer(get_tenant_id())
 
         keywords = self._extract_keywords(requirement)
 
@@ -81,9 +83,9 @@ class ImpactAnalysisService:
             quick_text = self._normalize(cf.file_path) + " " + content.lower()
             if any(kw in quick_text for kw in keywords):
                 seed_files.add(cf.file_path)
-                fa = self._analyzer.analyze(cf.file_path, content, cf.language, source_connection_id)
+                fa = analyzer.analyze(cf.file_path, content, cf.language, source_connection_id)
             else:
-                fa = self._analyzer.quick_imports(cf.file_path, content, cf.language)
+                fa = analyzer.quick_imports(cf.file_path, content, cf.language)
             file_analyses[cf.file_path] = fa
 
         logger.info(
@@ -144,24 +146,25 @@ class ImpactAnalysisService:
         analysis_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-        impact_analysis = ImpactAnalysis(
-            id=analysis_id,
-            requirement=requirement,
-            risk_level=risk_level,
-            files_impacted=total_impacted,
-            modules_impacted=len(modules),
-            analysis_summary=f"Analyzed {len(file_analyses)} files, {total_impacted} impacted",
-            created_at=now,
-        )
         module_names = sorted(modules)
 
-        impacted_file_models = [
-            ImpactedFile(analysis_id=analysis_id, file_path=path, reason=reason)
-            for path, reason in impacted_reasons.items()
-        ]
-
         t_save = time.monotonic()
-        self._impact_repo.save(impact_analysis, impacted_file_models, source_connection_id)
+        self._impact_repo.save(
+            {
+                "id": analysis_id,
+                "requirement": requirement,
+                "risk_level": risk_level,
+                "files_impacted": total_impacted,
+                "modules_impacted": len(modules),
+                "analysis_summary": f"Analyzed {len(file_analyses)} files, {total_impacted} impacted",
+                "created_at": now,
+            },
+            [
+                {"analysis_id": analysis_id, "file_path": path, "reason": reason}
+                for path, reason in impacted_reasons.items()
+            ],
+            source_connection_id,
+        )
         logger.info("Persist: %.2fs", time.monotonic() - t_save)
 
         duration = time.monotonic() - start

@@ -1,14 +1,13 @@
-from datetime import datetime
-from uuid import uuid4
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.core.auth0_auth import get_current_user, verify_auth0_jwt, _extract_bearer_token
+from app.api.dependencies import get_current_user
+from app.core.auth0_auth import verify_auth0_jwt, _extract_bearer_token
 from app.database.session import get_db
-from app.models.tenant import Tenant
 from app.models.user import User
+from app.repositories.tenant_repository import TenantRepository
+from app.services.user_provisioning_service import UserProvisioningService, ProvisionedUser
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -45,43 +44,18 @@ def provision(
     if not auth0_user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
 
-    # Upsert tenant (personal workspace, 1:1 with user)
-    tenant = db.query(Tenant).filter_by(auth0_user_id=auth0_user_id).first()
-    if not tenant:
-        tenant = Tenant(
-            id=str(uuid4()),
-            auth0_user_id=auth0_user_id,
-            name=body.user_name or body.user_email,
-            plan="free",
-            created_at=datetime.utcnow(),
-        )
-        db.add(tenant)
-        db.flush()
-
-    # Upsert user
-    user = db.query(User).filter_by(auth0_user_id=auth0_user_id).first()
-    if not user:
-        user = User(
-            id=str(uuid4()),
-            auth0_user_id=auth0_user_id,
-            tenant_id=tenant.id,
-            email=body.user_email,
-            name=body.user_name,
-            role="owner",
-            created_at=datetime.utcnow(),
-        )
-        db.add(user)
-
-    db.commit()
-    db.refresh(user)
-
+    provisioned: ProvisionedUser = UserProvisioningService(db).ensure_user(
+        auth0_user_id=auth0_user_id,
+        email=body.user_email,
+        name=body.user_name,
+    )
     return UserResponse(
-        user_id=user.id,
-        email=user.email,
-        name=user.name,
-        role=user.role,
-        tenant_id=user.tenant_id,
-        tenant_name=tenant.name,
+        user_id=provisioned.user_id,
+        email=provisioned.email,
+        name=provisioned.name,
+        role=provisioned.role,
+        tenant_id=provisioned.tenant_id,
+        tenant_name=provisioned.tenant_name,
     )
 
 
@@ -90,7 +64,7 @@ def me(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    tenant = db.query(Tenant).filter_by(id=current_user.tenant_id).first()
+    tenant = TenantRepository(db).find_by_id(current_user.tenant_id)
     return UserResponse(
         user_id=current_user.id,
         email=current_user.email,

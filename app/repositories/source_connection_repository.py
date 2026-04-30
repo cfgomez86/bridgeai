@@ -4,7 +4,8 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from app.core.context import current_tenant_id, get_tenant_id
+from app.core.context import get_tenant_id
+from app.domain.source_connection import SourceConnection as DomainSourceConnection
 
 _SCM_PLATFORMS = {"github", "gitlab", "azure_devops", "bitbucket"}
 from app.models.code_file import CodeFile
@@ -275,4 +276,20 @@ class SourceConnectionRepository:
             )
             .order_by(ConnectionAuditLog.timestamp.desc())
             .all()
+        )
+
+    @staticmethod
+    def to_domain(orm: SourceConnection) -> DomainSourceConnection:
+        return DomainSourceConnection(
+            id=orm.id,
+            platform=orm.platform,
+            display_name=orm.display_name,
+            repo_full_name=orm.repo_full_name,
+            repo_name=orm.repo_name,
+            owner=orm.owner,
+            default_branch=orm.default_branch,
+            is_active=orm.is_active,
+            created_at=orm.created_at,
+            boards_project=orm.boards_project,
+            auth_method=orm.auth_method,
         )

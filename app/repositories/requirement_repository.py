@@ -14,9 +14,12 @@ class RequirementRepository:
     def _tid(self) -> str:
         return get_tenant_id()
 
-    def save(self, req: Requirement, source_connection_id: str) -> Requirement:
-        req.tenant_id = self._tid()
-        req.source_connection_id = source_connection_id
+    def save(self, data: dict, source_connection_id: str) -> Requirement:
+        req = Requirement(
+            **data,
+            tenant_id=self._tid(),
+            source_connection_id=source_connection_id,
+        )
         self._db.add(req)
         self._db.commit()
         self._db.refresh(req)

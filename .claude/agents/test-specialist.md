@@ -55,6 +55,8 @@ def db_session():
 - For service tests: instantiate with `Settings(PROJECT_ROOT="<temp_dir>")` — never rely on `.env`.
 - For agent tests (in `app/agents/`): mock `anthropic.Anthropic` via `unittest.mock.patch`.
 - Run `python -m pytest <file> -v` to verify before reporting done.
+- **Repository `save()` takes dicts, not ORM instances**: when writing tests for repositories, call `repo.save({...}, connection_id)` with a plain dict. Never construct an ORM model in the test and pass it to `save()`. The repository constructs the ORM object internally.
+- **Cross-tenant isolation tests**: every new repository method that queries data must have at least one test that creates records for two different tenants and asserts that querying from tenant A never returns tenant B's data.
 - **Tenant context in tests**: any test that calls a repository method must set tenant context first. Use the fixture below — without it every `_tid()` call raises `RuntimeError`:
 
 ```python

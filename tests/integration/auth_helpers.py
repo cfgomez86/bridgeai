@@ -3,7 +3,7 @@ from datetime import datetime
 
 from fastapi import FastAPI
 
-from app.core.auth0_auth import get_current_user
+from app.api.dependencies import get_current_user
 from app.core.context import current_tenant_id, current_user_id
 from app.models.user import User
 

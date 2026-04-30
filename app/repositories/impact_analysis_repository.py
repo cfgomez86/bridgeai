@@ -16,16 +16,24 @@ class ImpactAnalysisRepository:
 
     def save(
         self,
-        analysis: ImpactAnalysis,
-        impacted_files: list[ImpactedFile],
+        analysis_data: dict,
+        impacted_file_data: list[dict],
         source_connection_id: str,
     ) -> ImpactAnalysis:
         tid = self._tid()
-        analysis.tenant_id = tid
-        analysis.source_connection_id = source_connection_id
-        for f in impacted_files:
-            f.tenant_id = tid
-            f.source_connection_id = source_connection_id
+        analysis = ImpactAnalysis(
+            **analysis_data,
+            tenant_id=tid,
+            source_connection_id=source_connection_id,
+        )
+        impacted_files = [
+            ImpactedFile(
+                **fd,
+                tenant_id=tid,
+                source_connection_id=source_connection_id,
+            )
+            for fd in impacted_file_data
+        ]
         self._db.add(analysis)
         self._db.add_all(impacted_files)
         self._db.commit()

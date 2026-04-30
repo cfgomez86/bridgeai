@@ -53,12 +53,21 @@ You are the Phase Implementer for BridgeAI. You own the end-to-end delivery of a
 - Every new repository must implement `_tid()` calling `get_tenant_id()` from `app.core.context`. Never call `current_tenant_id.get()` directly — it raises a silent `LookupError` → 500 with no log context.
 - Every new route that accesses tenant data must declare `_user: User = Depends(get_current_user)` from `app.core.auth0_auth`. This is what populates `current_tenant_id` in context.
 - For unauthenticated endpoints (OAuth callbacks, webhooks): restore tenant context from a trusted stored record using `current_tenant_id.set(record.tenant_id)` before any repository call.
+- **Never call `get_tenant_id()` or `get_user_id()` inside `__init__`**. These are request-scoped and not available at construction time. Call them lazily inside the method that needs them.
+- **Use typed accessors, not bare ContextVar calls**: use `get_user_id()` from `app.core.context`, never `current_user_id.get()`. The typed accessor raises a clear `RuntimeError`; `.get()` returns `None` silently and causes confusing downstream failures.
 
 ## Repository isolation rules (for phases adding file/repo-scoped data)
 
 - Any data that belongs to a specific SCM repository (not just a tenant) must include a `source_connection_id` FK column.
 - Queries against such data must accept and apply `source_connection_id` as an optional filter.
 - The active connection is resolved via `SourceConnectionRepository(db).get_active()` — pass its `id` to scoped queries.
+
+## ORM / service decoupling rules (mandatory for every phase that adds persistence)
+
+- **Services MUST NOT import from `app.models.*`**. Services pass `dict` to repository `save()` methods and receive domain objects back. ORM classes belong only in `repositories/` and `models/`.
+- **Repository `save()` / `save_batch()` must accept `dict` / `list[dict]`**, not ORM instances. Construct the ORM object inside the repository: `Model(**data, tenant_id=self._tid(), ...)`. This is the firewall that prevents ORM leaking into the service layer.
+- **Cross-tenant JOIN safety**: any repository query that uses `.join()` must apply `.filter(PrimaryModel.tenant_id == self._tid())` BEFORE the join. Skipping this guard leaks rows from other tenants through the join.
+- **Write at least one cross-tenant isolation test per new repository method**: create records for two tenants, query from one, assert the other's data is absent.
 
 ## Mandatory quality gates (run after tests pass)
 

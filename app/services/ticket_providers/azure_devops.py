@@ -11,6 +11,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.domain.ticket_integration import TicketResult
 from app.domain.user_story import UserStory
+from app.services.scm_providers.base import validate_instance_url
 from app.services.ticket_providers.base import TicketProvider
 
 logger = get_logger(__name__)
@@ -50,6 +51,8 @@ class AzureDevOpsTicketProvider(TicketProvider):
         self._access_token = access_token
         self._org_url = org_url.rstrip("/") if org_url else ""
         self._project = project
+        if self._org_url:
+            validate_instance_url(self._org_url)
         self._client = httpx.AsyncClient(timeout=self._settings.AZURE_REQUEST_TIMEOUT_SECONDS)
 
     @property
