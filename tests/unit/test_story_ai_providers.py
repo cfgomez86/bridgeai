@@ -3,7 +3,11 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.services.story_ai_provider import AnthropicStoryProvider, OpenAIStoryProvider
+from app.services.story_ai_provider import (
+    AnthropicStoryProvider,
+    GeminiStoryProvider,
+    OpenAIStoryProvider,
+)
 from app.services.ai_story_generator import AIStoryGenerator
 from app.services.story_ai_provider import StoryAIProvider
 from app.utils.json_utils import extract_json
@@ -155,6 +159,80 @@ def test_openai_story_provider_raises_on_invalid_json():
         provider = OpenAIStoryProvider(settings)
         with pytest.raises(ValueError, match="Invalid JSON"):
             provider.generate_story(_CONTEXT)
+
+
+# --- GeminiStoryProvider tests ---
+
+def _make_gemini_settings(model="gemini-2.0-flash"):
+    settings = MagicMock()
+    settings.GEMINI_API_KEY = "test-key"
+    settings.AI_MODEL = model
+    settings.AI_MAX_OUTPUT_TOKENS = 8192
+    return settings
+
+
+def test_gemini_story_provider_returns_valid_dict():
+    settings = _make_gemini_settings()
+    mock_candidate = MagicMock()
+    mock_candidate.finish_reason.name = "STOP"
+    mock_response = MagicMock()
+    mock_response.text = _VALID_STORY_JSON
+    mock_response.candidates = [mock_candidate]
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        provider = GeminiStoryProvider(settings)
+        result = provider.generate_story(_CONTEXT)
+
+    assert isinstance(result, dict)
+    assert _REQUIRED_FIELDS.issubset(result.keys())
+
+
+def test_gemini_story_provider_raises_on_truncation():
+    settings = _make_gemini_settings()
+    mock_candidate = MagicMock()
+    mock_candidate.finish_reason.name = "MAX_TOKENS"
+    mock_response = MagicMock()
+    mock_response.text = _VALID_STORY_JSON
+    mock_response.candidates = [mock_candidate]
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        provider = GeminiStoryProvider(settings)
+        with pytest.raises(ValueError, match="truncated"):
+            provider.generate_story(_CONTEXT)
+
+
+def test_gemini_story_provider_raises_on_invalid_json():
+    settings = _make_gemini_settings()
+    mock_candidate = MagicMock()
+    mock_candidate.finish_reason.name = "STOP"
+    mock_response = MagicMock()
+    mock_response.text = "not valid json"
+    mock_response.candidates = [mock_candidate]
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        provider = GeminiStoryProvider(settings)
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            provider.generate_story(_CONTEXT)
+
+
+def test_gemini_story_provider_uses_json_mime_type():
+    settings = _make_gemini_settings()
+    mock_candidate = MagicMock()
+    mock_candidate.finish_reason.name = "STOP"
+    mock_response = MagicMock()
+    mock_response.text = _VALID_STORY_JSON
+    mock_response.candidates = [mock_candidate]
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        provider = GeminiStoryProvider(settings)
+        provider.generate_story(_CONTEXT)
+
+    call_kwargs = MockClient.return_value.models.generate_content.call_args.kwargs
+    assert call_kwargs["config"].response_mime_type == "application/json"
 
 
 # --- Retry tests ---

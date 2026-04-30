@@ -7,6 +7,7 @@ import pytest
 from app.domain.user_story import UserStory
 from app.services.story_quality_judge import (
     AnthropicQualityJudge,
+    GeminiQualityJudge,
     OpenAIQualityJudge,
     StubQualityJudge,
     _aggregate_samples,
@@ -317,6 +318,91 @@ def test_openai_judge_parses_valid_response():
     assert result["samples_used"] == 1
 
 
+# --- GeminiQualityJudge ---
+
+def _make_gemini_judge_settings(samples: int = 1, temperature: float = 0.0):
+    settings = MagicMock()
+    settings.GEMINI_API_KEY = "test-key"
+    settings.AI_JUDGE_MODEL = ""
+    settings.AI_MODEL = "gemini-2.0-flash"
+    settings.AI_JUDGE_SAMPLES = samples
+    settings.AI_JUDGE_TEMPERATURE = temperature
+    return settings
+
+
+def test_gemini_judge_parses_valid_response():
+    settings = _make_gemini_judge_settings(samples=1)
+    mock_response = MagicMock()
+    mock_response.text = _VALID_JUDGE_JSON
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        judge = GeminiQualityJudge(settings)
+        result = judge.evaluate(_make_story())
+
+    assert _REQUIRED_SCORE_FIELDS.issubset(result.keys())
+    assert result["completeness"] == 8.0
+    assert result["samples_used"] == 1
+    assert "judge_model" in result
+
+
+def test_gemini_judge_aggregates_three_samples():
+    settings = _make_gemini_judge_settings(samples=3, temperature=0.3)
+    mock_response = MagicMock()
+    mock_response.text = _VALID_JUDGE_JSON
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        judge = GeminiQualityJudge(settings)
+        result = judge.evaluate(_make_story())
+
+    assert MockClient.return_value.models.generate_content.call_count == 3
+    assert result["samples_used"] == 3
+    assert result["dispersion"] == 0.0
+
+
+def test_gemini_judge_tolerates_partial_failures():
+    settings = _make_gemini_judge_settings(samples=3)
+    bad = MagicMock()
+    bad.text = "not json"
+    good = MagicMock()
+    good.text = _VALID_JUDGE_JSON
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.side_effect = [bad, bad, good]
+        judge = GeminiQualityJudge(settings)
+        result = judge.evaluate(_make_story())
+
+    assert result["samples_used"] == 1
+    assert result["completeness"] == 8.0
+
+
+def test_gemini_judge_raises_when_all_samples_fail():
+    settings = _make_gemini_judge_settings(samples=2)
+    bad = MagicMock()
+    bad.text = "not json"
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = bad
+        judge = GeminiQualityJudge(settings)
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            judge.evaluate(_make_story())
+
+
+def test_gemini_judge_uses_json_mime_type():
+    settings = _make_gemini_judge_settings(samples=1)
+    mock_response = MagicMock()
+    mock_response.text = _VALID_JUDGE_JSON
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        judge = GeminiQualityJudge(settings)
+        judge.evaluate(_make_story())
+
+    call_kwargs = MockClient.return_value.models.generate_content.call_args.kwargs
+    assert call_kwargs["config"].response_mime_type == "application/json"
+
+
 # --- Factory ---
 
 def test_get_quality_judge_returns_stub_by_default():
@@ -333,3 +419,20 @@ def test_get_quality_judge_returns_stub_when_disabled():
     settings.AI_JUDGE_ENABLED = False
     judge = get_quality_judge(settings)
     assert isinstance(judge, StubQualityJudge)
+
+
+def test_get_quality_judge_returns_gemini_instance():
+    settings = MagicMock()
+    settings.AI_JUDGE_ENABLED = True
+    settings.AI_JUDGE_PROVIDER = "gemini"
+    settings.AI_PROVIDER = "stub"
+    settings.GEMINI_API_KEY = "test-key"
+    settings.AI_JUDGE_MODEL = ""
+    settings.AI_MODEL = ""
+    settings.AI_JUDGE_SAMPLES = 1
+    settings.AI_JUDGE_TEMPERATURE = 0.3
+
+    with patch("google.genai.Client"):
+        judge = get_quality_judge(settings)
+
+    assert isinstance(judge, GeminiQualityJudge)

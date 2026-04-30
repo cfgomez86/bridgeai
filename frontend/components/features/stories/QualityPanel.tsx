@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
-import { Award, Loader2, CheckCircle, XCircle, ChevronDown, Sparkles } from "lucide-react"
+import { Award, Loader2, CheckCircle, XCircle, ChevronDown, Sparkles, AlertTriangle } from "lucide-react"
 import { getStoryQuality, evaluateStoryQuality, type QualityMetricsResponse } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 
@@ -310,6 +310,21 @@ export function QualityPanel({ storyId }: QualityPanelProps) {
                 </div>
               </div>
             </>
+          )}
+
+          {/* ── Coherence warning ──
+              · Forced (entity_not_found): show from initial render, regardless of judge state.
+              · Low completeness (post-eval): show when judge gave ≤ 4 even on a non-forced story. */}
+          {(quality?.entity_not_found || (judge && struct?.schema_valid && judge.completeness <= 4)) && (
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: 8,
+              padding: "10px 12px", borderRadius: "var(--radius)",
+              background: "var(--surface-3)", border: "1px solid var(--border)",
+              color: "var(--fg-2)", fontSize: "12px", lineHeight: 1.5,
+            }}>
+              <AlertTriangle size={14} style={{ color: "var(--warn-fg)", flexShrink: 0, marginTop: 2 }} />
+              <span>{quality?.entity_not_found ? s.coherence_warning_forced : s.coherence_warning}</span>
+            </div>
           )}
 
           {/* ── Structural ── */}

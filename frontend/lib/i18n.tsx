@@ -186,6 +186,17 @@ interface Translations {
       regenerating: string
       regenerate_btn: string
       continue_btn: string
+      errors: {
+        entity_not_found_title: string
+        entity_not_found_desc_with_suggestions: string
+        entity_not_found_desc_empty: string
+        entity_label: string
+        hint_label: string
+        suggestions_label: string
+        force_create_btn: string
+        creating_anyway: string
+        edit_requirement_btn: string
+      }
     }
     step4: {
       title: string
@@ -396,6 +407,8 @@ interface Translations {
       subtask_count: string
       cited_paths: string
       no_citations: string
+      coherence_warning: string
+      coherence_warning_forced: string
       evaluate_btn: string
       re_evaluate_btn: string
       per_dimension: string
@@ -629,6 +642,17 @@ const es: Translations = {
       regenerating: "Regenerando...",
       regenerate_btn: "Regenerar",
       continue_btn: "Continuar al ticket →",
+      errors: {
+        entity_not_found_title: "Entidad no encontrada en el codebase",
+        entity_not_found_desc_with_suggestions: "La entidad mencionada en tu requerimiento no existe en el codebase. ¿Quisiste decir alguna de estas?",
+        entity_not_found_desc_empty: "No encontramos esta entidad ni nombres similares en el codebase indexado. Si vas a crearla, usa \"Crear igualmente\". Si fue un error de escritura, edita el requerimiento.",
+        entity_label: "Entidad",
+        hint_label: "Sugerencia",
+        suggestions_label: "Entidades similares que sí existen:",
+        force_create_btn: "Crear igualmente",
+        creating_anyway: "Creando...",
+        edit_requirement_btn: "Editar requerimiento",
+      },
     },
     step4: {
       title: "Crear ticket",
@@ -773,6 +797,8 @@ const es: Translations = {
       subtask_count: "Subtareas tecnicas",
       cited_paths: "Archivos en repo",
       no_citations: "Sin citas externas",
+      coherence_warning: "Aunque la estructura se ve bien, el juez detecta poca coherencia con el requerimiento original. La historia podría no responder a lo que pediste.",
+      coherence_warning_forced: "Esta historia se generó forzadamente: la entidad principal no existía en el codebase indexado. Verificá manualmente la coherencia con el requerimiento — los scores estructurales pueden engañar.",
       evaluate_btn: "Evaluar con IA",
       re_evaluate_btn: "Re-evaluar",
       per_dimension: "Por dimensión",
@@ -1092,6 +1118,17 @@ const en: Translations = {
       regenerating: "Regenerating...",
       regenerate_btn: "Regenerate",
       continue_btn: "Continue to ticket →",
+      errors: {
+        entity_not_found_title: "Entity not found in the codebase",
+        entity_not_found_desc_with_suggestions: "The entity mentioned in your requirement does not exist in the codebase. Did you mean one of these?",
+        entity_not_found_desc_empty: "We couldn't find this entity or any similar names in the indexed codebase. If it's new, use \"Create anyway\". If it was a typo, edit the requirement.",
+        entity_label: "Entity",
+        hint_label: "Hint",
+        suggestions_label: "Similar entities that do exist:",
+        force_create_btn: "Create anyway",
+        creating_anyway: "Creating...",
+        edit_requirement_btn: "Edit requirement",
+      },
     },
     step4: {
       title: "Create ticket",
@@ -1322,6 +1359,8 @@ const en: Translations = {
       subtask_count: "Technical subtasks",
       cited_paths: "Files in repo",
       no_citations: "No external citations",
+      coherence_warning: "Even though the structure looks fine, the judge detects low coherence with the original requirement. The story may not actually answer what you asked.",
+      coherence_warning_forced: "This story was force-generated: the main entity did not exist in the indexed codebase. Verify coherence with the requirement manually — structural scores can be misleading.",
       evaluate_btn: "Evaluate with AI",
       re_evaluate_btn: "Re-evaluate",
       per_dimension: "By dimension",
@@ -1555,6 +1594,17 @@ const ca: Translations = {
       regenerating: "Regenerant...",
       regenerate_btn: "Regenerar",
       continue_btn: "Continuar al tiquet →",
+      errors: {
+        entity_not_found_title: "Entitat no trobada al codebase",
+        entity_not_found_desc_with_suggestions: "L'entitat esmentada al teu requeriment no existeix al codebase. Volies dir alguna d'aquestes?",
+        entity_not_found_desc_empty: "No hem trobat aquesta entitat ni noms semblants al codebase indexat. Si l'has de crear, usa \"Crear igualment\". Si va ser un error d'escriptura, edita el requeriment.",
+        entity_label: "Entitat",
+        hint_label: "Suggeriment",
+        suggestions_label: "Entitats semblants que sí existeixen:",
+        force_create_btn: "Crear igualment",
+        creating_anyway: "Creant...",
+        edit_requirement_btn: "Editar requeriment",
+      },
     },
     step4: {
       title: "Crear tiquet",
@@ -1785,6 +1835,8 @@ const ca: Translations = {
       subtask_count: "Subtasques tècniques",
       cited_paths: "Arxius al repositori",
       no_citations: "Sense cites externes",
+      coherence_warning: "Tot i que l'estructura es veu bé, el jutge detecta poca coherència amb el requeriment original. La història podria no respondre al que vas demanar.",
+      coherence_warning_forced: "Aquesta història es va generar forçadament: l'entitat principal no existia al codebase indexat. Verifica manualment la coherència amb el requeriment — els scores estructurals poden enganyar.",
       evaluate_btn: "Avaluar amb IA",
       re_evaluate_btn: "Re-avaluar",
       per_dimension: "Per dimensió",

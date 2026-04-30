@@ -13,6 +13,13 @@ try:
 except ImportError:
     _openai_lib = None  # type: ignore[assignment]
 
+try:
+    from google import genai as _genai_lib
+    from google.genai import types as _genai_types
+except ImportError:
+    _genai_lib = None  # type: ignore[assignment]
+    _genai_types = None  # type: ignore[assignment]
+
 _provider_cache: dict[str, "AIProvider"] = {}
 
 
@@ -132,6 +139,27 @@ class OpenAIAIProvider(AIProvider):
         return extract_json(raw_text)
 
 
+class GeminiAIProvider(AIProvider):
+    def __init__(self, settings: Settings) -> None:
+        if _genai_lib is None:
+            raise ImportError("google-genai package is required")
+        self._client = _genai_lib.Client(api_key=settings.GEMINI_API_KEY)
+        self._model = settings.AI_MODEL or "gemini-2.0-flash"
+
+    def parse_requirement(self, requirement_text: str) -> dict:
+        prompt = self._build_prompt(requirement_text)
+        response = self._client.models.generate_content(
+            model=self._model,
+            contents=prompt,
+            config=_genai_types.GenerateContentConfig(
+                temperature=0,
+                max_output_tokens=512,
+                response_mime_type="application/json",
+            ),
+        )
+        return extract_json(response.text)
+
+
 def get_ai_provider(settings: Settings) -> AIProvider:
     key = settings.AI_PROVIDER
     if key not in _provider_cache:
@@ -139,6 +167,8 @@ def get_ai_provider(settings: Settings) -> AIProvider:
             _provider_cache[key] = AnthropicAIProvider(settings)
         elif key == "openai":
             _provider_cache[key] = OpenAIAIProvider(settings)
+        elif key == "gemini":
+            _provider_cache[key] = GeminiAIProvider(settings)
         else:
             _provider_cache[key] = StubAIProvider()
     return _provider_cache[key]

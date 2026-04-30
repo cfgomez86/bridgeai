@@ -18,6 +18,13 @@ try:
 except ImportError:
     _openai_lib = None  # type: ignore[assignment]
 
+try:
+    from google import genai as _genai_lib
+    from google.genai import types as _genai_types
+except ImportError:
+    _genai_lib = None  # type: ignore[assignment]
+    _genai_types = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 _DIMENSIONS = ("completeness", "specificity", "feasibility", "risk_coverage", "language_consistency")
@@ -26,14 +33,33 @@ _JUDGE_PROMPT_TEMPLATE = """\
 Eres un revisor senior de historias de usuario ágiles. Eres exigente: solo das 9-10 cuando se cumplen \
 TODAS las condiciones del anclaje superior. Si dudas entre dos bandas, baja la nota.
 
-Evalúa la siguiente historia en cinco dimensiones (0-10) usando esta rúbrica anclada:
+{requirement_block}\
+PARTE 1 — CLASIFICACIÓN BINARIA OBLIGATORIA (responde con honestidad, NO ajustes scores tú mismo):
 
-completeness — ¿la historia cubre todo lo necesario?
-  9-10: descripción + ≥3 AC verificables + DoD explícito + subtareas frontend/backend/config + notas de riesgo coherentes.
+  is_actionable_requirement (true/false):
+    Marca FALSE si el requerimiento original es:
+      • Una sola palabra-sustantivo (p.ej. "rabbit", "login", "data").
+      • Una frase sin verbo de acción claro o sin objeto.
+      • Un nombre de campo/método aislado sin entidad de negocio plausible (p.ej. "agregar campo \
+volar" — el campo no tiene sentido en el dominio implícito; un PO real lo rechazaría).
+      • Un requerimiento sin propósito de negocio entendible (¿para qué? ¿qué problema resuelve?).
+    Marca TRUE solo si un PO razonable lo aceptaría como entrada de refinement sin pedir aclaraciones.
+
+  story_addresses_requirement (true/false):
+    Marca FALSE si la historia inventa un dominio distinto, completa un requerimiento vago con \
+suposiciones no verificables, o construye algo no implícito en el texto original.
+    Marca TRUE solo si la historia es la traducción fiel del requerimiento al formato de historia.
+
+PARTE 2 — Evalúa la siguiente historia en cinco dimensiones (0-10) usando esta rúbrica anclada.
+Puntúa según la rúbrica SIN considerar la alineación (eso lo aplicamos en código a partir de la \
+clasificación binaria de la Parte 1):
+
+completeness — ¿la historia cubre todo lo necesario Y aborda el requerimiento original?
+  9-10: aborda el requerimiento + descripción + ≥3 AC verificables + DoD explícito + subtareas frontend/backend/config + notas de riesgo coherentes.
   7-8 : la mayoría de los anteriores presentes; falta uno menor.
-  5-6 : AC presentes pero DoD o subtareas escasas/genéricas.
-  3-4 : falta más de un bloque importante.
-  0-2 : solo título y descripción, sin AC ni subtareas reales.
+  5-6 : AC presentes pero DoD o subtareas escasas/genéricas, o cobertura parcial del requerimiento.
+  3-4 : falta más de un bloque importante, o solo aborda tangencialmente el requerimiento.
+  0-2 : solo título y descripción sin AC ni subtareas reales, O la historia no aborda el requerimiento.
 
 specificity — ¿los AC son verificables y concretos?
   9-10: TODOS los AC en formato Given/When/Then o equivalente medible (ej. "responde en <300ms", "muestra el campo X").
@@ -78,6 +104,10 @@ o nota de riesgo que justifica esa banda. Si la nota es ≥7, omite esa dimensi�
 
 Responde ÚNICAMENTE con JSON válido, sin texto adicional:
 {{
+  "alignment": {{
+    "is_actionable_requirement": <true|false>,
+    "story_addresses_requirement": <true|false>
+  }},
   "completeness": <0-10>,
   "specificity": <0-10>,
   "feasibility": <0-10>,
@@ -91,9 +121,31 @@ Responde ÚNICAMENTE con JSON válido, sin texto adicional:
 """
 
 
-def _build_prompt(story: UserStory) -> str:
+def _build_prompt(
+    story: UserStory,
+    requirement_text: str | None = None,
+    requirement_intent: str | None = None,
+    entity_not_found: bool = False,
+) -> str:
     subtasks_backend = story.subtasks.get("backend", [])[:3]
+    if requirement_text:
+        intent_line = f"Intent detectada: {requirement_intent}\n" if requirement_intent else ""
+        force_line = (
+            "⚠️ La entidad principal del requerimiento NO existía en el codebase indexado al "
+            "generar la historia. El usuario fue advertido y aun así forzó la creación. Si el "
+            "requerimiento sigue siendo vago/no accionable, marca is_actionable_requirement=false; "
+            "una entidad ausente no puede compensar un requerimiento débil.\n"
+            if entity_not_found else ""
+        )
+        requirement_block = (
+            "REQUERIMIENTO ORIGINAL (ancla la evaluación):\n"
+            f"{requirement_text[:600]}\n"
+            f"{intent_line}{force_line}\n"
+        )
+    else:
+        requirement_block = ""
     return _JUDGE_PROMPT_TEMPLATE.format(
+        requirement_block=requirement_block,
         title=story.title,
         story_description=story.story_description[:300],
         acceptance_criteria=story.acceptance_criteria[:5],
@@ -129,6 +181,25 @@ def _parse_scores(raw: dict) -> dict:
         if v < 0 or v > 10:
             logger.warning("Judge returned out-of-range %s=%s; clamping to [0,10]", dim, v)
         scores[dim] = _clamp(v)
+
+    # Apply hard caps based on the binary alignment classification. We do this in
+    # code (not by trusting the model to lower its own dimension scores) because
+    # LLM judges have a strong bias toward rewarding well-formed output even when
+    # the underlying requirement is incoherent.
+    alignment_raw = raw.get("alignment") if isinstance(raw.get("alignment"), dict) else {}
+    is_actionable = bool(alignment_raw.get("is_actionable_requirement", True))
+    addresses_req = bool(alignment_raw.get("story_addresses_requirement", True))
+    if not is_actionable:
+        scores["completeness"] = min(scores["completeness"], 3.0)
+        scores["specificity"]  = min(scores["specificity"],  4.0)
+        scores["feasibility"]  = min(scores["feasibility"],  4.0)
+    if not addresses_req:
+        scores["completeness"] = min(scores["completeness"], 2.0)
+        scores["specificity"]  = min(scores["specificity"],  3.0)
+    scores["alignment"] = {
+        "is_actionable_requirement": is_actionable,
+        "story_addresses_requirement": addresses_req,
+    }
 
     scores["overall"] = round(sum(scores[d] for d in _DIMENSIONS) / len(_DIMENSIONS), 2)
     scores["justification"] = str(raw.get("justification", ""))
@@ -177,15 +248,31 @@ def _aggregate_samples(samples: list[dict]) -> dict:
 
 class StoryQualityJudge(ABC):
     @abstractmethod
-    def evaluate(self, story: UserStory) -> dict:
+    def evaluate(
+        self,
+        story: UserStory,
+        requirement_text: str | None = None,
+        requirement_intent: str | None = None,
+        entity_not_found: bool = False,
+    ) -> dict:
         """Return a dict with completeness, specificity, feasibility,
         risk_coverage, language_consistency, overall, justification,
-        evidence, dispersion, samples_used, judge_model."""
+        evidence, dispersion, samples_used, judge_model.
+
+        When `requirement_text` is provided the judge anchors `completeness`
+        to whether the story actually addresses the requirement (hard cap
+        of 2 if disconnected). Without it, alignment is not scored."""
         ...
 
 
 class StubQualityJudge(StoryQualityJudge):
-    def evaluate(self, story: UserStory) -> dict:
+    def evaluate(
+        self,
+        story: UserStory,
+        requirement_text: str | None = None,
+        requirement_intent: str | None = None,
+        entity_not_found: bool = False,
+    ) -> dict:
         return {
             "completeness": 7.0,
             "specificity": 7.0,
@@ -230,8 +317,14 @@ class AnthropicQualityJudge(StoryQualityJudge):
         self._n_samples = max(1, int(settings.AI_JUDGE_SAMPLES))
         self._temperature = float(settings.AI_JUDGE_TEMPERATURE)
 
-    def evaluate(self, story: UserStory) -> dict:
-        prompt = _build_prompt(story)
+    def evaluate(
+        self,
+        story: UserStory,
+        requirement_text: str | None = None,
+        requirement_intent: str | None = None,
+        entity_not_found: bool = False,
+    ) -> dict:
+        prompt = _build_prompt(story, requirement_text, requirement_intent, entity_not_found)
 
         def call_once() -> str:
             response = self._client.messages.create(
@@ -257,8 +350,14 @@ class OpenAIQualityJudge(StoryQualityJudge):
         self._n_samples = max(1, int(settings.AI_JUDGE_SAMPLES))
         self._temperature = float(settings.AI_JUDGE_TEMPERATURE)
 
-    def evaluate(self, story: UserStory) -> dict:
-        prompt = _build_prompt(story)
+    def evaluate(
+        self,
+        story: UserStory,
+        requirement_text: str | None = None,
+        requirement_intent: str | None = None,
+        entity_not_found: bool = False,
+    ) -> dict:
+        prompt = _build_prompt(story, requirement_text, requirement_intent, entity_not_found)
 
         def call_once() -> str:
             response = self._client.chat.completions.create(
@@ -276,6 +375,42 @@ class OpenAIQualityJudge(StoryQualityJudge):
         return scores
 
 
+class GeminiQualityJudge(StoryQualityJudge):
+    def __init__(self, settings: Settings) -> None:
+        if _genai_lib is None:
+            raise ImportError("google-genai package is required")
+        self._client = _genai_lib.Client(api_key=settings.GEMINI_API_KEY)
+        self._model = settings.AI_JUDGE_MODEL or settings.AI_MODEL or "gemini-2.0-flash"
+        self._n_samples = max(1, int(settings.AI_JUDGE_SAMPLES))
+        self._temperature = float(settings.AI_JUDGE_TEMPERATURE)
+
+    def evaluate(
+        self,
+        story: UserStory,
+        requirement_text: str | None = None,
+        requirement_intent: str | None = None,
+        entity_not_found: bool = False,
+    ) -> dict:
+        prompt = _build_prompt(story, requirement_text, requirement_intent, entity_not_found)
+
+        def call_once() -> str:
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=prompt,
+                config=_genai_types.GenerateContentConfig(
+                    temperature=self._temperature,
+                    max_output_tokens=512,
+                    response_mime_type="application/json",
+                ),
+            )
+            return response.text
+
+        samples = _collect_samples(call_once, self._n_samples)
+        scores = _aggregate_samples(samples)
+        scores["judge_model"] = self._model
+        return scores
+
+
 def get_quality_judge(settings: Settings = None) -> StoryQualityJudge:
     if settings is None:
         settings = get_settings()
@@ -286,4 +421,6 @@ def get_quality_judge(settings: Settings = None) -> StoryQualityJudge:
         return AnthropicQualityJudge(settings)
     if provider == "openai":
         return OpenAIQualityJudge(settings)
+    if provider == "gemini":
+        return GeminiQualityJudge(settings)
     return StubQualityJudge()

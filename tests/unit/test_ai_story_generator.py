@@ -131,10 +131,11 @@ def test_retry_succeeds_on_second_attempt():
 
 def test_raises_after_max_retries():
     from app.core.config import Settings
+    from app.services.ai_story_generator import TransientGenerationError
     settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=1)
     provider = FailThenSucceedProvider(fail_times=10)
     gen = AIStoryGenerator(provider, settings)
-    with pytest.raises(ValueError, match="Story generation failed after"):
+    with pytest.raises(TransientGenerationError, match="Story generation failed after"):
         gen.generate({})
     assert provider._calls == 2  # initial + 1 retry
 

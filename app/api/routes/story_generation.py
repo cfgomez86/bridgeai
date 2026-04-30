@@ -25,6 +25,7 @@ from app.repositories.user_story_repository import UserStoryRepository
 from app.core.context import get_tenant_id
 from app.services.ai_story_generator import AIStoryGenerator
 from app.services.dependency_analyzer import DependencyAnalyzer
+from app.services.ai_story_generator import TransientGenerationError
 from app.services.entity_existence_checker import (
     EntityExistenceChecker,
     EntityNotFoundError,
@@ -147,6 +148,7 @@ class QualityMetricsResponse(BaseModel):
     story_id: str
     structural: StructuralMetricsResponse
     judge: Optional[JudgeScoresResponse] = None
+    entity_not_found: bool = False
 
 
 class SystemQualityResponse(BaseModel):
@@ -284,6 +286,18 @@ async def generate_story(
                 "suggestions": exc.suggestions,
                 "hint": "Envía force=true para generar la historia de creación, o usa una de las sugerencias.",
             },
+        )
+    except TransientGenerationError as exc:
+        logger.warning(
+            "POST /generate-story upstream timeout request_id=%s attempts=%d last=%s",
+            request_id, exc.attempts, exc.last_error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=(
+                "El proveedor de IA no respondió a tiempo tras varios intentos. "
+                "Probá de nuevo en unos segundos o aumentá AI_TIMEOUT_SECONDS si esto persiste."
+            ),
         )
     except ValueError as exc:
         msg = str(exc)
@@ -446,6 +460,7 @@ async def get_quality(
         story_id=story_id,
         structural=StructuralMetricsResponse(**structural),
         judge=_score_model_to_judge_response(score_model),
+        entity_not_found=domain_story.entity_not_found,
     )
 
 
@@ -461,9 +476,20 @@ async def evaluate_quality(
         domain_story, CodeFileRepository(db), story_model.source_connection_id
     )
 
+    requirement = RequirementRepository(db).find_by_id(
+        domain_story.requirement_id, story_model.source_connection_id
+    )
+    requirement_text = requirement.requirement_text if requirement else None
+    requirement_intent = requirement.intent if requirement else None
+
     judge = get_quality_judge(settings)
     try:
-        scores = judge.evaluate(domain_story)
+        scores = judge.evaluate(
+            domain_story,
+            requirement_text=requirement_text,
+            requirement_intent=requirement_intent,
+            entity_not_found=domain_story.entity_not_found,
+        )
     except Exception as exc:
         logger.error("Quality judge failed for story %s: %s", story_id, exc)
         raise HTTPException(
@@ -476,6 +502,7 @@ async def evaluate_quality(
         story_id=story_id,
         structural=StructuralMetricsResponse(**structural),
         judge=_score_model_to_judge_response(score_record),
+        entity_not_found=domain_story.entity_not_found,
     )
 
 

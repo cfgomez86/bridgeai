@@ -13,6 +13,13 @@ try:
 except ImportError:
     _openai_lib = None  # type: ignore[assignment]
 
+try:
+    from google import genai as _genai_lib
+    from google.genai import types as _genai_types
+except ImportError:
+    _genai_lib = None  # type: ignore[assignment]
+    _genai_types = None  # type: ignore[assignment]
+
 _provider_cache: dict[str, "StoryAIProvider"] = {}
 
 _STUB_STORY_RESPONSE = {
@@ -315,6 +322,35 @@ class OpenAIStoryProvider(StoryAIProvider):
         return extract_json(raw_text)
 
 
+class GeminiStoryProvider(StoryAIProvider):
+    def __init__(self, settings: Settings) -> None:
+        if _genai_lib is None:
+            raise ImportError("google-genai package is required")
+        self._client = _genai_lib.Client(api_key=settings.GEMINI_API_KEY)
+        self._model = settings.AI_MODEL or "gemini-2.0-flash"
+        self._max_output_tokens = settings.AI_MAX_OUTPUT_TOKENS
+
+    def generate_story(self, context: dict) -> dict:
+        # Gemini does not support multi-block prompt caching (Anthropic-only);
+        # use the single combined prompt from the base class helper.
+        prompt = self._build_prompt(context)
+        response = self._client.models.generate_content(
+            model=self._model,
+            contents=prompt,
+            config=_genai_types.GenerateContentConfig(
+                temperature=0,
+                max_output_tokens=self._max_output_tokens,
+                response_mime_type="application/json",
+            ),
+        )
+        if response.candidates[0].finish_reason.name == "MAX_TOKENS":
+            raise ValueError(
+                f"Gemini response truncated at max_tokens={self._max_output_tokens}; "
+                "increase AI_MAX_OUTPUT_TOKENS"
+            )
+        return extract_json(response.text)
+
+
 def get_story_ai_provider(settings: Settings) -> StoryAIProvider:
     key = settings.AI_PROVIDER
     if key not in _provider_cache:
@@ -322,6 +358,8 @@ def get_story_ai_provider(settings: Settings) -> StoryAIProvider:
             _provider_cache[key] = AnthropicStoryProvider(settings)
         elif key == "openai":
             _provider_cache[key] = OpenAIStoryProvider(settings)
+        elif key == "gemini":
+            _provider_cache[key] = GeminiStoryProvider(settings)
         else:
             _provider_cache[key] = StubStoryProvider()
     return _provider_cache[key]

@@ -3,6 +3,7 @@ import pytest
 from app.core.config import Settings
 from app.services.ai_provider import (
     AnthropicAIProvider,
+    GeminiAIProvider,
     OpenAIAIProvider,
     StubAIProvider,
     get_ai_provider,
@@ -17,6 +18,7 @@ def make_settings(**kwargs) -> Settings:
         "AI_PROVIDER": "stub",
         "ANTHROPIC_API_KEY": "sk-ant-test",
         "OPENAI_API_KEY": "sk-test",
+        "GEMINI_API_KEY": "",
         "AI_MODEL": "",
         "AI_TIMEOUT_SECONDS": 10,
         "AI_MAX_RETRIES": 2,
@@ -139,12 +141,79 @@ def test_parser_raises_after_max_retries_exhausted():
         parser.parse("Add user registration")
 
 
+# ── Gemini provider ─────────────────────────────────────────────────────────
+
+def test_gemini_provider_returns_valid_dict():
+    mock_response = MagicMock()
+    mock_response.text = valid_json_str()
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        settings = make_settings(AI_PROVIDER="gemini", GEMINI_API_KEY="test-key")
+        provider = GeminiAIProvider(settings)
+        result = provider.parse_requirement("Add user registration")
+
+    assert result["feature_type"] == "feature"
+    assert result["estimated_complexity"] == "MEDIUM"
+    assert isinstance(result["keywords"], list)
+
+
+def test_gemini_provider_raises_on_invalid_json():
+    mock_response = MagicMock()
+    mock_response.text = "not valid json at all"
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        settings = make_settings(AI_PROVIDER="gemini", GEMINI_API_KEY="test-key")
+        provider = GeminiAIProvider(settings)
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            provider.parse_requirement("Add user registration")
+
+
+def test_gemini_provider_uses_default_model():
+    mock_response = MagicMock()
+    mock_response.text = valid_json_str()
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        settings = make_settings(AI_PROVIDER="gemini", GEMINI_API_KEY="test-key", AI_MODEL="")
+        provider = GeminiAIProvider(settings)
+        provider.parse_requirement("test")
+
+    call_kwargs = MockClient.return_value.models.generate_content.call_args
+    assert call_kwargs.kwargs["model"] == "gemini-2.0-flash"
+
+
+def test_gemini_provider_uses_custom_model():
+    mock_response = MagicMock()
+    mock_response.text = valid_json_str()
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = mock_response
+        settings = make_settings(AI_PROVIDER="gemini", GEMINI_API_KEY="test-key", AI_MODEL="gemini-1.5-flash")
+        provider = GeminiAIProvider(settings)
+        provider.parse_requirement("test")
+
+    call_kwargs = MockClient.return_value.models.generate_content.call_args
+    assert call_kwargs.kwargs["model"] == "gemini-1.5-flash"
+
+
 # ── Factory ─────────────────────────────────────────────────────────────────
 
 def test_get_ai_provider_returns_stub_by_default():
     settings = make_settings(AI_PROVIDER="stub")
     provider = get_ai_provider(settings)
     assert isinstance(provider, StubAIProvider)
+
+
+def test_get_ai_provider_returns_gemini_instance():
+    import app.services.ai_provider as _mod
+    _mod._provider_cache.pop("gemini", None)
+    with patch("google.genai.Client"):
+        settings = make_settings(AI_PROVIDER="gemini", GEMINI_API_KEY="test-key")
+        provider = _mod.get_ai_provider(settings)
+    _mod._provider_cache.pop("gemini", None)
+    assert isinstance(provider, GeminiAIProvider)
 
 
 # ── Prompt injection ────────────────────────────────────────────────────────
