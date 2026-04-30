@@ -151,6 +151,7 @@ class StoryGenerationService:
             "story_points": story_points,
             "risk_level": analysis.risk_level,
             "generation_time_seconds": generation_time,
+            "entity_not_found": entity_not_found,
             "created_at": created_at,
         }, source_connection_id)
         self._logger.info(
@@ -174,6 +175,7 @@ class StoryGenerationService:
                 risk_level=analysis.risk_level,
                 created_at=created_at,
                 generation_time_seconds=generation_time,
+                entity_not_found=entity_not_found,
             ),
             entity_not_found,
         )
@@ -218,4 +220,5 @@ class StoryGenerationService:
             risk_level=orm.risk_level,
             created_at=orm.created_at,
             generation_time_seconds=orm.generation_time_seconds,
+            entity_not_found=bool(getattr(orm, "entity_not_found", False)),
         )

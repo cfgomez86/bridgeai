@@ -80,7 +80,11 @@ export default function WorkflowPage() {
           <Step2Impact state={state} completeStep2={workflow.completeStep2} />
         )}
         {state.currentStep === 3 && (
-          <Step3Generate state={state} completeStep3={workflow.completeStep3} />
+          <Step3Generate
+            state={state}
+            completeStep3={workflow.completeStep3}
+            goBackToStep1={workflow.goBackToStep1}
+          />
         )}
         {state.currentStep >= 4 && (
           <Step4Ticket

@@ -33,9 +33,10 @@ class Settings(BaseSettings):
     INDEXING_MAX_WORKERS: int = 20
 
     # AI Provider
-    AI_PROVIDER: str = "stub"
+    AI_PROVIDER: str = "stub"   # stub | anthropic | openai | gemini
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
     AI_MODEL: str = ""
     AI_TIMEOUT_SECONDS: int = 60
     AI_MAX_RETRIES: int = 2

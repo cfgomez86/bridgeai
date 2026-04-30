@@ -18,3 +18,4 @@ class UserStory:
     risk_level: str
     created_at: datetime
     generation_time_seconds: float
+    entity_not_found: bool = False

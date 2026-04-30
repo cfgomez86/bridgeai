@@ -48,6 +48,25 @@ async function buildHeaders(): Promise<Record<string, string>> {
   return h
 }
 
+export class ApiError extends Error {
+  status: number
+  detail: unknown
+  constructor(message: string, status: number, detail: unknown) {
+    super(message)
+    this.name = "ApiError"
+    this.status = status
+    this.detail = detail
+  }
+}
+
+export interface EntityNotFoundDetail {
+  code: "ENTITY_NOT_FOUND"
+  entity: string
+  message: string
+  suggestions: string[]
+  hint: string
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = await buildHeaders()
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -57,12 +76,19 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }))
     const detail = (body as { detail?: unknown }).detail
-    const message =
-      typeof detail === "string" ? detail
-      : typeof detail === "object" && detail !== null && "error" in detail
-        ? String((detail as { error: unknown }).error)
+    let message: string
+    if (typeof detail === "string") {
+      message = detail
+    } else if (detail && typeof detail === "object") {
+      const d = detail as Record<string, unknown>
+      message =
+        typeof d.message === "string" ? d.message
+        : typeof d.error === "string" ? d.error
         : `HTTP ${res.status} ${res.statusText}`
-    throw new Error(message)
+    } else {
+      message = `HTTP ${res.status} ${res.statusText}`
+    }
+    throw new ApiError(message, res.status, detail)
   }
   if (res.status === 204 || res.headers.get("content-length") === "0") {
     return undefined as unknown as T
@@ -210,6 +236,7 @@ export interface QualityMetricsResponse {
   story_id: string
   structural: StructuralMetrics
   judge?: JudgeScores | null
+  entity_not_found?: boolean
 }
 
 export interface SystemQualityResponse {
@@ -444,6 +471,7 @@ export async function generateStory(
   projectId: string,
   sourceConnectionId: string,
   language?: string,
+  force?: boolean,
 ): Promise<{
   story_id: string
   source_connection_id: string
@@ -451,6 +479,7 @@ export async function generateStory(
   story_points: number
   risk_level: string
   generation_time_seconds: number
+  entity_not_found?: boolean
 }> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 270_000)
@@ -463,6 +492,7 @@ export async function generateStory(
         project_id: projectId,
         source_connection_id: sourceConnectionId,
         language,
+        ...(force ? { force: true } : {}),
       }),
       signal: controller.signal,
     })

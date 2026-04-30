@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect } from "react"
+import React, { createContext, useContext, useState } from "react"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,21 +20,16 @@ const STORAGE_KEY = "bridgeai-theme"
 // Provider
 // ---------------------------------------------------------------------------
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light")
+// Read initial theme from the DOM class set by the blocking <script> in layout.tsx.
+// This avoids a "light → dark" flash on hydration because the DOM already has the
+// correct class before React mounts.
+function getInitialTheme(): Theme {
+  if (typeof document === "undefined") return "light"
+  return document.documentElement.classList.contains("dark") ? "dark" : "light"
+}
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY) as Theme | null
-    if (saved === "light" || saved === "dark") {
-      apply(saved)
-      setThemeState(saved)
-    } else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-      const initial: Theme = prefersDark ? "dark" : "light"
-      apply(initial)
-      setThemeState(initial)
-    }
-  }, [])
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setThemeState] = useState<Theme>(getInitialTheme)
 
   function apply(t: Theme) {
     document.documentElement.classList.toggle("dark", t === "dark")

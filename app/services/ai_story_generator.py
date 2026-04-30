@@ -6,9 +6,11 @@ from app.services.story_ai_provider import StoryAIProvider
 from app.utils.ai_retry import is_retryable_error
 
 _REQUIRED_FIELDS = {
-    "title", "story_description", "acceptance_criteria",
-    "subtasks", "definition_of_done", "risk_notes",
+    "title", "story_description", "acceptance_criteria", "subtasks",
 }
+# Soft fields: filled with [] when absent so the story still passes through.
+# Their quality (or lack thereof) is reflected in structural metrics + judge scoring.
+_OPTIONAL_LIST_FIELDS = ("definition_of_done", "risk_notes")
 _SUBTASK_CATEGORIES = {"frontend", "backend", "configuration"}
 
 _PATH_RE = re.compile(
@@ -69,6 +71,18 @@ class StoryQualityRetryError(ValueError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+class TransientGenerationError(Exception):
+    """All retries exhausted on transient upstream failures (timeout, 5xx,
+    network). Surfaces as 504 Gateway Timeout — not a client (4xx) error."""
+
+    def __init__(self, attempts: int, last_error: Exception) -> None:
+        super().__init__(
+            f"Story generation failed after {attempts} transient errors: {last_error}"
+        )
+        self.attempts = attempts
+        self.last_error = last_error
 
 
 class AIStoryGenerator:
@@ -144,9 +158,7 @@ class AIStoryGenerator:
                 )
                 if attempt < self._max_retries:
                     continue
-        raise ValueError(
-            f"Story generation failed after {self._max_retries + 1} transient errors: {last_error}"
-        )
+        raise TransientGenerationError(self._max_retries + 1, last_error)
 
     @staticmethod
     def _ac_uses_gwt(text: str) -> bool:
@@ -204,15 +216,20 @@ class AIStoryGenerator:
         missing = _REQUIRED_FIELDS - raw.keys()
         if missing:
             raise ValueError(f"Story response missing required fields: {missing}")
+        for field in _OPTIONAL_LIST_FIELDS:
+            if field not in raw or raw[field] is None:
+                self._logger.warning(
+                    "AI response missing optional field %r; defaulting to []", field
+                )
+                raw[field] = []
+            elif not isinstance(raw[field], list):
+                raise ValueError(f"{field} must be a list")
         if not str(raw["title"]).strip():
             raise ValueError("title cannot be empty")
         if not str(raw["story_description"]).strip():
             raise ValueError("story_description cannot be empty")
-        for field in ("acceptance_criteria", "definition_of_done"):
-            if not isinstance(raw[field], list) or len(raw[field]) == 0:
-                raise ValueError(f"{field} must be a non-empty list")
-        if not isinstance(raw["risk_notes"], list):
-            raise ValueError("risk_notes must be a list")
+        if not isinstance(raw["acceptance_criteria"], list) or len(raw["acceptance_criteria"]) == 0:
+            raise ValueError("acceptance_criteria must be a non-empty list")
         subtasks = raw.get("subtasks")
         if not isinstance(subtasks, dict):
             raise ValueError("subtasks must be an object")

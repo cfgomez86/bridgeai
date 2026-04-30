@@ -8,6 +8,9 @@ _RETRYABLE_EXC_NAMES = frozenset({
     "RateLimitError",
     "InternalServerError",
     "ServiceUnavailableError",
+    # google-genai SDK exceptions
+    "ServerError",
+    "DeadlineExceeded",
 })
 
 

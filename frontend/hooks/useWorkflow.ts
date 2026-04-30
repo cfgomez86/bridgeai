@@ -120,6 +120,25 @@ export function useWorkflow() {
     setState((prev) => ({ ...initialState, sourceConnectionId: prev.sourceConnectionId, repoFullName: prev.repoFullName }))
   }
 
+  function goBackToStep1() {
+    setState((prev) => ({
+      ...prev,
+      requirementId: null,
+      intent: null,
+      featureType: null,
+      complexity: null,
+      keywords: [],
+      analysisId: null,
+      filesImpacted: null,
+      modulesImpacted: [],
+      riskLevel: null,
+      storyId: null,
+      storyTitle: null,
+      storyPoints: null,
+      currentStep: 1,
+    }))
+  }
+
   return {
     state,
     setProjectId,
@@ -132,5 +151,6 @@ export function useWorkflow() {
     completeStep3,
     completeStep4,
     reset,
+    goBackToStep1,
   }
 }
