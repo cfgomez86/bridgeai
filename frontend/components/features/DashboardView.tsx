@@ -110,18 +110,30 @@ export function DashboardView() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    Promise.all([
-      getDashboardStats().catch(() => null),
-      getDashboardActivity(10).catch(() => []),
-    ]).then(([s, a]) => {
-      if (cancelled) return
-      setStats(s)
-      setActivity(a ?? [])
-      setLoading(false)
-    })
-    return () => {
-      cancelled = true
+
+    async function fetchWithRetry() {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (cancelled) return
+        if (attempt > 0) await new Promise((r) => setTimeout(r, attempt * 800))
+        try {
+          const [s, a] = await Promise.all([
+            getDashboardStats(),
+            getDashboardActivity(10),
+          ])
+          if (cancelled) return
+          setStats(s)
+          setActivity(a ?? [])
+          setLoading(false)
+          return
+        } catch {
+          // retry
+        }
+      }
+      if (!cancelled) setLoading(false)
     }
+
+    fetchWithRetry()
+    return () => { cancelled = true }
   }, [])
 
   const isCompletelyEmpty =

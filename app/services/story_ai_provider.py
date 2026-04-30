@@ -88,7 +88,9 @@ _STUB_STORY_RESPONSE = {
     ],
 }
 
-_STORY_PROMPT_TEMPLATE = """\
+# Static portion of the prompt: rules + whitelist. Sent as a cached block so the large
+# file list is not re-processed on quality/hallucination retries.
+_STORY_STATIC_TEMPLATE = """\
 Eres un analista ágil de software senior. Dado el siguiente contexto técnico, genera una Historia de Usuario profesional y completa.
 
 REGLAS ESTRICTAS — VIOLARLAS INVALIDA LA RESPUESTA:
@@ -101,6 +103,13 @@ REGLAS ESTRICTAS — VIOLARLAS INVALIDA LA RESPUESTA:
    Ejemplo válido (en): "Given an unauthenticated user, When they submit the registration form with a valid email and password ≥8 chars, Then the system returns 201 and displays 'Account created'."
    Ejemplo INVÁLIDO: "El sistema permite el registro" (vago, sin G/W/T).
 6. Subtareas frontend: solo OBLIGATORIAS si la historia implica interfaz de usuario (formularios, pantallas, listas, dashboards, modales, vistas, botones). En ese caso devuelve ≥2 tareas que cubran (a) estructura del componente o pantalla, (b) validaciones / estados de UI / mensajes de error, (c) integración con la API. Si no hay archivos UI en el whitelist, describe el componente NUEVO a crear sin inventar paths concretos. Si la historia es PURAMENTE backend (endpoint sin UI, job, cron, migración interna), `frontend` debe ser un array vacío [].
+
+Archivos disponibles del codebase (whitelist exhaustiva — NO puedes citar nada fuera de esta lista):
+{available_file_paths_formatted}\
+"""
+
+# Dynamic portion: per-request context + per-retry warnings + output schema.
+_STORY_DYNAMIC_TEMPLATE = """\
 {hallucination_warning}{quality_warning}{entity_creation_instruction}
 Contexto del requerimiento:
 - Texto: "{requirement_text}"
@@ -117,16 +126,13 @@ Contexto del impacto técnico:
 - Archivos concretos del codebase identificados por el análisis como más relevantes:
 {impacted_file_paths_formatted}
 
-Archivos disponibles del codebase (whitelist exhaustiva — NO puedes citar nada fuera de esta lista):
-{available_file_paths_formatted}
-
 Genera ÚNICAMENTE un JSON válido con estos campos exactos:
 - title: string corto y descriptivo (máximo 80 caracteres)
 - story_description: string en formato de historia de usuario estándar: "Como [tipo de usuario], quiero [acción] para que [beneficio]". Usa el mismo idioma que el texto del requerimiento.
 - acceptance_criteria: array de strings en formato Given/When/Then (regla 5). Mínimo 3.
 - subtasks: objeto con tres claves obligatorias ("frontend", "backend", "configuration"). Cada una es un array de objetos con dos claves: "title" y "description".
     * "title": string ≤150 caracteres, en imperativo, accionable. Describe la INTENCIÓN de la tarea SIN prefijo de categoría y SIN repetir la ruta de archivo. Ej: "Agregar campo descripción al ProductReadModelMapper".
-    * "description": string multilínea (usa "\n\n" entre párrafos). Debe explicar: (1) QUÉ hacer en detalle, paso a paso si es necesario; (2) POR QUÉ es necesario o cómo conecta con la historia; (3) qué archivos del whitelist tocar (lista los paths exactos), o si es UI nueva qué componente/pantalla crear sin path concreto; (4) cómo verificarlo (qué tests correr, qué comportamiento observar). Mínimo 30 caracteres.
+    * "description": string multilínea (usa "\\n\\n" entre párrafos). Debe explicar: (1) QUÉ hacer en detalle, paso a paso si es necesario; (2) POR QUÉ es necesario o cómo conecta con la historia; (3) qué archivos del whitelist tocar (lista los paths exactos), o si es UI nueva qué componente/pantalla crear sin path concreto; (4) cómo verificarlo (qué tests correr, qué comportamiento observar). Mínimo 30 caracteres.
     * "frontend": ver regla 6. Vacío [] si la historia no tiene UI.
     * "backend": tareas para lógica de negocio, servicios, rutas, base de datos. Mínimo 2 tareas. Si no hay archivos verificables, describe sin path.
     * "configuration": infraestructura, variables de entorno, dependencias, migraciones, CI/CD. Si no aplica, array vacío.
@@ -144,19 +150,34 @@ Sin texto adicional. Sin explicaciones. Solo el JSON válido.\
 """
 
 
+_LANGUAGE_NAMES = {
+    "es": "español", "en": "English", "fr": "français",
+    "de": "Deutsch", "pt": "português",
+}
+
+
 class StoryAIProvider(ABC):
     @abstractmethod
     def generate_story(self, context: dict) -> dict:
         ...
 
-    def _build_prompt(self, context: dict) -> str:
-        paths = context.get("impacted_file_paths", [])
-        formatted_paths = "\n".join(f"  - {p}" for p in paths) if paths else "  (no hay archivos específicos identificados)"
+    def _build_prompt_parts(self, context: dict) -> tuple[str, str]:
+        """Returns (static_part, dynamic_part) for use with prompt caching.
+
+        static_part  — rules + full file whitelist; stable across retries, suitable for caching.
+        dynamic_part — per-request context, retry warnings, and output schema.
+        """
         available = context.get("available_file_paths", [])
         formatted_available = (
             "\n".join(f"  - {p}" for p in available)
             if available
             else "  (whitelist vacía — NO cites ningún archivo en las subtareas)"
+        )
+        paths = context.get("impacted_file_paths", [])
+        formatted_paths = (
+            "\n".join(f"  - {p}" for p in paths)
+            if paths
+            else "  (no hay archivos específicos identificados)"
         )
         hallucinated = context.get("hallucinated_last_attempt") or []
         hallucination_warning = ""
@@ -183,13 +204,16 @@ class StoryAIProvider(ABC):
                 f"'{entity_name}' (modelo/clase, repositorio, migración si aplica). "
                 f"El resto de tareas asume que '{entity_name}' se creará en esta misma implementación.\n"
             )
-        language_names = {
-            "es": "español", "en": "English", "fr": "français",
-            "de": "Deutsch", "pt": "português",
-        }
         lang_code = context.get("language", "es")
-        language_label = language_names.get(lang_code, lang_code)
-        return _STORY_PROMPT_TEMPLATE.format(
+        language_label = _LANGUAGE_NAMES.get(lang_code, lang_code)
+
+        static = _STORY_STATIC_TEMPLATE.format(
+            available_file_paths_formatted=formatted_available,
+        )
+        dynamic = _STORY_DYNAMIC_TEMPLATE.format(
+            hallucination_warning=hallucination_warning,
+            quality_warning=quality_warning,
+            entity_creation_instruction=entity_creation_instruction,
             requirement_text=context.get("requirement_text", ""),
             intent=context.get("intent", ""),
             feature_type=context.get("feature_type", ""),
@@ -200,12 +224,13 @@ class StoryAIProvider(ABC):
             modules_impacted=context.get("modules_impacted", 0),
             risk_level=context.get("risk_level", ""),
             impacted_file_paths_formatted=formatted_paths,
-            available_file_paths_formatted=formatted_available,
-            hallucination_warning=hallucination_warning,
-            quality_warning=quality_warning,
-            entity_creation_instruction=entity_creation_instruction,
             language=language_label,
         )
+        return static, dynamic
+
+    def _build_prompt(self, context: dict) -> str:
+        static, dynamic = self._build_prompt_parts(context)
+        return static + "\n\n" + dynamic
 
 
 class StubStoryProvider(StoryAIProvider):
@@ -217,19 +242,40 @@ class AnthropicStoryProvider(StoryAIProvider):
     def __init__(self, settings: Settings) -> None:
         if _anthropic_lib is None:
             raise ImportError("anthropic package is required")
-        self._client = _anthropic_lib.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        # max_retries=0: SDK-level retries are disabled so AIStoryGenerator's retry
+        # loop is the single source of truth. Without this the SDK would retry
+        # internally on timeout, multiplying the per-attempt wall time by 3×.
+        self._client = _anthropic_lib.Anthropic(
+            api_key=settings.ANTHROPIC_API_KEY,
+            max_retries=0,
+        )
         self._model = settings.AI_MODEL or "claude-haiku-4-5-20251001"
         self._timeout = settings.AI_TIMEOUT_SECONDS
         self._max_output_tokens = settings.AI_MAX_OUTPUT_TOKENS
 
     def generate_story(self, context: dict) -> dict:
-        prompt = self._build_prompt(context)
+        static_part, dynamic_part = self._build_prompt_parts(context)
+        # Static block (rules + whitelist) is marked ephemeral so the large file
+        # list is served from the prompt cache on quality/hallucination retries.
         response = self._client.messages.create(
             model=self._model,
             max_tokens=self._max_output_tokens,
             temperature=0,
             timeout=self._timeout,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": static_part,
+                        "cache_control": {"type": "ephemeral"},
+                    },
+                    {
+                        "type": "text",
+                        "text": dynamic_part,
+                    },
+                ],
+            }],
         )
         if getattr(response, "stop_reason", None) == "max_tokens":
             raise ValueError(

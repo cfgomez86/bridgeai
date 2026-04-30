@@ -16,6 +16,10 @@ export function StoryFeedback({ storyId, onToast }: StoryFeedbackProps) {
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [initial, setInitial] = useState<FeedbackResponse | null>(null)
+
+  const isDirty = submitted && initial
+    ? rating !== initial.rating || comment !== (initial.comment ?? "")
+    : true
   const { t } = useLanguage()
   const s = t.stories.feedback
 
@@ -104,23 +108,25 @@ export function StoryFeedback({ storyId, onToast }: StoryFeedbackProps) {
               fontFamily: "inherit", outline: "none", marginBottom: "8px",
             }}
           />
-          <button
-            type="button"
-            disabled={loading}
-            onClick={handleSubmit}
-            style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              padding: "5px 12px", borderRadius: "var(--radius)",
-              border: "none",
-              background: loading ? "var(--surface-3)" : "var(--accent)",
-              color: loading ? "var(--muted)" : "var(--accent-fg)",
-              fontSize: "12px", fontWeight: 500,
-              cursor: loading ? "not-allowed" : "pointer",
-            }}
-          >
-            {loading && <Loader2 size={12} className="animate-spin" />}
-            {loading ? s.submitting : submitted ? s.update_btn : s.submit_btn}
-          </button>
+          {isDirty && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleSubmit}
+              style={{
+                display: "flex", alignItems: "center", gap: "6px",
+                padding: "5px 12px", borderRadius: "var(--radius)",
+                border: "none",
+                background: loading ? "var(--surface-3)" : "var(--accent)",
+                color: loading ? "var(--muted)" : "var(--accent-fg)",
+                fontSize: "12px", fontWeight: 500,
+                cursor: loading ? "not-allowed" : "pointer",
+              }}
+            >
+              {loading && <Loader2 size={12} className="animate-spin" />}
+              {loading ? s.submitting : s.submit_btn}
+            </button>
+          )}
         </>
       )}
     </div>

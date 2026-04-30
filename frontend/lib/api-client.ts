@@ -10,14 +10,29 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ""
 // ---------------------------------------------------------------------------
 let _getToken: (() => Promise<string | null>) | null = null
 let _inflightToken: Promise<string | null> | null = null
+const _tokenWaiters: Array<() => void> = []
 
 export function setTokenGetter(fn: (() => Promise<string | null>) | null) {
   _getToken = fn
   _inflightToken = null
+  if (fn) {
+    for (const cb of _tokenWaiters.splice(0)) cb()
+  }
 }
 
 async function resolveToken(): Promise<string | null> {
   if (typeof window === "undefined") return null
+  if (!_getToken) {
+    // Auth0TokenSync hasn't set the getter yet — wait up to 5s before giving up
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        const idx = _tokenWaiters.indexOf(resolve)
+        if (idx !== -1) _tokenWaiters.splice(idx, 1)
+        resolve()
+      }, 5000)
+      _tokenWaiters.push(() => { clearTimeout(timer); resolve() })
+    })
+  }
   if (!_getToken) return null
   // Deduplicate parallel calls — all share the same in-flight request
   if (!_inflightToken) {
@@ -437,16 +452,23 @@ export async function generateStory(
   risk_level: string
   generation_time_seconds: number
 }> {
-  return apiFetch("/api/v1/generate-story", {
-    method: "POST",
-    body: JSON.stringify({
-      requirement_id: requirementId,
-      impact_analysis_id: analysisId,
-      project_id: projectId,
-      source_connection_id: sourceConnectionId,
-      language,
-    }),
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 270_000)
+  try {
+    return await apiFetch("/api/v1/generate-story", {
+      method: "POST",
+      body: JSON.stringify({
+        requirement_id: requirementId,
+        impact_analysis_id: analysisId,
+        project_id: projectId,
+        source_connection_id: sourceConnectionId,
+        language,
+      }),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export async function getStoryDetail(storyId: string): Promise<StoryDetailResponse> {

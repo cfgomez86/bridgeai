@@ -51,7 +51,7 @@ const nextConfig: NextConfig = {
     serverActions: {
       allowedOrigins: ["localhost:3000", ...extraOrigins],
     },
-    proxyTimeout: 120_000,
+    proxyTimeout: 300_000,
   },
   async rewrites() {
     return [

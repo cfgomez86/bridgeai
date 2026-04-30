@@ -805,7 +805,7 @@ const es: Translations = {
       },
     },
     feedback: {
-      title: "Tu opinion",
+      title: "Tu opinion nos ayuda a mejorar",
       thumbs_up: "Util",
       thumbs_down: "Mejorable",
       comment_placeholder: "Comentario opcional...",
@@ -1354,7 +1354,7 @@ const en: Translations = {
       },
     },
     feedback: {
-      title: "Your feedback",
+      title: "Your feedback helps us improve",
       thumbs_up: "Useful",
       thumbs_down: "Needs improvement",
       comment_placeholder: "Optional comment...",
@@ -1817,7 +1817,7 @@ const ca: Translations = {
       },
     },
     feedback: {
-      title: "La teva opinió",
+      title: "La teva opinió ens ajuda a millorar",
       thumbs_up: "Útil",
       thumbs_down: "Millorable",
       comment_placeholder: "Comentari opcional...",

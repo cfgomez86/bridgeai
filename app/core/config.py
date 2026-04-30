@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     AI_MODEL: str = ""
-    AI_TIMEOUT_SECONDS: int = 30
+    AI_TIMEOUT_SECONDS: int = 60
     AI_MAX_RETRIES: int = 2
     AI_MAX_OUTPUT_TOKENS: int = 8192
 
