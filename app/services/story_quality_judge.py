@@ -62,12 +62,13 @@ completeness — ¿la historia cubre todo lo necesario Y aborda el requerimiento
   3-4 : falta más de un bloque importante, o solo aborda tangencialmente el requerimiento.
   0-2 : solo título y descripción sin AC ni subtareas reales, O la historia no aborda el requerimiento.
 
-specificity — ¿los AC son verificables y concretos?
-  9-10: TODOS los AC en formato Given/When/Then o equivalente medible (ej. "responde en <300ms", "muestra el campo X").
-  7-8 : la mayoría son medibles, alguno algo ambiguo.
+specificity — ¿los AC son verificables y concretos, en lenguaje funcional de Product Owner?
+  9-10: TODOS los AC en formato Given/When/Then con resultado observable por el usuario en términos de negocio (ej. "se muestra el mensaje de confirmación", "el botón 'Guardar' queda deshabilitado", "la cuenta queda creada").
+  7-8 : la mayoría son medibles y funcionales, alguno algo ambiguo.
   5-6 : la mitad son cuantificables; el resto subjetivos.
   3-4 : la mayoría son frases genéricas sin sujeto/objeto claros.
   0-2 : AC del tipo "el sistema funcione" / "sea fácil de usar".
+  REGLA DURA: si UN solo AC contiene jerga técnica (rutas/archivos como "app/foo.py", códigos HTTP como "201"/"404", métodos REST como "POST /api/...", nombres de clases/módulos/tablas/columnas, librerías o frameworks), capa specificity a un máximo de 6 aunque el formato G/W/T sea correcto, y cita el fragmento en `evidence.specificity`. Los AC son lenguaje de PO; la implementación va en subtareas.
 
 feasibility — ¿es implementable en un sprint normal (1-2 semanas)?
   9-10: alcance claro, story points 1-5, riesgo bajo, subtareas atomizadas.

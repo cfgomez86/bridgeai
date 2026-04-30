@@ -1,7 +1,11 @@
 from abc import ABC, abstractmethod
 
 from app.core.config import Settings
+from app.core.logging import get_logger
 from app.utils.json_utils import extract_json
+from app.utils.token_logging import log_token_usage
+
+_logger = get_logger(__name__)
 
 try:
     import anthropic as _anthropic_lib
@@ -29,9 +33,9 @@ _STUB_STORY_RESPONSE = {
         "so that I can access the platform securely."
     ),
     "acceptance_criteria": [
-        "Given an unauthenticated visitor, When they submit the registration form with a valid email and a password of at least 8 characters, Then the system returns 201 and creates the user account.",
-        "Given a visitor submitting an invalid email or a password shorter than 8 characters, When they press submit, Then the form shows an inline validation error and does not call the API.",
-        "Given a newly registered user, When the registration succeeds, Then the system enqueues a confirmation email containing a token that expires in 24 hours.",
+        "Given an unauthenticated visitor, When they submit the registration form with a valid email and a password of at least 8 characters, Then the account is created and a confirmation message is shown on screen.",
+        "Given a visitor submitting an invalid email or a password shorter than 8 characters, When they press submit, Then the form displays an inline validation error and the registration is not performed.",
+        "Given a newly registered user, When the registration succeeds, Then a confirmation email is sent to their inbox and remains valid for 24 hours.",
     ],
     "subtasks": {
         "frontend": [
@@ -106,9 +110,19 @@ REGLAS ESTRICTAS — VIOLARLAS INVALIDA LA RESPUESTA:
 3. NUNCA uses ejemplos genéricos tipo "app/routes/X.py", "src/Foo.java", "app/components/Bar.tsx". Ese tipo de paths son señal de invención.
 4. El whitelist refleja el lenguaje real del repo. Si el repo es Java, no pongas paths .py ni .tsx. Si es Python, no pongas .java. Respeta las extensiones existentes en el whitelist.
 5. Cada criterio de aceptación DEBE seguir el formato Given/When/Then verificable, en el idioma de salida (es: "Dado ... Cuando ... Entonces ..."; en: "Given ... When ... Then ..."; pt/fr/de equivalentes). Resultados medibles, sin frases vagas. Mínimo 3 AC.
-   Ejemplo válido (es): "Dado un usuario no autenticado, Cuando envía el formulario de registro con email válido y contraseña ≥8 caracteres, Entonces el sistema responde 201 y muestra el mensaje 'Cuenta creada'."
-   Ejemplo válido (en): "Given an unauthenticated user, When they submit the registration form with a valid email and password ≥8 chars, Then the system returns 201 and displays 'Account created'."
-   Ejemplo INVÁLIDO: "El sistema permite el registro" (vago, sin G/W/T).
+   IMPORTANTE — los AC son LENGUAJE DE PRODUCT OWNER, no de implementación. Describen COMPORTAMIENTO OBSERVABLE por el usuario en términos de negocio.
+   PROHIBIDO en los AC (estos detalles van en subtasks/risk_notes, NO en AC):
+     • Rutas o nombres de archivo (p.ej. "app/services/auth.py", "frontend/components/Foo.tsx").
+     • Códigos HTTP (p.ej. "responde 201", "devuelve 404", "status 500").
+     • Métodos REST y endpoints (p.ej. "POST /api/users", "llamada a GET /v1/orders").
+     • Nombres de clases, módulos, funciones, tablas o columnas (p.ej. "AuthService", "user_id", "users.email").
+     • Librerías, frameworks o lenguajes (p.ej. "FastAPI", "React", "JWT", "SQLAlchemy").
+     • Detalles de implementación (queries SQL, hashing, formatos JSON, headers).
+   PERMITIDO en los AC: elementos de UI visibles por nombre ("botón 'Crear cuenta'", "mensaje 'Cuenta creada'", "campo 'Email'", "pantalla de bienvenida"), tiempos de respuesta percibidos por el usuario ("en menos de 2 segundos"), reglas de negocio ("contraseña de al menos 8 caracteres").
+   Ejemplo VÁLIDO (es): "Dado un visitante no autenticado, Cuando envía el formulario de registro con email válido y contraseña de al menos 8 caracteres, Entonces se crea la cuenta y se muestra el mensaje 'Cuenta creada'."
+   Ejemplo VÁLIDO (en): "Given an unauthenticated visitor, When they submit the registration form with a valid email and a password of at least 8 characters, Then the account is created and the message 'Account created' is shown."
+   Ejemplo INVÁLIDO (vago): "El sistema permite el registro" — sin G/W/T y sin resultado medible.
+   Ejemplo INVÁLIDO (técnico): "Dado un cliente, Cuando hace POST /api/users con email y password, Entonces app/services/auth_service.py responde 201 y guarda en la tabla users." — paths, HTTP, endpoints y nombres de archivo NO van en AC.
 6. Subtareas frontend: solo OBLIGATORIAS si la historia implica interfaz de usuario (formularios, pantallas, listas, dashboards, modales, vistas, botones). En ese caso devuelve ≥2 tareas que cubran (a) estructura del componente o pantalla, (b) validaciones / estados de UI / mensajes de error, (c) integración con la API. Si no hay archivos UI en el whitelist, describe el componente NUEVO a crear sin inventar paths concretos. Si la historia es PURAMENTE backend (endpoint sin UI, job, cron, migración interna), `frontend` debe ser un array vacío [].
 
 Archivos disponibles del codebase (whitelist exhaustiva — NO puedes citar nada fuera de esta lista):
@@ -289,6 +303,7 @@ class AnthropicStoryProvider(StoryAIProvider):
                 ],
             }],
         )
+        log_token_usage(_logger, provider="anthropic", operation="story_gen", model=self._model, response=response)
         if getattr(response, "stop_reason", None) == "max_tokens":
             raise ValueError(
                 f"Anthropic response truncated at max_tokens={self._max_output_tokens}; "

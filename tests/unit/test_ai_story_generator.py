@@ -15,9 +15,9 @@ def valid_story() -> dict:
         "title": "User Registration",
         "story_description": "As a user, I want to register so that I can log in.",
         "acceptance_criteria": [
-            "Given an unauthenticated visitor, When they submit the form with a valid email, Then the system returns 201.",
-            "Given a duplicate email, When the form is submitted, Then the API responds with 409 and the form shows the error.",
-            "Given a successful registration, When it completes, Then the system enqueues a confirmation email with a 24h token.",
+            "Given an unauthenticated visitor, When they submit the form with a valid email, Then the account is created and a confirmation message is shown.",
+            "Given a duplicate email, When the form is submitted, Then the user sees an error message indicating the email is already in use.",
+            "Given a successful registration, When it completes, Then a confirmation email is sent to the user and remains valid for 24 hours.",
         ],
         "subtasks": {
             "frontend": [
@@ -326,9 +326,9 @@ def test_ac_check_accepts_spanish_gwt():
     settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=0)
     story = valid_story()
     story["acceptance_criteria"] = [
-        "Dado un usuario nuevo, Cuando se registra, Entonces el sistema responde 201.",
-        "Dado un email duplicado, Cuando envía el formulario, Entonces la API responde 409.",
-        "Dado un registro exitoso, Cuando termina, Entonces se envía un email de confirmación.",
+        "Dado un usuario nuevo, Cuando se registra, Entonces se crea la cuenta y se muestra el mensaje 'Cuenta creada'.",
+        "Dado un email duplicado, Cuando envía el formulario, Entonces se muestra un error indicando que el email ya está registrado.",
+        "Dado un registro exitoso, Cuando termina, Entonces se envía un email de confirmación al usuario.",
     ]
     gen = AIStoryGenerator(FixedStoryProvider(story), settings)
     result = gen.generate({})
@@ -402,3 +402,153 @@ def test_ambiguous_text_does_not_trigger_ui_retry():
     })
     assert provider.calls == 1
     assert result["subtasks"]["frontend"] == []
+
+
+# --- Functional AC detector ---------------------------------------------------
+
+
+def test_ac_with_file_path_triggers_retry():
+    """An AC referencing a source file path is implementation jargon, not PO language."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a registered user, When they sign in, Then app/services/auth_service.py validates the credentials and grants access.",
+        "Given a wrong password, When they sign in, Then an error message is shown.",
+        "Given a successful sign-in, When it completes, Then the user lands on the welcome screen.",
+    ]
+    provider = CountingProvider([bad, valid_story()])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.calls == 2
+    reason = provider.contexts[1].get("quality_warning_reason") or ""
+    assert "jerga técnica" in reason
+    assert "auth_service.py" in reason
+    # Final result is the clean retry response
+    assert "Given an unauthenticated visitor" in result["acceptance_criteria"][0]
+
+
+def test_ac_with_http_status_code_triggers_retry():
+    """AC that mention HTTP codes (responde 201, returns 404) leak implementation."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a valid request, When the form is submitted, Then the system returns 201.",
+        "Given a duplicate email, When submitting, Then the API responds with 409.",
+        "Given an unknown error, When it occurs, Then the system logs the failure.",
+    ]
+    provider = CountingProvider([bad, valid_story()])
+    gen = AIStoryGenerator(provider, settings)
+    gen.generate({})
+    assert provider.calls == 2
+    reason = provider.contexts[1].get("quality_warning_reason") or ""
+    assert "jerga técnica" in reason
+
+
+def test_ac_with_rest_method_and_endpoint_triggers_retry():
+    """AC like 'POST /api/users' or '/v1/orders' belong in subtasks, not in AC."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a registered user, When they call POST /api/users with valid data, Then the resource is created.",
+        "Given an authenticated client, When they hit /v1/orders, Then the list of orders is shown.",
+        "Given an unknown endpoint, When called, Then the user sees an error.",
+    ]
+    provider = CountingProvider([bad, valid_story()])
+    gen = AIStoryGenerator(provider, settings)
+    gen.generate({})
+    assert provider.calls == 2
+
+
+def test_ac_with_visible_ui_elements_passes():
+    """Mentioning UI elements by name ('button Save', 'message Account created') is
+    legitimate PO language, NOT a technicalism — the detector must accept it."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=0)
+    story = valid_story()
+    story["acceptance_criteria"] = [
+        "Given a visitor on the registration page, When they click the 'Create account' button, Then the form is submitted and the message 'Account created' is shown for 3 seconds.",
+        "Given an empty email field, When the visitor presses 'Create account', Then the field shows the error 'Email is required'.",
+        "Given a successful registration, When the page reloads, Then the welcome screen is displayed.",
+    ]
+    provider = CountingProvider([story])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.calls == 1  # no retry triggered
+    assert "Create account" in result["acceptance_criteria"][0]
+
+
+def test_ac_with_plain_numbers_does_not_trigger_retry():
+    """Plain numbers like '8 characters' or '200 productos' must not be
+    confused with HTTP status codes — context (a verb of response) is required."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=0)
+    story = valid_story()
+    story["acceptance_criteria"] = [
+        "Given a password with 8 characters, When the form is submitted, Then it is accepted.",
+        "Given a customer with 200 products in their cart, When they check out, Then the order is created.",
+        "Given a slow network, When a request takes 500 milliseconds, Then a loading indicator is shown.",
+    ]
+    provider = CountingProvider([story])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.calls == 1
+    assert "8 characters" in result["acceptance_criteria"][0]
+
+
+def test_technical_ac_falls_back_after_max_retries():
+    """If every retry still produces technical AC, return last shape-valid story
+    (best-effort) rather than crashing — same fallback as the G/W/T retry."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=1)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a request to POST /api/users, When it arrives, Then app/auth.py returns 201.",
+        "Given a duplicate, When posted, Then the API responds with 409.",
+        "Given a server error, When triggered, Then the system returns 500.",
+    ]
+    provider = CountingProvider([bad])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.calls == 2  # initial + 1 retry, both bad
+    # Best-effort: returns the (technical) shape-valid story
+    assert "POST /api/users" in result["acceptance_criteria"][0]
+
+
+def test_find_ac_technicalisms_returns_citations():
+    """The helper returns up to 5 deduped citations for the retry feedback."""
+    citations = AIStoryGenerator._find_ac_technicalisms([
+        "Given a request, When made, Then app/services/foo.py runs.",
+        "Given a duplicate, When posted, Then the system returns 409.",
+        "Given an admin, When they call POST /api/users, Then the user is created.",
+    ])
+    assert citations  # non-empty
+    joined = " | ".join(citations)
+    assert "app/services/foo.py" in joined
+    assert "returns 409" in joined.lower() or "returns 409" in joined
+    assert "POST /api/users" in joined
+
+
+def test_find_ac_technicalisms_returns_empty_for_clean_ac():
+    """Pure PO-language AC produce no citations."""
+    citations = AIStoryGenerator._find_ac_technicalisms([
+        "Given a visitor, When they fill the form correctly, Then the account is created.",
+        "Given a duplicate email, When submitting, Then the user sees an inline error message.",
+        "Given a successful sign-up, When it completes, Then a welcome screen is displayed.",
+    ])
+    assert citations == []
+
+
+def test_stub_response_acs_are_functional():
+    """The stub used as fallback / few-shot example must itself pass the detector,
+    or the LLM may copy its bad pattern (returns 201, etc.) into real responses."""
+    from app.services.story_ai_provider import _STUB_STORY_RESPONSE
+    citations = AIStoryGenerator._find_ac_technicalisms(
+        _STUB_STORY_RESPONSE["acceptance_criteria"]
+    )
+    assert citations == [], (
+        f"Stub AC contain technical jargon: {citations}. "
+        "Keep the stub as a clean PO-language example."
+    )

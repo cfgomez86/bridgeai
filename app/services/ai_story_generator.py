@@ -37,6 +37,35 @@ _GWT_PATTERNS = [
 ]
 _GWT_MIN_RATIO = 0.6
 
+# Patterns that flag implementation jargon inside acceptance criteria.
+# AC must read in business / Product Owner language; technical detail belongs in subtasks.
+# Conservative on purpose — favor fewer false positives over catching every edge case.
+_AC_TECHNICAL_PATTERNS = [
+    # 1. File paths with a known source extension (reuses the same set as _PATH_RE).
+    _PATH_RE,
+    # 2. Code-tree segments that strongly suggest a path even without an extension
+    #    (e.g. "app/services/auth_service", "frontend/components/Foo").
+    re.compile(
+        r"\b(?:app|src|lib|backend|frontend|components?|pages?|routes?|"
+        r"services?|repositor(?:y|ies)|models?|controllers?|migrations?)/"
+        r"[\w./-]+",
+        re.IGNORECASE,
+    ),
+    # 3. HTTP status codes — only when preceded by a verb that implies a response code,
+    #    so we don't catch plain numbers like "8 caracteres" or "200 productos".
+    re.compile(
+        r"\b(?:responde|devuelve|retorna|returns?|return|"
+        r"status(?:\s+code)?|c[oó]digo(?:\s+http)?|http)\s+"
+        r"(?:con\s+)?(?:un\s+)?(?:c[oó]digo\s+)?(?:status\s+)?"
+        r"(?:1\d{2}|2\d{2}|3\d{2}|4\d{2}|5\d{2})\b",
+        re.IGNORECASE,
+    ),
+    # 4. REST methods followed by an endpoint path.
+    re.compile(r"\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/\S+"),
+    # 5. API endpoints (/api/..., /v1/..., /v2/...).
+    re.compile(r"(?<!\w)/(?:api|v\d+)/[\w/{}-]+"),
+]
+
 # Conservative UI signals — only trigger when the story clearly touches an interface.
 # Pure backend / job / cron / migration stories must NOT match here so that
 # subtasks.frontend remains a legitimate empty array.
@@ -116,6 +145,7 @@ class AIStoryGenerator:
                     raise HallucinatedPathError(invalid)
                 last_validated = validated
                 self._check_ac_format(validated["acceptance_criteria"])
+                self._check_ac_functional(validated["acceptance_criteria"])
                 self._check_frontend_explicit(validated, context)
                 self._logger.info("Story validation passed")
                 return validated
@@ -182,6 +212,46 @@ class AIStoryGenerator:
                 "'Dado <contexto>, Cuando <acción>, Entonces <resultado medible>' "
                 "(o 'Given/When/Then' en inglés) con resultados concretos y comprobables."
             )
+
+    @staticmethod
+    def _find_ac_technicalisms(criteria: list) -> list[str]:
+        """Return up to 5 technical jargon citations found across all AC.
+
+        Each citation is the matched substring trimmed to 80 chars. Empty list = clean.
+        """
+        citations: list[str] = []
+        for ac in criteria:
+            if not isinstance(ac, str):
+                continue
+            for pattern in _AC_TECHNICAL_PATTERNS:
+                for match in pattern.finditer(ac):
+                    cite = match.group(0).strip()
+                    if cite and cite not in citations:
+                        citations.append(cite[:80])
+                        if len(citations) >= 5:
+                            return citations
+        return citations
+
+    def _check_ac_functional(self, criteria: list) -> None:
+        """Reject AC that leak implementation detail (paths, HTTP codes, REST routes).
+
+        AC must describe observable, business-facing behaviour — Product Owner language.
+        Implementation specifics belong in subtasks/risk_notes, never in AC.
+        """
+        if not criteria:
+            return
+        citations = self._find_ac_technicalisms(criteria)
+        if not citations:
+            return
+        joined = "; ".join(f'"{c}"' for c in citations)
+        raise StoryQualityRetryError(
+            "los criterios de aceptación contienen jerga técnica de implementación "
+            f"(citas detectadas: {joined}). Reescribe TODOS los AC en lenguaje de Product Owner: "
+            "describe únicamente el COMPORTAMIENTO OBSERVABLE por el usuario en términos de "
+            "negocio. PROHIBIDO en los AC: rutas de archivo, códigos HTTP, métodos REST, "
+            "endpoints (/api/..., /v1/...), nombres de clases/módulos/tablas/columnas, "
+            "librerías o frameworks. Mueve esos detalles a las subtareas backend."
+        )
 
     @staticmethod
     def _context_implies_ui(context: dict) -> bool:
