@@ -321,13 +321,38 @@ interface Translations {
     startWorkflow: string
     stats: {
       requirements: string
+      analyses: string
+      analysesMeta: string
       stories: string
+      storiesMeta: string
       tickets: string
       approval: string
       approvalMeta: string
+      approvalMetaWithCounts: string
       quality: string
       qualityMeta: string
       qualityEmpty: string
+      qualityOrganic: string
+      qualityOrganicTooltip: string
+      qualityForced: string
+      qualityForcedMeta: string
+      qualityForcedMetaCreationOnly: string
+      qualityForcedMetaOverrideOnly: string
+      qualityForcedEmpty: string
+      qualityForcedTooltip: string
+      ticketsMetaWithFailures: string
+      storiesMetaWithTime: string
+      storiesMetaTimeOnly: string
+      unnecessaryForceMeta: string
+      dimensionsShow: string
+      dimensionsHide: string
+      dimensionsTitle: string
+      dimensionsEmpty: string
+      dimCompleteness: string
+      dimSpecificity: string
+      dimFeasibility: string
+      dimRiskCoverage: string
+      dimLanguageConsistency: string
       conversion: string
       conversionMeta: string
       conversionEmpty: string
@@ -887,13 +912,38 @@ const es: Translations = {
     startWorkflow: "Iniciar workflow →",
     stats: {
       requirements: "Requerimientos",
+      analyses: "Análisis",
+      analysesMeta: "{n}% de requerimientos",
       stories: "Historias generadas",
+      storiesMeta: "{n}% de análisis",
       tickets: "Tickets creados",
       approval: "Aprobación",
       approvalMeta: "{n} valoraciones",
+      approvalMetaWithCounts: "👍 {up} · 👎 {down}",
       quality: "Calidad media",
       qualityMeta: "{n} evaluadas",
       qualityEmpty: "Sin evaluar",
+      qualityOrganic: "Calidad orgánica",
+      qualityOrganicTooltip: "Promedio de las notas del juez sobre historias generadas a partir de requerimientos donde la entidad principal sí estaba en el codebase. Es la métrica de salud real del pipeline — no incluye historias forzadas.",
+      qualityForced: "Calidad forzada",
+      qualityForcedMeta: "{creation} por creación · {override} override",
+      qualityForcedMetaCreationOnly: "{n} por creación",
+      qualityForcedMetaOverrideOnly: "{n} override",
+      qualityForcedEmpty: "Sin forzadas",
+      qualityForcedTooltip: "Por creación: el sistema detectó un verbo de creación (crear, añadir…) — la historia describe la creación de una entidad nueva. Override: el usuario forzó la generación sobre un requerimiento que el sistema no pudo validar. En ambos casos el juez aplica notas más bajas por diseño.",
+      ticketsMetaWithFailures: "✓ {ok} · ✗ {failed}",
+      storiesMetaWithTime: "{n}% de análisis · {time}s avg",
+      storiesMetaTimeOnly: "{time}s avg",
+      unnecessaryForceMeta: "{n} con force innecesario",
+      dimensionsShow: "Ver desglose",
+      dimensionsHide: "Ocultar desglose",
+      dimensionsTitle: "Desglose por dimensión",
+      dimensionsEmpty: "Aún no hay historias evaluadas",
+      dimCompleteness: "Completitud",
+      dimSpecificity: "Especificidad",
+      dimFeasibility: "Viabilidad",
+      dimRiskCoverage: "Cobertura de riesgo",
+      dimLanguageConsistency: "Consistencia de idioma",
       conversion: "Conversión",
       conversionMeta: "{n} historias",
       conversionEmpty: "sin historias",
@@ -1273,13 +1323,38 @@ const en: Translations = {
     startWorkflow: "Start workflow →",
     stats: {
       requirements: "Requirements",
+      analyses: "Analyses",
+      analysesMeta: "{n}% of requirements",
       stories: "Stories generated",
+      storiesMeta: "{n}% of analyses",
       tickets: "Tickets created",
       approval: "Approval rate",
       approvalMeta: "{n} ratings",
+      approvalMetaWithCounts: "👍 {up} · 👎 {down}",
       quality: "Average quality",
       qualityMeta: "{n} evaluated",
       qualityEmpty: "Not evaluated yet",
+      qualityOrganic: "Organic quality",
+      qualityOrganicTooltip: "Average judge score across stories generated from requirements where the main entity actually existed in the codebase. The pipeline's real health metric — does not include forced stories.",
+      qualityForced: "Forced quality",
+      qualityForcedMeta: "{creation} creation · {override} override",
+      qualityForcedMetaCreationOnly: "{n} creation",
+      qualityForcedMetaOverrideOnly: "{n} override",
+      qualityForcedEmpty: "No forced",
+      qualityForcedTooltip: "Creation: the system detected a creation verb (create, add…) — the story describes creating a new entity. Override: the user forced generation on a requirement the system couldn't validate. In both cases the judge applies lower scores by design.",
+      ticketsMetaWithFailures: "✓ {ok} · ✗ {failed}",
+      storiesMetaWithTime: "{n}% of analyses · {time}s avg",
+      storiesMetaTimeOnly: "{time}s avg",
+      unnecessaryForceMeta: "{n} unnecessary force",
+      dimensionsShow: "Show breakdown",
+      dimensionsHide: "Hide breakdown",
+      dimensionsTitle: "Dimension breakdown",
+      dimensionsEmpty: "No evaluated stories yet",
+      dimCompleteness: "Completeness",
+      dimSpecificity: "Specificity",
+      dimFeasibility: "Feasibility",
+      dimRiskCoverage: "Risk coverage",
+      dimLanguageConsistency: "Language consistency",
       conversion: "Conversion",
       conversionMeta: "{n} stories",
       conversionEmpty: "no stories yet",
@@ -1749,13 +1824,38 @@ const ca: Translations = {
     startWorkflow: "Iniciar flux de treball →",
     stats: {
       requirements: "Requeriments",
+      analyses: "Anàlisis",
+      analysesMeta: "{n}% de requeriments",
       stories: "Històries generades",
+      storiesMeta: "{n}% d'anàlisis",
       tickets: "Tiquets creats",
       approval: "Aprovació",
       approvalMeta: "{n} valoracions",
+      approvalMetaWithCounts: "👍 {up} · 👎 {down}",
       quality: "Qualitat mitjana",
       qualityMeta: "{n} avaluades",
       qualityEmpty: "Sense avaluar",
+      qualityOrganic: "Qualitat orgànica",
+      qualityOrganicTooltip: "Mitjana de les notes del jutge sobre històries generades a partir de requeriments on l'entitat principal sí era al codebase. És la mètrica de salut real del pipeline — no inclou històries forçades.",
+      qualityForced: "Qualitat forçada",
+      qualityForcedMeta: "{creation} per creació · {override} override",
+      qualityForcedMetaCreationOnly: "{n} per creació",
+      qualityForcedMetaOverrideOnly: "{n} override",
+      qualityForcedEmpty: "Sense forçades",
+      qualityForcedTooltip: "Per creació: el sistema va detectar un verb de creació (crear, afegir…) — la història descriu la creació d'una entitat nova. Override: l'usuari va forçar la generació sobre un requeriment que el sistema no va poder validar. En tots dos casos el jutge aplica notes més baixes per disseny.",
+      ticketsMetaWithFailures: "✓ {ok} · ✗ {failed}",
+      storiesMetaWithTime: "{n}% d'anàlisis · {time}s avg",
+      storiesMetaTimeOnly: "{time}s avg",
+      unnecessaryForceMeta: "{n} amb force innecessari",
+      dimensionsShow: "Veure desglossament",
+      dimensionsHide: "Ocultar desglossament",
+      dimensionsTitle: "Desglossament per dimensió",
+      dimensionsEmpty: "Encara no hi ha històries avaluades",
+      dimCompleteness: "Completesa",
+      dimSpecificity: "Especificitat",
+      dimFeasibility: "Viabilitat",
+      dimRiskCoverage: "Cobertura de risc",
+      dimLanguageConsistency: "Consistència d'idioma",
       conversion: "Conversió",
       conversionMeta: "{n} històries",
       conversionEmpty: "sense històries",

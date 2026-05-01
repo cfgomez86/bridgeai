@@ -566,6 +566,20 @@ export interface DashboardStats {
   feedback_approval_rate: number | null
   quality_avg_overall: number | null
   quality_evaluated_count: number
+  quality_avg_organic: number | null
+  quality_count_organic: number
+  quality_avg_forced: number | null
+  quality_count_forced: number
+  quality_count_creation_bypass: number
+  quality_count_override: number
+  tickets_failed_count: number
+  avg_generation_time_seconds: number | null
+  unnecessary_force_count: number
+  quality_organic_avg_completeness: number | null
+  quality_organic_avg_specificity: number | null
+  quality_organic_avg_feasibility: number | null
+  quality_organic_avg_risk_coverage: number | null
+  quality_organic_avg_language_consistency: number | null
   tickets_by_provider: Record<string, number>
   stories_by_risk: Record<string, number>
 }

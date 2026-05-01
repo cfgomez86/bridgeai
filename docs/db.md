@@ -2,7 +2,7 @@
 
 Motor: **PostgreSQL** (único soportado). ORM: **SQLAlchemy 2.0** con sintaxis `Mapped[...]`. Migraciones: **Alembic**. La `Base` declarativa vive en `app/database/session.py` y todos los modelos se importan en `app/main.py` para que `Base.metadata` los registre automáticamente.
 
-> Para la arquitectura general ver [`arquitectura.md`](./arquitectura.md). Para los flujos de IA ver [`specs/ai.md`](./specs/ai.md).
+> Para la arquitectura general ver [`arquitectura.md`](./arquitectura.md). Para los flujos de IA ver [`specs/ai.md`](./specs/ai.md). Para la guía operativa de métricas (qué significan, cómo leerlas) ver [`metricas.md`](./metricas.md).
 
 ---
 
@@ -270,7 +270,7 @@ erDiagram
 | `requirements` | Clasificación LLM del texto de requerimiento | `UNIQUE (tenant_id, source_connection_id, requirement_text_hash, project_id)` para idempotencia; `keywords` es JSON serializado |
 | `impact_analysis` | Resultado del análisis de impacto | `risk_level` calculado por número de archivos impactados (LOW <3, MEDIUM 3-10, HIGH >10) |
 | `impacted_files` | Detalle 1:N por análisis | `reason` ∈ `{keyword_match, imports_impacted_file, imported_by_impacted_file}` |
-| `user_stories` | Historia generada (artefacto final) | Listas (AC, subtasks, DoD, risk_notes) se guardan como JSON serializado en `Text`; `entity_not_found` flagea historias forzadas sin entidad en código (clave de partición de métricas — ver §4.1); `generator_model` registra el modelo IA usado |
+| `user_stories` | Historia generada (artefacto final) | Listas (AC, subtasks, DoD, risk_notes) se guardan como JSON serializado en `Text`; `entity_not_found` flagea historias generadas sin entidad en código (clave de partición de métricas — ver §4.1); `was_forced` distingue override explícito del usuario (`force=true`) vs creación intencional (auto-bypass por verbo de creación), formando una segunda dimensión de partición; `generator_model` registra el modelo IA usado |
 | `story_quality_score` | Output del LLM-as-Judge (5 dimensiones + agregados) | `dispersion` = stdev poblacional cuando hay N>1 muestras; `evidence` = JSON con citas textuales por dimensión baja. Las agregaciones se parten por `user_stories.entity_not_found` para no mezclar runs degradados con runs orgánicos (ver §4.1) |
 | `story_feedback` | Reacción del usuario sobre una historia | `UNIQUE (tenant_id, story_id, user_id)` — un usuario un voto por historia |
 
@@ -300,9 +300,9 @@ Toda tabla con `tenant_id` se consulta a través de un repository en `app/reposi
 
 ---
 
-### 4.1 Partición de métricas de calidad (organic vs forced)
+### 4.1 Partición de métricas de calidad (organic vs forced, con sub-corte por origen)
 
-Las consultas agregadas sobre `story_quality_score` siempre se parten por `user_stories.entity_not_found` para que las historias forzadas (donde el juez aplica caps duros por diseño) no contaminen el promedio "real". El método `StoryQualityRepository.summary_since(since)` resuelve los tres buckets en una sola query con `CASE` (portátil entre PostgreSQL y SQLite de tests):
+Las consultas agregadas sobre `story_quality_score` siempre se parten por `user_stories.entity_not_found` para que las historias forzadas (donde el juez aplica caps duros por diseño) no contaminen el promedio "real". Dentro del bucket forced, se sub-corta por `user_stories.was_forced` para distinguir la **creación intencional** del sistema (verbo de creación → bypass automático) del **override explícito** del usuario (`force=true` sobre input dudoso). El método `StoryQualityRepository.summary_since(since)` resuelve los tres buckets — y los dos sub-counts dentro de forced — en una sola query con `CASE` (portátil entre PostgreSQL y SQLite de tests):
 
 ```sql
 SELECT
@@ -310,6 +310,8 @@ SELECT
   AVG(CASE WHEN us.entity_not_found = true  THEN sqs.overall END) AS forced_avg,
   COUNT(CASE WHEN us.entity_not_found = false THEN 1 END)         AS organic_count,
   COUNT(CASE WHEN us.entity_not_found = true  THEN 1 END)         AS forced_count,
+  COUNT(CASE WHEN us.entity_not_found = true  AND us.was_forced = false THEN 1 END) AS creation_bypass_count,
+  COUNT(CASE WHEN us.entity_not_found = true  AND us.was_forced = true  THEN 1 END) AS override_count,
   AVG(sqs.overall) AS all_avg,
   COUNT(*)         AS all_count
 FROM story_quality_score sqs
@@ -320,12 +322,21 @@ WHERE sqs.tenant_id = :tid
   AND sqs.evaluated_at >= :since;
 ```
 
+Cuatro estados posibles en `user_stories`:
+
+| `entity_not_found` | `was_forced` | Bucket | Significado |
+|---|---|---|---|
+| false | false | `organic` | Generación normal — entidad existe en el codebase |
+| true | false | `forced.creation_bypass` | Verbo de creación — sistema bypassea el chequeo intencionalmente |
+| true | true | `forced.override` | Usuario forzó (`force=true`) sobre un requerimiento incoherente |
+| false | true | (organic) | "Force innecesario": usuario pasó force, pero la entidad sí estaba — UX smell, no se surface en UI todavía |
+
 Notas operativas:
 
 - El JOIN incluye doble tenant check (lado score y lado story) — defensa en profundidad para que un score huérfano de otro tenant nunca se cuele.
 - `AVG()` ignora NULLs, así que el `CASE` sin `ELSE` produce el filtro correcto.
 - Mismo patrón en `avg_overall_since(since, forced=...)` y `count_evaluated_since(since, forced=...)` cuando se necesita un solo bucket.
-- Endpoint que materializa la consulta: `GET /api/v1/system/quality/live?days=N` (con `N` clamped a `[1, 365]`).
+- Endpoint que materializa la consulta: `GET /api/v1/system/quality/live?days=N` (con `N` clamped a `[1, 365]`). El dashboard (`GET /api/v1/dashboard/stats`) consume el mismo `summary_since` para sus KPIs partidos.
 
 ---
 

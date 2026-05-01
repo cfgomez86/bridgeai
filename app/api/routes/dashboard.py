@@ -34,6 +34,20 @@ class DashboardStatsResponse(BaseModel):
     feedback_approval_rate: Optional[float]
     quality_avg_overall: Optional[float]
     quality_evaluated_count: int
+    quality_avg_organic: Optional[float] = None
+    quality_count_organic: int = 0
+    quality_avg_forced: Optional[float] = None
+    quality_count_forced: int = 0
+    quality_count_creation_bypass: int = 0
+    quality_count_override: int = 0
+    tickets_failed_count: int = 0
+    avg_generation_time_seconds: Optional[float] = None
+    unnecessary_force_count: int = 0
+    quality_organic_avg_completeness: Optional[float] = None
+    quality_organic_avg_specificity: Optional[float] = None
+    quality_organic_avg_feasibility: Optional[float] = None
+    quality_organic_avg_risk_coverage: Optional[float] = None
+    quality_organic_avg_language_consistency: Optional[float] = None
     tickets_by_provider: dict[str, int]
     stories_by_risk: dict[str, int]
 
@@ -89,6 +103,20 @@ async def get_dashboard_stats(
         feedback_approval_rate=stats.feedback_approval_rate,
         quality_avg_overall=stats.quality_avg_overall,
         quality_evaluated_count=stats.quality_evaluated_count,
+        quality_avg_organic=stats.quality_avg_organic,
+        quality_count_organic=stats.quality_count_organic,
+        quality_avg_forced=stats.quality_avg_forced,
+        quality_count_forced=stats.quality_count_forced,
+        quality_count_creation_bypass=stats.quality_count_creation_bypass,
+        quality_count_override=stats.quality_count_override,
+        tickets_failed_count=stats.tickets_failed_count,
+        avg_generation_time_seconds=stats.avg_generation_time_seconds,
+        unnecessary_force_count=stats.unnecessary_force_count,
+        quality_organic_avg_completeness=stats.quality_organic_avg_completeness,
+        quality_organic_avg_specificity=stats.quality_organic_avg_specificity,
+        quality_organic_avg_feasibility=stats.quality_organic_avg_feasibility,
+        quality_organic_avg_risk_coverage=stats.quality_organic_avg_risk_coverage,
+        quality_organic_avg_language_consistency=stats.quality_organic_avg_language_consistency,
         tickets_by_provider=stats.tickets_by_provider,
         stories_by_risk=stats.stories_by_risk,
     )

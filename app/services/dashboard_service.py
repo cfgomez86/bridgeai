@@ -26,6 +26,20 @@ class DashboardStats:
     feedback_approval_rate: Optional[float]
     quality_avg_overall: Optional[float]
     quality_evaluated_count: int
+    quality_avg_organic: Optional[float] = None
+    quality_count_organic: int = 0
+    quality_avg_forced: Optional[float] = None
+    quality_count_forced: int = 0
+    quality_count_creation_bypass: int = 0
+    quality_count_override: int = 0
+    tickets_failed_count: int = 0
+    avg_generation_time_seconds: Optional[float] = None
+    unnecessary_force_count: int = 0
+    quality_organic_avg_completeness: Optional[float] = None
+    quality_organic_avg_specificity: Optional[float] = None
+    quality_organic_avg_feasibility: Optional[float] = None
+    quality_organic_avg_risk_coverage: Optional[float] = None
+    quality_organic_avg_language_consistency: Optional[float] = None
     tickets_by_provider: dict[str, int] = field(default_factory=dict)
     stories_by_risk: dict[str, int] = field(
         default_factory=lambda: {"LOW": 0, "MEDIUM": 0, "HIGH": 0}
@@ -81,6 +95,11 @@ class DashboardService:
         conversion_rate = (
             stories_with_tickets / stories_count if stories_count > 0 else None
         )
+        # Single hit returns organic / forced (with creation_bypass + override
+        # sub-counts) / all — replaces two separate calls and keeps the
+        # dashboard's quality numbers consistent at one DB snapshot.
+        quality = self._quality_repo.summary_since(since)
+        organic = quality["organic"]
         return DashboardStats(
             window_days=self._window_days,
             requirements_count=self._requirement_repo.count_since(since),
@@ -92,8 +111,22 @@ class DashboardService:
             feedback_thumbs_up=feedback_counts["thumbs_up"],
             feedback_thumbs_down=feedback_counts["thumbs_down"],
             feedback_approval_rate=approval_rate,
-            quality_avg_overall=self._quality_repo.avg_overall_since(since),
-            quality_evaluated_count=self._quality_repo.count_evaluated_since(since),
+            quality_avg_overall=quality["all"]["avg_overall"],
+            quality_evaluated_count=quality["all"]["count"],
+            quality_avg_organic=organic["avg_overall"],
+            quality_count_organic=organic["count"],
+            quality_avg_forced=quality["forced"]["avg_overall"],
+            quality_count_forced=quality["forced"]["count"],
+            quality_count_creation_bypass=quality["forced"]["creation_bypass_count"],
+            quality_count_override=quality["forced"]["override_count"],
+            tickets_failed_count=self._ticket_repo.count_failed_since(since),
+            avg_generation_time_seconds=self._story_repo.avg_generation_time_since(since),
+            unnecessary_force_count=self._story_repo.count_unnecessary_force_since(since),
+            quality_organic_avg_completeness=organic.get("avg_completeness"),
+            quality_organic_avg_specificity=organic.get("avg_specificity"),
+            quality_organic_avg_feasibility=organic.get("avg_feasibility"),
+            quality_organic_avg_risk_coverage=organic.get("avg_risk_coverage"),
+            quality_organic_avg_language_consistency=organic.get("avg_language_consistency"),
             tickets_by_provider=self._ticket_repo.count_by_provider_since(since),
             stories_by_risk=self._story_repo.count_by_risk_since(since),
         )

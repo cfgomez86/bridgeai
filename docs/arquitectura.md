@@ -2,7 +2,7 @@
 
 BridgeAI es una plataforma SaaS multi-tenant que conecta repositorios de código y sistemas de tickets para generar **Historias de Usuario** automáticamente a partir de requerimientos en lenguaje natural. La arquitectura sigue **Clean Architecture** con una regla de dependencias estricta: las capas externas dependen de las internas, nunca al revés.
 
-> Este documento describe la arquitectura de la aplicación. Para el modelo de datos ver [`db.md`](./db.md). Para el detalle del pipeline de IA ver [`specs/ai.md`](./specs/ai.md).
+> Este documento describe la arquitectura de la aplicación. Para el modelo de datos ver [`db.md`](./db.md). Para el detalle del pipeline de IA ver [`specs/ai.md`](./specs/ai.md). Para qué significa cada métrica del dashboard y cómo leerlas ver [`metricas.md`](./metricas.md).
 
 ---
 
@@ -114,6 +114,8 @@ flowchart LR
 
 `app/core/context.py` expone `get_tenant_id()` que **lanza `RuntimeError`** si el `ContextVar` no está seteado. Esto convierte un fallo de autenticación en un error explícito en lugar de una fuga silenciosa de datos: imposible que un repositorio se ejecute sin contexto.
 
+> Detalle del flujo JWT, JWKS, provisioning y modos de fallo en [`specs/auth.md`](./specs/auth.md).
+
 ---
 
 ## 4. Aislamiento por conexión (Phase 7)
@@ -164,34 +166,45 @@ graph LR
 
 | Servicio | Entrada → Salida | Notas |
 |---|---|---|
-| `CodeIndexingService` | Repo (local o SCM remoto) → registros `CodeFile` | Hash SHA-256, batch save, concurrencia con `ThreadPoolExecutor`, eliminación de stale paths |
+| `CodeIndexingService` | Repo (local o SCM remoto) → registros `CodeFile` | Hash SHA-256, batch save, concurrencia con `ThreadPoolExecutor`, eliminación de stale paths. Detalle de qué se indexa, qué se almacena y qué viaja al LLM en [`specs/indexacion.md`](./specs/indexacion.md) |
 | `RequirementUnderstandingService` | Texto libre → `Requirement` clasificado | Sanitización anti-prompt-injection, caché por `(hash, project, connection)` |
 | `ImpactAnalysisService` | Requerimiento → `ImpactAnalysis` + lista de archivos impactados | Scan keyword + AST imports + filtro semántico LLM + grafo de dependencias |
 | `StoryGenerationService` | `requirement_id` + `analysis_id` → `UserStory` | Validación de existencia de entidad, whitelist de paths, retry inteligente. Marca `entity_not_found=True` cuando el usuario fuerza la generación sobre un requerimiento incoherente — ver §5.1 |
 | `TicketIntegrationService` | `UserStory` + provider → `TicketIntegration` | Idempotencia, retry exponencial, audit log con payload + response |
 | `SourceConnectionService` | OAuth callback / PAT → `SourceConnection` | Encriptación de tokens, audit log de eventos |
 
-### 5.1 Partición de métricas: orgánico vs forzado
+> Detalle de los flujos: [`specs/integraciones-scm.md`](./specs/integraciones-scm.md) (GitHub/GitLab/Azure Repos/Bitbucket + OAuth + PAT + Fernet) y [`specs/integracion-tickets.md`](./specs/integracion-tickets.md) (Jira + Azure DevOps + idempotencia + retry exponencial + audit).
 
-Cuando el `EntityExistenceChecker` detecta que la entidad principal del requerimiento no aparece en el codebase, la generación se rechaza por defecto (HTTP 422). El usuario puede mandar `force=true` para forzarla; el sistema también bypassea el chequeo automáticamente cuando la acción es un verbo de creación (`create`, `add`, `crear`…). Cualquiera de las dos vías persiste `user_stories.entity_not_found=True`.
+### 5.1 Partición de métricas: orgánico vs forzado (con sub-corte por origen)
 
-El `StoryQualityJudge` recibe ese flag y aplica caps duros (completeness ≤3, specificity ≤4, feasibility ≤4) por diseño — esas notas bajas son **esperadas**, no un fallo. Para que no contaminen las métricas agregadas, todos los reportes en vivo separan dos buckets:
+Cuando el `EntityExistenceChecker` detecta que la entidad principal del requerimiento no aparece en el codebase, la generación se rechaza por defecto (HTTP 422). El usuario puede mandar `force=true` para forzarla; el sistema también bypassea el chequeo automáticamente cuando la acción es un verbo de creación (`create`, `add`, `crear`…). Cualquiera de las dos vías persiste `user_stories.entity_not_found=True`, pero **no son lo mismo** — la creación intencional es legítima, el override del usuario es input degradado real.
+
+Para distinguirlas, el dominio persiste también `user_stories.was_forced` (el flag `force` del request). El `StoryQualityJudge` recibe `entity_not_found` y aplica caps duros (completeness ≤3, specificity ≤4, feasibility ≤4) — esas notas bajas son **esperadas** por diseño, no un fallo. Las métricas agregadas se parten para que no contaminen el baseline:
 
 ```mermaid
 flowchart LR
     SCORE[(story_quality_score)] -->|JOIN story_id| STORY[(user_stories)]
     STORY -->|entity_not_found=False| ORG[Bucket organic<br/>baseline real]
-    STORY -->|entity_not_found=True| FRC[Bucket forced<br/>condición degradada]
-    ORG --> EP[GET /system/quality/live]
-    FRC --> EP
+    STORY -->|entity_not_found=True<br/>was_forced=False| CREATE[forced.creation_bypass<br/>creación intencional]
+    STORY -->|entity_not_found=True<br/>was_forced=True| OVR[forced.override<br/>override del usuario]
+    ORG --> LIVE[GET /system/quality/live]
+    CREATE --> LIVE
+    OVR --> LIVE
+    ORG --> DASH[GET /dashboard/stats]
+    CREATE --> DASH
+    OVR --> DASH
 
     style ORG fill:#0f5,color:#000
-    style FRC fill:#fa5,color:#000
+    style CREATE fill:#fa5,color:#000
+    style OVR fill:#f55,color:#000
 ```
 
-- **Repositorio** (`StoryQualityRepository.summary_since`) emite los tres buckets (`organic`, `forced`, `all`) en una sola query con `CASE` (portátil PG/SQLite).
-- **Endpoint** `GET /api/v1/system/quality/live?days=N` devuelve `{window_days, organic, forced, all}` con `avg_overall`, `count` y `avg_dispersion` por bucket.
-- El endpoint legado `GET /api/v1/system/quality` sigue sirviendo `eval_report.json` del harness offline — son fuentes distintas.
+- **Repositorio** (`StoryQualityRepository.summary_since`) emite tres buckets (`organic`, `forced`, `all`) en una sola query con `CASE`; dentro de `forced` reporta `creation_bypass_count` y `override_count`. Portátil PG/SQLite.
+- **Endpoint live** `GET /api/v1/system/quality/live?days=N` devuelve `{window_days, organic, forced, all}` con `avg_overall`, `count` y `avg_dispersion` por bucket.
+- **Dashboard** (`GET /api/v1/dashboard/stats`) consume el mismo `summary_since` y expone:
+  - Funnel completo en row 1: Requirements → Análisis → Historias → Tickets (cuatro KPIs).
+  - Calidad partida en row 2: *Calidad orgánica* y *Calidad forzada* (con meta "X por creación · Y override"), junto a Aprobación (con chips 👍/👎 absolutos) y Conversión.
+- El endpoint legado `GET /api/v1/system/quality` sigue sirviendo `eval_report.json` del harness offline — fuente distinta.
 
 ---
 
@@ -271,6 +284,8 @@ Variables relevantes (ver [`CLAUDE.md`](../CLAUDE.md) para la lista completa):
 | Pérdida de auditoría tras borrado de conexión | `connection_audit_logs.connection_id` es plain string (no FK); audit logs sobreviven al delete |
 
 `app/core/security.py` añade `SecurityMiddleware` con cabeceras (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Strict-Transport-Security`).
+
+> Profundización: [`specs/auth.md`](./specs/auth.md) cubre JWT/JWKS y el contrato de `ContextVar`; [`specs/integraciones-scm.md`](./specs/integraciones-scm.md) cubre la encriptación Fernet de tokens y la validación anti-SSRF de `base_url`.
 
 ---
 

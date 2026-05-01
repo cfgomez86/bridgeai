@@ -7,6 +7,7 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -30,7 +31,14 @@ def _make_engine():
     return engine
 
 
-def _seed_story(db, *, story_id: str, tenant_id: str, entity_not_found: bool) -> UserStory:
+def _seed_story(
+    db,
+    *,
+    story_id: str,
+    tenant_id: str,
+    entity_not_found: bool,
+    was_forced: bool = False,
+) -> UserStory:
     story = UserStory(
         id=story_id,
         tenant_id=tenant_id,
@@ -48,6 +56,7 @@ def _seed_story(db, *, story_id: str, tenant_id: str, entity_not_found: bool) ->
         risk_level="LOW",
         generation_time_seconds=0.1,
         entity_not_found=entity_not_found,
+        was_forced=was_forced,
         created_at=datetime.now(timezone.utc),
     )
     db.add(story)
@@ -62,16 +71,21 @@ def _seed_score(
     overall: float,
     dispersion: float | None = None,
     evaluated_at: datetime | None = None,
+    completeness: float | None = None,
+    specificity: float | None = None,
+    feasibility: float | None = None,
+    risk_coverage: float | None = None,
+    language_consistency: float | None = None,
 ) -> StoryQualityScore:
     score = StoryQualityScore(
         id=uuid.uuid4(),
         tenant_id=tenant_id,
         story_id=story_id,
-        completeness=overall,
-        specificity=overall,
-        feasibility=overall,
-        risk_coverage=overall,
-        language_consistency=overall,
+        completeness=completeness if completeness is not None else overall,
+        specificity=specificity if specificity is not None else overall,
+        feasibility=feasibility if feasibility is not None else overall,
+        risk_coverage=risk_coverage if risk_coverage is not None else overall,
+        language_consistency=language_consistency if language_consistency is not None else overall,
         overall=overall,
         justification=None,
         judge_model="test-judge",
@@ -196,6 +210,120 @@ def test_avg_overall_since_with_forced_filter():
     # Filtered.
     assert repo.avg_overall_since(None, forced=False) == 8.0
     assert repo.avg_overall_since(None, forced=True) == 4.0
+
+
+def test_summary_since_returns_organic_dimension_averages():
+    """The 5 judge dimensions must be averaged across organic stories only —
+    forced rows have hard caps that would distort the per-dimension picture."""
+    engine = _make_engine()
+    db = sessionmaker(bind=engine)()
+
+    # Two organic with custom per-dimension scores. risk_coverage is the
+    # weakest in both — verifies it surfaces as such in the average.
+    _seed_story(db, story_id="org-1", tenant_id=TEST_TENANT_ID, entity_not_found=False)
+    _seed_score(
+        db, story_id="org-1", tenant_id=TEST_TENANT_ID, overall=7.0,
+        completeness=8.0, specificity=8.0, feasibility=8.0,
+        risk_coverage=4.0, language_consistency=7.0,
+    )
+    _seed_story(db, story_id="org-2", tenant_id=TEST_TENANT_ID, entity_not_found=False)
+    _seed_score(
+        db, story_id="org-2", tenant_id=TEST_TENANT_ID, overall=7.5,
+        completeness=9.0, specificity=8.0, feasibility=8.0,
+        risk_coverage=5.0, language_consistency=7.5,
+    )
+
+    # Forced row with extreme dimensions — must NOT contaminate organic averages.
+    _seed_story(db, story_id="frc-1", tenant_id=TEST_TENANT_ID, entity_not_found=True)
+    _seed_score(
+        db, story_id="frc-1", tenant_id=TEST_TENANT_ID, overall=2.0,
+        completeness=1.0, specificity=1.0, feasibility=1.0,
+        risk_coverage=1.0, language_consistency=1.0,
+    )
+    db.commit()
+
+    summary = StoryQualityRepository(db).summary_since(None)
+    organic = summary["organic"]
+
+    assert organic["avg_completeness"] == pytest.approx(8.5)
+    assert organic["avg_specificity"] == pytest.approx(8.0)
+    assert organic["avg_feasibility"] == pytest.approx(8.0)
+    assert organic["avg_risk_coverage"] == pytest.approx(4.5)
+    assert organic["avg_language_consistency"] == pytest.approx(7.25)
+
+
+def test_summary_since_dimension_averages_none_when_organic_empty():
+    """No organic stories ⇒ all 5 dimension averages are None (not 0)."""
+    engine = _make_engine()
+    db = sessionmaker(bind=engine)()
+
+    _seed_story(db, story_id="frc-1", tenant_id=TEST_TENANT_ID, entity_not_found=True)
+    _seed_score(db, story_id="frc-1", tenant_id=TEST_TENANT_ID, overall=4.0)
+    db.commit()
+
+    organic = StoryQualityRepository(db).summary_since(None)["organic"]
+
+    assert organic["count"] == 0
+    assert organic["avg_completeness"] is None
+    assert organic["avg_specificity"] is None
+    assert organic["avg_feasibility"] is None
+    assert organic["avg_risk_coverage"] is None
+    assert organic["avg_language_consistency"] is None
+
+
+def test_summary_since_subdivides_forced_by_was_forced():
+    """Inside the forced bucket, creation_bypass_count vs override_count must
+    partition correctly by `user_stories.was_forced`."""
+    engine = _make_engine()
+    db = sessionmaker(bind=engine)()
+
+    # Organic baseline.
+    _seed_story(db, story_id="org-1", tenant_id=TEST_TENANT_ID, entity_not_found=False)
+    _seed_score(db, story_id="org-1", tenant_id=TEST_TENANT_ID, overall=8.0)
+
+    # Creation bypass: entity not found, system bypassed via creation verb.
+    _seed_story(
+        db, story_id="creation-1", tenant_id=TEST_TENANT_ID,
+        entity_not_found=True, was_forced=False,
+    )
+    _seed_score(db, story_id="creation-1", tenant_id=TEST_TENANT_ID, overall=5.0)
+
+    # User explicit override.
+    _seed_story(
+        db, story_id="override-1", tenant_id=TEST_TENANT_ID,
+        entity_not_found=True, was_forced=True,
+    )
+    _seed_score(db, story_id="override-1", tenant_id=TEST_TENANT_ID, overall=4.0)
+    db.commit()
+
+    summary = StoryQualityRepository(db).summary_since(None)
+
+    assert summary["organic"]["count"] == 1
+    assert summary["organic"]["avg_overall"] == 8.0
+
+    assert summary["forced"]["count"] == 2
+    assert summary["forced"]["avg_overall"] == 4.5
+    assert summary["forced"]["creation_bypass_count"] == 1
+    assert summary["forced"]["override_count"] == 1
+
+    assert summary["all"]["count"] == 3
+    # (8 + 5 + 4) / 3
+    assert summary["all"]["avg_overall"] == pytest.approx(17.0 / 3.0)
+
+
+def test_summary_since_forced_subcounts_zero_when_no_forced_rows():
+    engine = _make_engine()
+    db = sessionmaker(bind=engine)()
+
+    _seed_story(db, story_id="org-1", tenant_id=TEST_TENANT_ID, entity_not_found=False)
+    _seed_score(db, story_id="org-1", tenant_id=TEST_TENANT_ID, overall=7.0)
+    db.commit()
+
+    summary = StoryQualityRepository(db).summary_since(None)
+
+    assert summary["forced"]["count"] == 0
+    assert summary["forced"]["creation_bypass_count"] == 0
+    assert summary["forced"]["override_count"] == 0
 
 
 def test_count_evaluated_since_with_forced_filter():

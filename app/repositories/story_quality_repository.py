@@ -110,15 +110,23 @@ class StoryQualityRepository:
         return q.count()
 
     def summary_since(self, since: Optional[datetime]) -> dict:
-        """Aggregate scores partitioned by `user_stories.entity_not_found`.
+        """Aggregate scores partitioned by `user_stories.entity_not_found`,
+        with the forced bucket sub-divided by `user_stories.was_forced`.
 
-        Returns three buckets — `organic` (entity_not_found=False), `forced`
-        (entity_not_found=True), and `all` — each with `avg_overall`, `count`,
-        and `avg_dispersion`. Uses CASE expressions so it stays portable across
-        PostgreSQL and SQLite (used in unit tests).
+        Returns three buckets:
+          - `organic` (entity_not_found=False) — clean baseline
+          - `forced` (entity_not_found=True) — degraded inputs; sub-divided into:
+              * `creation_bypass_count`: was_forced=False (system-driven creation)
+              * `override_count`: was_forced=True (user explicit override)
+          - `all` — everything
+
+        Each bucket has `avg_overall`, `count`, and `avg_dispersion`. Uses CASE
+        expressions so it stays portable across PostgreSQL and SQLite (tests).
         """
         organic_pred = UserStory.entity_not_found.is_(False)
         forced_pred = UserStory.entity_not_found.is_(True)
+        creation_bypass_pred = forced_pred & UserStory.was_forced.is_(False)
+        override_pred = forced_pred & UserStory.was_forced.is_(True)
 
         organic_overall = func.avg(case((organic_pred, StoryQualityScore.overall)))
         forced_overall = func.avg(case((forced_pred, StoryQualityScore.overall)))
@@ -126,6 +134,16 @@ class StoryQualityRepository:
         forced_count = func.count(case((forced_pred, 1)))
         organic_dispersion = func.avg(case((organic_pred, StoryQualityScore.dispersion)))
         forced_dispersion = func.avg(case((forced_pred, StoryQualityScore.dispersion)))
+        creation_bypass_count = func.count(case((creation_bypass_pred, 1)))
+        override_count = func.count(case((override_pred, 1)))
+        # Per-dimension averages, organic only — forced has hard caps that
+        # would distort the picture; the goal is to see where the LLM is
+        # weakest under normal generation.
+        organic_completeness = func.avg(case((organic_pred, StoryQualityScore.completeness)))
+        organic_specificity = func.avg(case((organic_pred, StoryQualityScore.specificity)))
+        organic_feasibility = func.avg(case((organic_pred, StoryQualityScore.feasibility)))
+        organic_risk_coverage = func.avg(case((organic_pred, StoryQualityScore.risk_coverage)))
+        organic_language_consistency = func.avg(case((organic_pred, StoryQualityScore.language_consistency)))
 
         q = (
             self._db.query(
@@ -138,6 +156,13 @@ class StoryQualityRepository:
                 func.avg(StoryQualityScore.overall),
                 func.count(StoryQualityScore.id),
                 func.avg(StoryQualityScore.dispersion),
+                creation_bypass_count,
+                override_count,
+                organic_completeness,
+                organic_specificity,
+                organic_feasibility,
+                organic_risk_coverage,
+                organic_language_consistency,
             )
             .join(UserStory, UserStory.id == StoryQualityScore.story_id)
             .filter(
@@ -159,11 +184,18 @@ class StoryQualityRepository:
                 "avg_overall": _f(row[0]),
                 "count": int(row[2] or 0),
                 "avg_dispersion": _f(row[4]),
+                "avg_completeness": _f(row[11]),
+                "avg_specificity": _f(row[12]),
+                "avg_feasibility": _f(row[13]),
+                "avg_risk_coverage": _f(row[14]),
+                "avg_language_consistency": _f(row[15]),
             },
             "forced": {
                 "avg_overall": _f(row[1]),
                 "count": int(row[3] or 0),
                 "avg_dispersion": _f(row[5]),
+                "creation_bypass_count": int(row[9] or 0),
+                "override_count": int(row[10] or 0),
             },
             "all": {
                 "avg_overall": _f(row[6]),
