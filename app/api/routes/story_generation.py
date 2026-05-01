@@ -1,6 +1,7 @@
 import asyncio
 import json
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -155,6 +156,27 @@ class QualityMetricsResponse(BaseModel):
 class SystemQualityResponse(BaseModel):
     status: str
     data: Optional[dict] = None
+
+
+class QualityBucket(BaseModel):
+    avg_overall: Optional[float] = None
+    count: int = 0
+    avg_dispersion: Optional[float] = None
+
+
+class LiveQualityResponse(BaseModel):
+    """Real-time judge metrics partitioned by `user_stories.entity_not_found`.
+
+    `organic` covers stories whose requirement matched the codebase; `forced`
+    covers stories generated under degraded inputs (the judge applies hard
+    score caps in this case by design — see `story_quality_judge.py`). Reading
+    them separately keeps degraded-input runs from polluting the baseline.
+    """
+
+    window_days: int
+    organic: QualityBucket
+    forced: QualityBucket
+    all: QualityBucket
 
 
 def get_story_service(
@@ -546,3 +568,19 @@ async def get_system_quality(
     except (OSError, ValueError) as exc:
         logger.debug("Eval report not available at %s: %s", settings.EVAL_REPORT_PATH, exc)
         return SystemQualityResponse(status="not_evaluated")
+
+
+@router.get("/system/quality/live", response_model=LiveQualityResponse)
+async def get_live_system_quality(
+    days: int = 30,
+    db: Session = Depends(get_db),
+) -> LiveQualityResponse:
+    window_days = max(1, min(days, 365))
+    since = datetime.utcnow() - timedelta(days=window_days)
+    summary = StoryQualityRepository(db).summary_since(since)
+    return LiveQualityResponse(
+        window_days=window_days,
+        organic=QualityBucket(**summary["organic"]),
+        forced=QualityBucket(**summary["forced"]),
+        all=QualityBucket(**summary["all"]),
+    )
