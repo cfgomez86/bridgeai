@@ -18,7 +18,7 @@ from app.services.entity_existence_checker import (
 )
 from app.services.story_points_calculator import StoryPointsCalculator
 
-_WHITELIST_CAP = 300
+_WHITELIST_CAP = 150
 _CREATION_VERBS = {"create", "add", "crear", "añadir", "anadir", "agregar"}
 
 

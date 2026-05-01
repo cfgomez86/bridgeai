@@ -163,11 +163,12 @@ def test_openai_story_provider_raises_on_invalid_json():
 
 # --- GeminiStoryProvider tests ---
 
-def _make_gemini_settings(model="gemini-2.0-flash"):
+def _make_gemini_settings(model="gemini-2.0-flash", cache_ttl: int = 0):
     settings = MagicMock()
     settings.GEMINI_API_KEY = "test-key"
     settings.AI_MODEL = model
     settings.AI_MAX_OUTPUT_TOKENS = 8192
+    settings.GEMINI_CACHE_TTL_SECONDS = cache_ttl
     return settings
 
 
@@ -233,6 +234,111 @@ def test_gemini_story_provider_uses_json_mime_type():
 
     call_kwargs = MockClient.return_value.models.generate_content.call_args.kwargs
     assert call_kwargs["config"].response_mime_type == "application/json"
+
+
+# --- Gemini explicit prompt cache (caches.create) ---
+
+
+def _make_gemini_response():
+    mock_candidate = MagicMock()
+    mock_candidate.finish_reason.name = "STOP"
+    mock_response = MagicMock()
+    mock_response.text = _VALID_STORY_JSON
+    mock_response.candidates = [mock_candidate]
+    return mock_response
+
+
+def _reset_gemini_cache_index():
+    from app.services.story_ai_provider import _GEMINI_CACHE_INDEX
+    _GEMINI_CACHE_INDEX.clear()
+
+
+def test_gemini_no_cache_when_ttl_zero():
+    """TTL=0 must skip caches.create entirely — preserves the un-cached path."""
+    _reset_gemini_cache_index()
+    settings = _make_gemini_settings(cache_ttl=0)
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = _make_gemini_response()
+        provider = GeminiStoryProvider(settings)
+        provider.generate_story(_CONTEXT)
+
+    assert MockClient.return_value.caches.create.call_count == 0
+    gen_kwargs = MockClient.return_value.models.generate_content.call_args.kwargs
+    assert getattr(gen_kwargs["config"], "cached_content", None) is None
+
+
+def test_gemini_creates_cache_once_and_reuses_on_second_call():
+    """With TTL set, the static block is cached once and the second call passes
+    cached_content instead of re-sending the static block."""
+    _reset_gemini_cache_index()
+    settings = _make_gemini_settings(cache_ttl=600)
+
+    mock_cache = MagicMock()
+    mock_cache.name = "cachedContents/abc123"
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.caches.create.return_value = mock_cache
+        MockClient.return_value.models.generate_content.return_value = _make_gemini_response()
+        provider = GeminiStoryProvider(settings)
+        provider.generate_story(_CONTEXT)
+        provider.generate_story(_CONTEXT)
+
+    # Same static block on both calls → caches.create invoked exactly once.
+    assert MockClient.return_value.caches.create.call_count == 1
+    # Both generate_content calls received the cached_content reference.
+    calls = MockClient.return_value.models.generate_content.call_args_list
+    assert len(calls) == 2
+    for call in calls:
+        cfg = call.kwargs["config"]
+        assert getattr(cfg, "cached_content", None) == "cachedContents/abc123"
+
+
+def test_gemini_falls_back_to_uncached_when_cache_create_fails():
+    """If caches.create raises (e.g. content below model minimum), generate_story
+    must still succeed without cached_content."""
+    _reset_gemini_cache_index()
+    settings = _make_gemini_settings(cache_ttl=600)
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.caches.create.side_effect = RuntimeError(
+            "Cached content size is too small"
+        )
+        MockClient.return_value.models.generate_content.return_value = _make_gemini_response()
+        provider = GeminiStoryProvider(settings)
+        result = provider.generate_story(_CONTEXT)
+
+    assert "title" in result
+    gen_kwargs = MockClient.return_value.models.generate_content.call_args.kwargs
+    # No cached_content attribute means the call sent the full static prompt.
+    assert getattr(gen_kwargs["config"], "cached_content", None) is None
+
+
+def test_gemini_invalidates_cache_and_retries_uncached_on_cache_error():
+    """When generate_content fails with a cache-related error, the entry is
+    invalidated and the call is retried once without cached_content."""
+    _reset_gemini_cache_index()
+    settings = _make_gemini_settings(cache_ttl=600)
+
+    mock_cache = MagicMock()
+    mock_cache.name = "cachedContents/expired"
+    successful_response = _make_gemini_response()
+
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.caches.create.return_value = mock_cache
+        # First call raises cache error, second succeeds (uncached retry).
+        MockClient.return_value.models.generate_content.side_effect = [
+            RuntimeError("CachedContent not found (404)"),
+            successful_response,
+        ]
+        provider = GeminiStoryProvider(settings)
+        result = provider.generate_story(_CONTEXT)
+
+    assert "title" in result
+    assert MockClient.return_value.models.generate_content.call_count == 2
+    # The retry call must NOT carry cached_content.
+    retry_call = MockClient.return_value.models.generate_content.call_args_list[1]
+    assert getattr(retry_call.kwargs["config"], "cached_content", None) is None
 
 
 # --- Retry tests ---

@@ -298,7 +298,7 @@ async def generate_story(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=(
                 "El proveedor de IA no respondió a tiempo tras varios intentos. "
-                "Probá de nuevo en unos segundos o aumentá AI TIMEOUT si esto persiste."
+                "Probá de nuevo en unos segundos."
             ),
         )
     except ValueError as exc:

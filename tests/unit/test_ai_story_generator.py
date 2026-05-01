@@ -15,9 +15,9 @@ def valid_story() -> dict:
         "title": "User Registration",
         "story_description": "As a user, I want to register so that I can log in.",
         "acceptance_criteria": [
-            "Given an unauthenticated visitor, When they submit the form with a valid email, Then the system returns 201.",
-            "Given a duplicate email, When the form is submitted, Then the API responds with 409 and the form shows the error.",
-            "Given a successful registration, When it completes, Then the system enqueues a confirmation email with a 24h token.",
+            "Given an unauthenticated visitor, When they submit the form with a valid email, Then the account is created and a confirmation message is shown.",
+            "Given a duplicate email, When the form is submitted, Then the user sees an error message indicating the email is already in use.",
+            "Given a successful registration, When it completes, Then a confirmation email is sent to the user and remains valid for 24 hours.",
         ],
         "subtasks": {
             "frontend": [
@@ -326,9 +326,9 @@ def test_ac_check_accepts_spanish_gwt():
     settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=0)
     story = valid_story()
     story["acceptance_criteria"] = [
-        "Dado un usuario nuevo, Cuando se registra, Entonces el sistema responde 201.",
-        "Dado un email duplicado, Cuando envía el formulario, Entonces la API responde 409.",
-        "Dado un registro exitoso, Cuando termina, Entonces se envía un email de confirmación.",
+        "Dado un usuario nuevo, Cuando se registra, Entonces se crea la cuenta y se muestra el mensaje 'Cuenta creada'.",
+        "Dado un email duplicado, Cuando envía el formulario, Entonces se muestra un error indicando que el email ya está registrado.",
+        "Dado un registro exitoso, Cuando termina, Entonces se envía un email de confirmación al usuario.",
     ]
     gen = AIStoryGenerator(FixedStoryProvider(story), settings)
     result = gen.generate({})
@@ -402,3 +402,313 @@ def test_ambiguous_text_does_not_trigger_ui_retry():
     })
     assert provider.calls == 1
     assert result["subtasks"]["frontend"] == []
+
+
+# --- Functional AC detector ---------------------------------------------------
+
+
+def test_ac_with_file_path_triggers_retry():
+    """An AC referencing a source file path is implementation jargon, not PO language."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a registered user, When they sign in, Then app/services/auth_service.py validates the credentials and grants access.",
+        "Given a wrong password, When they sign in, Then an error message is shown.",
+        "Given a successful sign-in, When it completes, Then the user lands on the welcome screen.",
+    ]
+    provider = CountingProvider([bad, valid_story()])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.calls == 2
+    reason = provider.contexts[1].get("quality_warning_reason") or ""
+    assert "jerga técnica" in reason
+    assert "auth_service.py" in reason
+    # Final result is the clean retry response
+    assert "Given an unauthenticated visitor" in result["acceptance_criteria"][0]
+
+
+def test_ac_with_http_status_code_triggers_retry():
+    """AC that mention HTTP codes (responde 201, returns 404) leak implementation."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a valid request, When the form is submitted, Then the system returns 201.",
+        "Given a duplicate email, When submitting, Then the API responds with 409.",
+        "Given an unknown error, When it occurs, Then the system logs the failure.",
+    ]
+    provider = CountingProvider([bad, valid_story()])
+    gen = AIStoryGenerator(provider, settings)
+    gen.generate({})
+    assert provider.calls == 2
+    reason = provider.contexts[1].get("quality_warning_reason") or ""
+    assert "jerga técnica" in reason
+
+
+def test_ac_with_rest_method_and_endpoint_triggers_retry():
+    """AC like 'POST /api/users' or '/v1/orders' belong in subtasks, not in AC."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a registered user, When they call POST /api/users with valid data, Then the resource is created.",
+        "Given an authenticated client, When they hit /v1/orders, Then the list of orders is shown.",
+        "Given an unknown endpoint, When called, Then the user sees an error.",
+    ]
+    provider = CountingProvider([bad, valid_story()])
+    gen = AIStoryGenerator(provider, settings)
+    gen.generate({})
+    assert provider.calls == 2
+
+
+def test_ac_with_visible_ui_elements_passes():
+    """Mentioning UI elements by name ('button Save', 'message Account created') is
+    legitimate PO language, NOT a technicalism — the detector must accept it."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=0)
+    story = valid_story()
+    story["acceptance_criteria"] = [
+        "Given a visitor on the registration page, When they click the 'Create account' button, Then the form is submitted and the message 'Account created' is shown for 3 seconds.",
+        "Given an empty email field, When the visitor presses 'Create account', Then the field shows the error 'Email is required'.",
+        "Given a successful registration, When the page reloads, Then the welcome screen is displayed.",
+    ]
+    provider = CountingProvider([story])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.calls == 1  # no retry triggered
+    assert "Create account" in result["acceptance_criteria"][0]
+
+
+def test_ac_with_plain_numbers_does_not_trigger_retry():
+    """Plain numbers like '8 characters' or '200 productos' must not be
+    confused with HTTP status codes — context (a verb of response) is required."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=0)
+    story = valid_story()
+    story["acceptance_criteria"] = [
+        "Given a password with 8 characters, When the form is submitted, Then it is accepted.",
+        "Given a customer with 200 products in their cart, When they check out, Then the order is created.",
+        "Given a slow network, When a request takes 500 milliseconds, Then a loading indicator is shown.",
+    ]
+    provider = CountingProvider([story])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.calls == 1
+    assert "8 characters" in result["acceptance_criteria"][0]
+
+
+def test_technical_ac_falls_back_after_max_retries():
+    """If every retry still produces technical AC, return last shape-valid story
+    (best-effort) rather than crashing — same fallback as the G/W/T retry."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=1)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a request to POST /api/users, When it arrives, Then app/auth.py returns 201.",
+        "Given a duplicate, When posted, Then the API responds with 409.",
+        "Given a server error, When triggered, Then the system returns 500.",
+    ]
+    provider = CountingProvider([bad])
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.calls == 2  # initial + 1 retry, both bad
+    # Best-effort: returns the (technical) shape-valid story
+    assert "POST /api/users" in result["acceptance_criteria"][0]
+
+
+def test_find_ac_technicalisms_returns_citations():
+    """The helper returns up to 5 deduped citations for the retry feedback."""
+    citations = AIStoryGenerator._find_ac_technicalisms([
+        "Given a request, When made, Then app/services/foo.py runs.",
+        "Given a duplicate, When posted, Then the system returns 409.",
+        "Given an admin, When they call POST /api/users, Then the user is created.",
+    ])
+    assert citations  # non-empty
+    joined = " | ".join(citations)
+    assert "app/services/foo.py" in joined
+    assert "returns 409" in joined.lower() or "returns 409" in joined
+    assert "POST /api/users" in joined
+
+
+def test_find_ac_technicalisms_returns_empty_for_clean_ac():
+    """Pure PO-language AC produce no citations."""
+    citations = AIStoryGenerator._find_ac_technicalisms([
+        "Given a visitor, When they fill the form correctly, Then the account is created.",
+        "Given a duplicate email, When submitting, Then the user sees an inline error message.",
+        "Given a successful sign-up, When it completes, Then a welcome screen is displayed.",
+    ])
+    assert citations == []
+
+
+def test_stub_response_acs_are_functional():
+    """The stub used as fallback / few-shot example must itself pass the detector,
+    or the LLM may copy its bad pattern (returns 201, etc.) into real responses."""
+    from app.services.story_ai_provider import _STUB_STORY_RESPONSE
+    citations = AIStoryGenerator._find_ac_technicalisms(
+        _STUB_STORY_RESPONSE["acceptance_criteria"]
+    )
+    assert citations == [], (
+        f"Stub AC contain technical jargon: {citations}. "
+        "Keep the stub as a clean PO-language example."
+    )
+
+
+# ─── Mechanical AC repair (mini-prompt) ───────────────────────────────────
+
+
+_CLEAN_REPAIRED_AC = [
+    "Given an unauthenticated visitor, When they submit the form with a valid email and a password of at least 8 characters, Then the account is created and a confirmation message is shown.",
+    "Given a duplicate email, When the form is submitted, Then the user sees an inline error message.",
+    "Given a successful registration, When it completes, Then a welcome screen is displayed.",
+]
+
+
+class RepairableProvider(StoryAIProvider):
+    """Returns a bad story on generate_story; serves a clean AC list on repair."""
+
+    def __init__(self, bad_story: dict, repair_response: list[str] | None):
+        self._bad_story = bad_story
+        self._repair_response = repair_response
+        self.generate_calls = 0
+        self.repair_calls = 0
+        self.last_repair_kwargs: dict | None = None
+
+    def generate_story(self, context: dict) -> dict:
+        self.generate_calls += 1
+        return dict(self._bad_story)
+
+    def repair_acceptance_criteria(self, story: dict, reason: str, language: str):
+        self.repair_calls += 1
+        self.last_repair_kwargs = {
+            "story_title": story.get("title"),
+            "reason": reason,
+            "language": language,
+        }
+        return list(self._repair_response) if self._repair_response else None
+
+
+def test_ac_repair_succeeds_avoids_full_retry():
+    """When the provider can repair AC mechanically, the loop should accept the
+    repaired story without a second full-prompt regeneration."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a request, When made, Then app/services/auth.py returns 201.",
+        "Given a duplicate, When posted, Then the API responds with 409.",
+        "Given an error, When triggered, Then the system returns 500.",
+    ]
+    provider = RepairableProvider(bad, _CLEAN_REPAIRED_AC)
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({"language": "en"})
+    assert provider.generate_calls == 1, "no full retry needed when repair works"
+    assert provider.repair_calls == 1
+    assert result["acceptance_criteria"] == _CLEAN_REPAIRED_AC
+    assert provider.last_repair_kwargs["language"] == "en"
+    assert "jerga técnica" in provider.last_repair_kwargs["reason"]
+
+
+def test_ac_repair_returning_none_falls_back_to_full_retry():
+    """If repair returns None (provider can't repair), the loop must do the
+    full-prompt retry just like before — preserving prior behaviour."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a request, When made, Then app/services/auth.py is invoked.",
+        "Given a duplicate, When posted, Then an error message is shown.",
+        "Given an unknown error, When triggered, Then the user is informed.",
+    ]
+    provider = RepairableProvider(bad, repair_response=None)
+
+    # After the failed repair we want the next generate_story to return a clean
+    # story so the loop can succeed via full retry.
+    original = provider.generate_story
+    clean = valid_story()
+
+    def fake_generate(context: dict) -> dict:
+        provider.generate_calls += 1
+        return dict(clean) if provider.generate_calls > 1 else dict(bad)
+
+    provider.generate_story = fake_generate  # type: ignore[assignment]
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({"language": "es"})
+    assert provider.generate_calls == 2, "fallback to full retry expected when repair fails"
+    assert provider.repair_calls == 1
+    assert "Given an unauthenticated visitor" in result["acceptance_criteria"][0]
+
+
+def test_ac_repair_with_still_invalid_output_falls_back():
+    """If the repair output STILL contains technical jargon, treat as failed
+    repair and fall back to full retry."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a request, When made, Then app/services/auth.py is invoked.",
+        "Given a duplicate, When posted, Then an error message is shown.",
+        "Given an unknown error, When triggered, Then the user is informed.",
+    ]
+    still_bad_repair = [
+        "Given a registered user, When they sign in, Then app/services/auth_service.py validates credentials.",
+        "Given a wrong password, When they sign in, Then an error is shown.",
+        "Given a successful sign-in, When it completes, Then the user lands on the welcome screen.",
+    ]
+    provider = RepairableProvider(bad, still_bad_repair)
+    clean = valid_story()
+    original_generate = provider.generate_story
+
+    def fake_generate(context: dict) -> dict:
+        provider.generate_calls += 1
+        return dict(clean) if provider.generate_calls > 1 else dict(bad)
+
+    provider.generate_story = fake_generate  # type: ignore[assignment]
+    gen = AIStoryGenerator(provider, settings)
+    result = gen.generate({})
+    assert provider.repair_calls == 1
+    assert provider.generate_calls == 2  # repair invalid → fall back to full retry
+    assert "Given an unauthenticated visitor" in result["acceptance_criteria"][0]
+
+
+def test_ac_repair_attempted_at_most_once_per_generate():
+    """Even across multiple retries, repair is attempted at most once — never
+    let the loop spam the repair endpoint."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["acceptance_criteria"] = [
+        "Given a request, When made, Then /api/users returns 201.",
+        "Given a duplicate, When posted, Then 409 is returned.",
+        "Given an error, When triggered, Then 500 is returned.",
+    ]
+    provider = RepairableProvider(bad, repair_response=None)
+    # Always return the same bad story to force every retry to fail.
+    gen = AIStoryGenerator(provider, settings)
+    gen.generate({})
+    assert provider.repair_calls == 1, "repair must be attempted at most once"
+    assert provider.generate_calls == 3  # initial + 2 retries (max_retries=2)
+
+
+def test_ac_repair_skipped_for_frontend_missing_kind():
+    """frontend_missing is not an AC quality issue — must NOT trigger AC repair,
+    only a full retry that adds frontend tasks."""
+    from app.core.config import Settings
+    settings = Settings(DATABASE_URL="sqlite:///:memory:", AI_MAX_RETRIES=2)
+    bad = valid_story()
+    bad["subtasks"]["frontend"] = []  # UI context but empty frontend → triggers retry
+    good = valid_story()  # has frontend tasks
+
+    provider = RepairableProvider(bad, repair_response=_CLEAN_REPAIRED_AC)
+    original = provider.generate_story
+
+    def fake_generate(context: dict) -> dict:
+        provider.generate_calls += 1
+        return dict(good) if provider.generate_calls > 1 else dict(bad)
+
+    provider.generate_story = fake_generate  # type: ignore[assignment]
+    gen = AIStoryGenerator(provider, settings)
+    # UI-implying context so _check_frontend_explicit fires.
+    result = gen.generate({"requirement_text": "registration form for new users"})
+    assert provider.repair_calls == 0, "AC repair must not run for frontend_missing"
+    assert provider.generate_calls == 2  # full retry path

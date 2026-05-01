@@ -1,7 +1,14 @@
+import hashlib
+import threading
+import time
 from abc import ABC, abstractmethod
 
 from app.core.config import Settings
+from app.core.logging import get_logger
 from app.utils.json_utils import extract_json
+from app.utils.token_logging import log_token_usage
+
+_logger = get_logger(__name__)
 
 try:
     import anthropic as _anthropic_lib
@@ -29,9 +36,9 @@ _STUB_STORY_RESPONSE = {
         "so that I can access the platform securely."
     ),
     "acceptance_criteria": [
-        "Given an unauthenticated visitor, When they submit the registration form with a valid email and a password of at least 8 characters, Then the system returns 201 and creates the user account.",
-        "Given a visitor submitting an invalid email or a password shorter than 8 characters, When they press submit, Then the form shows an inline validation error and does not call the API.",
-        "Given a newly registered user, When the registration succeeds, Then the system enqueues a confirmation email containing a token that expires in 24 hours.",
+        "Given an unauthenticated visitor, When they submit the registration form with a valid email and a password of at least 8 characters, Then the account is created and a confirmation message is shown on screen.",
+        "Given a visitor submitting an invalid email or a password shorter than 8 characters, When they press submit, Then the form displays an inline validation error and the registration is not performed.",
+        "Given a newly registered user, When the registration succeeds, Then a confirmation email is sent to their inbox and remains valid for 24 hours.",
     ],
     "subtasks": {
         "frontend": [
@@ -106,9 +113,19 @@ REGLAS ESTRICTAS — VIOLARLAS INVALIDA LA RESPUESTA:
 3. NUNCA uses ejemplos genéricos tipo "app/routes/X.py", "src/Foo.java", "app/components/Bar.tsx". Ese tipo de paths son señal de invención.
 4. El whitelist refleja el lenguaje real del repo. Si el repo es Java, no pongas paths .py ni .tsx. Si es Python, no pongas .java. Respeta las extensiones existentes en el whitelist.
 5. Cada criterio de aceptación DEBE seguir el formato Given/When/Then verificable, en el idioma de salida (es: "Dado ... Cuando ... Entonces ..."; en: "Given ... When ... Then ..."; pt/fr/de equivalentes). Resultados medibles, sin frases vagas. Mínimo 3 AC.
-   Ejemplo válido (es): "Dado un usuario no autenticado, Cuando envía el formulario de registro con email válido y contraseña ≥8 caracteres, Entonces el sistema responde 201 y muestra el mensaje 'Cuenta creada'."
-   Ejemplo válido (en): "Given an unauthenticated user, When they submit the registration form with a valid email and password ≥8 chars, Then the system returns 201 and displays 'Account created'."
-   Ejemplo INVÁLIDO: "El sistema permite el registro" (vago, sin G/W/T).
+   IMPORTANTE — los AC son LENGUAJE DE PRODUCT OWNER, no de implementación. Describen COMPORTAMIENTO OBSERVABLE por el usuario en términos de negocio.
+   PROHIBIDO en los AC (estos detalles van en subtasks/risk_notes, NO en AC):
+     • Rutas o nombres de archivo (p.ej. "app/services/auth.py", "frontend/components/Foo.tsx").
+     • Códigos HTTP (p.ej. "responde 201", "devuelve 404", "status 500").
+     • Métodos REST y endpoints (p.ej. "POST /api/users", "llamada a GET /v1/orders").
+     • Nombres de clases, módulos, funciones, tablas o columnas (p.ej. "AuthService", "user_id", "users.email").
+     • Librerías, frameworks o lenguajes (p.ej. "FastAPI", "React", "JWT", "SQLAlchemy").
+     • Detalles de implementación (queries SQL, hashing, formatos JSON, headers).
+   PERMITIDO en los AC: elementos de UI visibles por nombre ("botón 'Crear cuenta'", "mensaje 'Cuenta creada'", "campo 'Email'", "pantalla de bienvenida"), tiempos de respuesta percibidos por el usuario ("en menos de 2 segundos"), reglas de negocio ("contraseña de al menos 8 caracteres").
+   Ejemplo VÁLIDO (es): "Dado un visitante no autenticado, Cuando envía el formulario de registro con email válido y contraseña de al menos 8 caracteres, Entonces se crea la cuenta y se muestra el mensaje 'Cuenta creada'."
+   Ejemplo VÁLIDO (en): "Given an unauthenticated visitor, When they submit the registration form with a valid email and a password of at least 8 characters, Then the account is created and the message 'Account created' is shown."
+   Ejemplo INVÁLIDO (vago): "El sistema permite el registro" — sin G/W/T y sin resultado medible.
+   Ejemplo INVÁLIDO (técnico): "Dado un cliente, Cuando hace POST /api/users con email y password, Entonces app/services/auth_service.py responde 201 y guarda en la tabla users." — paths, HTTP, endpoints y nombres de archivo NO van en AC.
 6. Subtareas frontend: solo OBLIGATORIAS si la historia implica interfaz de usuario (formularios, pantallas, listas, dashboards, modales, vistas, botones). En ese caso devuelve ≥2 tareas que cubran (a) estructura del componente o pantalla, (b) validaciones / estados de UI / mensajes de error, (c) integración con la API. Si no hay archivos UI en el whitelist, describe el componente NUEVO a crear sin inventar paths concretos. Si la historia es PURAMENTE backend (endpoint sin UI, job, cron, migración interna), `frontend` debe ser un array vacío [].
 
 Archivos disponibles del codebase (whitelist exhaustiva — NO puedes citar nada fuera de esta lista):
@@ -163,10 +180,73 @@ _LANGUAGE_NAMES = {
 }
 
 
+_AC_REPAIR_TEMPLATE = """\
+Eres un Product Owner ágil. Recibes una historia cuyos criterios de aceptación fueron rechazados y debes reescribirlos.
+
+Historia:
+- Título: {title}
+- Descripción: {story_description}
+
+Criterios de aceptación actuales (rechazados):
+{current_ac_bulleted}
+
+Motivo del rechazo:
+{reason}
+
+Reescribe los {n_ac} criterios de aceptación en lenguaje 100% de Product Owner, generando la salida en {language}:
+- Cada AC en formato Given/When/Then ("Dado/Cuando/Entonces" si el idioma es español; equivalentes en otros idiomas).
+- Resultado observable por el usuario en términos de negocio.
+- PROHIBIDO en los AC: rutas o nombres de archivo, códigos HTTP (201/404/...), métodos REST (POST/GET/...), endpoints (/api/..., /v1/...), nombres de clases/módulos/funciones/tablas/columnas, librerías o frameworks.
+- PERMITIDO: nombres visibles de UI (p. ej. "botón 'Crear cuenta'", "mensaje 'Cuenta creada'"), tiempos perceptibles ("en menos de 2 segundos"), reglas de negocio ("contraseña de al menos 8 caracteres").
+
+Responde ÚNICAMENTE con JSON válido, sin texto adicional:
+{{"acceptance_criteria": ["AC 1...", "AC 2...", "AC 3..."]}}\
+"""
+
+
 class StoryAIProvider(ABC):
     @abstractmethod
     def generate_story(self, context: dict) -> dict:
         ...
+
+    def repair_acceptance_criteria(
+        self, story: dict, reason: str, language: str
+    ) -> list[str] | None:
+        """Mini-prompt to rewrite ONLY the acceptance criteria.
+
+        Returns the new AC list on success, or None if repair is not supported
+        or fails — the caller falls back to a full regeneration retry.
+        Default implementation returns None; concrete providers override.
+        """
+        return None
+
+    @staticmethod
+    def _build_repair_prompt(story: dict, reason: str, language: str) -> str:
+        current = story.get("acceptance_criteria") or []
+        bulleted = "\n".join(f"  - {c}" for c in current) or "  (vacío)"
+        lang_label = _LANGUAGE_NAMES.get(language, language)
+        return _AC_REPAIR_TEMPLATE.format(
+            title=story.get("title", ""),
+            story_description=str(story.get("story_description", ""))[:300],
+            current_ac_bulleted=bulleted,
+            reason=reason,
+            n_ac=max(3, len(current)),
+            language=lang_label,
+        )
+
+    @staticmethod
+    def _parse_repaired_ac(raw_text: str) -> list[str] | None:
+        try:
+            parsed = extract_json(raw_text)
+        except Exception:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        ac = parsed.get("acceptance_criteria")
+        if not isinstance(ac, list) or not ac:
+            return None
+        cleaned = [str(c).strip() for c in ac if str(c).strip()]
+        return cleaned or None
 
     @property
     def model_name(self) -> str:
@@ -289,6 +369,7 @@ class AnthropicStoryProvider(StoryAIProvider):
                 ],
             }],
         )
+        log_token_usage(_logger, provider="anthropic", operation="story_gen", model=self._model, response=response)
         if getattr(response, "stop_reason", None) == "max_tokens":
             raise ValueError(
                 f"Anthropic response truncated at max_tokens={self._max_output_tokens}; "
@@ -296,6 +377,25 @@ class AnthropicStoryProvider(StoryAIProvider):
             )
         raw_text = response.content[0].text
         return extract_json(raw_text)
+
+    def repair_acceptance_criteria(
+        self, story: dict, reason: str, language: str
+    ) -> list[str] | None:
+        prompt = self._build_repair_prompt(story, reason, language)
+        response = self._client.messages.create(
+            model=self._model,
+            max_tokens=800,
+            temperature=0,
+            timeout=self._timeout,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        log_token_usage(
+            _logger, provider="anthropic", operation="ac_repair",
+            model=self._model, response=response,
+        )
+        if not response.content:
+            return None
+        return self._parse_repaired_ac(response.content[0].text)
 
 
 class OpenAIStoryProvider(StoryAIProvider):
@@ -306,6 +406,7 @@ class OpenAIStoryProvider(StoryAIProvider):
         api_key: str | None = None,
         base_url: str | None = None,
         default_model: str = "gpt-4o-mini",
+        provider_name: str = "openai",
     ) -> None:
         if _openai_lib is None:
             raise ImportError("openai package is required")
@@ -316,6 +417,7 @@ class OpenAIStoryProvider(StoryAIProvider):
         self._model = settings.AI_MODEL or default_model
         self._timeout = settings.AI_TIMEOUT_SECONDS
         self._max_output_tokens = settings.AI_MAX_OUTPUT_TOKENS
+        self._provider_name = provider_name
 
     def generate_story(self, context: dict) -> dict:
         prompt = self._build_prompt(context)
@@ -327,6 +429,13 @@ class OpenAIStoryProvider(StoryAIProvider):
             response_format={"type": "json_object"},
             messages=[{"role": "user", "content": prompt}],
         )
+        log_token_usage(
+            _logger,
+            provider=self._provider_name,
+            operation="story_gen",
+            model=self._model,
+            response=response,
+        )
         choice = response.choices[0]
         if getattr(choice, "finish_reason", None) == "length":
             raise ValueError(
@@ -336,6 +445,33 @@ class OpenAIStoryProvider(StoryAIProvider):
         raw_text = choice.message.content
         return extract_json(raw_text)
 
+    def repair_acceptance_criteria(
+        self, story: dict, reason: str, language: str
+    ) -> list[str] | None:
+        prompt = self._build_repair_prompt(story, reason, language)
+        response = self._client.chat.completions.create(
+            model=self._model,
+            max_tokens=800,
+            temperature=0,
+            timeout=self._timeout,
+            response_format={"type": "json_object"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        log_token_usage(
+            _logger, provider=self._provider_name, operation="ac_repair",
+            model=self._model, response=response,
+        )
+        if not response.choices:
+            return None
+        return self._parse_repaired_ac(response.choices[0].message.content or "")
+
+
+_GEMINI_CACHE_LOCK = threading.Lock()
+# Process-wide index keyed by (model, sha256_short(static_part)) → (cache_name, expires_at_ts).
+# Same-whitelist back-to-back calls reuse the explicit cache; different whitelists get
+# their own cache entry. Negative numbers / 0 TTL disable caching entirely.
+_GEMINI_CACHE_INDEX: dict[tuple[str, str], tuple[str, float]] = {}
+
 
 class GeminiStoryProvider(StoryAIProvider):
     def __init__(self, settings: Settings) -> None:
@@ -344,20 +480,106 @@ class GeminiStoryProvider(StoryAIProvider):
         self._client = _genai_lib.Client(api_key=settings.GEMINI_API_KEY)
         self._model = settings.AI_MODEL or settings.GEMINI_MODEL
         self._max_output_tokens = settings.AI_MAX_OUTPUT_TOKENS
+        ttl_raw = getattr(settings, "GEMINI_CACHE_TTL_SECONDS", 0)
+        try:
+            self._cache_ttl_seconds = int(ttl_raw or 0)
+        except (TypeError, ValueError):
+            self._cache_ttl_seconds = 0
+
+    @staticmethod
+    def _hash_static(text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+    @staticmethod
+    def _is_cache_error(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return "cach" in msg or "404" in msg or "not found" in msg
+
+    def _get_or_create_cache(self, static_part: str) -> str | None:
+        """Return a usable cache name for the given static block, or None on failure.
+
+        Failures (model min size not met, transient API errors, etc.) downgrade to
+        an uncached call rather than breaking story generation.
+        """
+        if self._cache_ttl_seconds <= 0:
+            return None
+        key = (self._model, self._hash_static(static_part))
+        now = time.time()
+        with _GEMINI_CACHE_LOCK:
+            entry = _GEMINI_CACHE_INDEX.get(key)
+            if entry and entry[1] > now:
+                return entry[0]
+        try:
+            cache = self._client.caches.create(
+                model=self._model,
+                config=_genai_types.CreateCachedContentConfig(
+                    contents=[static_part],
+                    ttl=f"{self._cache_ttl_seconds}s",
+                ),
+            )
+        except Exception as exc:  # min size, quota, transient — never break the request path
+            _logger.warning(
+                "Gemini caches.create failed (model=%s); falling back to uncached: %s",
+                self._model, exc,
+            )
+            return None
+        cache_name = getattr(cache, "name", None)
+        if not cache_name:
+            return None
+        # Local expiry has a margin so we never use a cache that's about to expire server-side.
+        local_expires = now + max(60, self._cache_ttl_seconds - 30)
+        with _GEMINI_CACHE_LOCK:
+            _GEMINI_CACHE_INDEX[key] = (cache_name, local_expires)
+        return cache_name
+
+    def _invalidate_cache(self, static_part: str) -> None:
+        key = (self._model, self._hash_static(static_part))
+        with _GEMINI_CACHE_LOCK:
+            _GEMINI_CACHE_INDEX.pop(key, None)
+
+    def _generate_content(self, *, cache_name: str | None, static_part: str, dynamic_part: str):
+        config_kwargs = {
+            "temperature": 0,
+            "max_output_tokens": self._max_output_tokens,
+            "response_mime_type": "application/json",
+            "thinking_config": _genai_types.ThinkingConfig(thinking_budget=0),
+        }
+        if cache_name:
+            config_kwargs["cached_content"] = cache_name
+            contents = dynamic_part
+        else:
+            contents = static_part + "\n\n" + dynamic_part
+        return self._client.models.generate_content(
+            model=self._model,
+            contents=contents,
+            config=_genai_types.GenerateContentConfig(**config_kwargs),
+        )
 
     def generate_story(self, context: dict) -> dict:
-        # Gemini does not support multi-block prompt caching (Anthropic-only);
-        # use the single combined prompt from the base class helper.
-        prompt = self._build_prompt(context)
-        response = self._client.models.generate_content(
+        static_part, dynamic_part = self._build_prompt_parts(context)
+        cache_name = self._get_or_create_cache(static_part)
+        try:
+            response = self._generate_content(
+                cache_name=cache_name, static_part=static_part, dynamic_part=dynamic_part,
+            )
+        except Exception as exc:
+            # Cache may have been GC'd or expired server-side. One-shot retry uncached.
+            if cache_name and self._is_cache_error(exc):
+                _logger.warning(
+                    "Gemini cached call failed; invalidating and retrying uncached: %s", exc,
+                )
+                self._invalidate_cache(static_part)
+                response = self._generate_content(
+                    cache_name=None, static_part=static_part, dynamic_part=dynamic_part,
+                )
+            else:
+                raise
+        log_token_usage(
+            _logger,
+            provider="gemini",
+            operation="story_gen",
             model=self._model,
-            contents=prompt,
-            config=_genai_types.GenerateContentConfig(
-                temperature=0,
-                max_output_tokens=self._max_output_tokens,
-                response_mime_type="application/json",
-                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
-            ),
+            response=response,
         )
         if response.candidates[0].finish_reason.name == "MAX_TOKENS":
             raise ValueError(
@@ -365,6 +587,29 @@ class GeminiStoryProvider(StoryAIProvider):
                 "increase AI_MAX_OUTPUT_TOKENS"
             )
         return extract_json(response.text)
+
+    def repair_acceptance_criteria(
+        self, story: dict, reason: str, language: str
+    ) -> list[str] | None:
+        prompt = self._build_repair_prompt(story, reason, language)
+        response = self._client.models.generate_content(
+            model=self._model,
+            contents=prompt,
+            config=_genai_types.GenerateContentConfig(
+                temperature=0,
+                max_output_tokens=800,
+                response_mime_type="application/json",
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+        log_token_usage(
+            _logger, provider="gemini", operation="ac_repair",
+            model=self._model, response=response,
+        )
+        text = getattr(response, "text", None)
+        if not text:
+            return None
+        return self._parse_repaired_ac(text)
 
 
 def get_story_ai_provider(settings: Settings) -> StoryAIProvider:
@@ -380,6 +625,7 @@ def get_story_ai_provider(settings: Settings) -> StoryAIProvider:
                 api_key=settings.GROQ_API_KEY,
                 base_url=settings.GROQ_BASE_URL,
                 default_model=settings.GROQ_MODEL,
+                provider_name="groq",
             )
         elif key == "gemini":
             _provider_cache[key] = GeminiStoryProvider(settings)
