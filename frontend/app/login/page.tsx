@@ -151,7 +151,7 @@ export default function LoginPage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
               <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
             </svg>
-            Continuar con Auth0
+            Ingresar
           </a>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "18px 0", color: "var(--muted-2)" }}>

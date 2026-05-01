@@ -121,7 +121,7 @@ export default function SignInPage() {
             cursor: "pointer",
           }}
         >
-          Continuar con Auth0
+          Ingresar
         </a>
       </div>
     </div>
