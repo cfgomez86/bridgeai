@@ -353,6 +353,9 @@ interface Translations {
       dimFeasibility: string
       dimRiskCoverage: string
       dimLanguageConsistency: string
+      dimRiskCoverageShort: string
+      dimLanguageConsistencyShort: string
+      dimSpecificityShort: string
       conversion: string
       conversionMeta: string
       conversionEmpty: string
@@ -944,6 +947,9 @@ const es: Translations = {
       dimFeasibility: "Viabilidad",
       dimRiskCoverage: "Cobertura de riesgo",
       dimLanguageConsistency: "Consistencia de idioma",
+      dimRiskCoverageShort: "Riesgos",
+      dimLanguageConsistencyShort: "Idioma",
+      dimSpecificityShort: "Especif.",
       conversion: "Conversión",
       conversionMeta: "{n} historias",
       conversionEmpty: "sin historias",
@@ -1355,6 +1361,9 @@ const en: Translations = {
       dimFeasibility: "Feasibility",
       dimRiskCoverage: "Risk coverage",
       dimLanguageConsistency: "Language consistency",
+      dimRiskCoverageShort: "Risks",
+      dimLanguageConsistencyShort: "Language",
+      dimSpecificityShort: "Specif.",
       conversion: "Conversion",
       conversionMeta: "{n} stories",
       conversionEmpty: "no stories yet",
@@ -1856,6 +1865,9 @@ const ca: Translations = {
       dimFeasibility: "Viabilitat",
       dimRiskCoverage: "Cobertura de risc",
       dimLanguageConsistency: "Consistència d'idioma",
+      dimRiskCoverageShort: "Riscos",
+      dimLanguageConsistencyShort: "Idioma",
+      dimSpecificityShort: "Especif.",
       conversion: "Conversió",
       conversionMeta: "{n} històries",
       conversionEmpty: "sense històries",

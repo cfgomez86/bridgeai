@@ -198,6 +198,247 @@ function dimensionColor(v: number | null): string {
   return "oklch(0.55 0.18 27)"
 }
 
+function DimensionBreakdownBody({
+  dims,
+}: {
+  dims: Array<{ label: string; short: string; value: number | null }>
+}) {
+  // Below this width the radar + legend would crowd each other, so we stack:
+  // chart on top (wider, centered), legend below as full-width rows.
+  const STACK_BREAKPOINT = 520
+  const ref = useRef<HTMLDivElement>(null)
+  const [stacked, setStacked] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setStacked(entry.contentRect.width < STACK_BREAKPOINT)
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        padding: "6px 14px 8px",
+        borderTop: "1px solid var(--border)",
+        display: stacked ? "flex" : "grid",
+        flexDirection: stacked ? ("column" as const) : undefined,
+        gridTemplateColumns: stacked ? undefined : "auto 1fr",
+        gap: stacked ? "8px" : "60px",
+        alignItems: stacked ? "stretch" : "center",
+      }}
+    >
+      <div style={{
+        display: "flex", justifyContent: "center", alignItems: "center",
+      }}>
+        <DimensionRadar dims={dims} />
+      </div>
+      <div style={{
+        display: "flex", flexDirection: "column", gap: "4px", minWidth: 0,
+      }}>
+        {dims.map(d => {
+          const color = dimensionColor(d.value)
+          return (
+            <div
+              key={d.label}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "8px 1fr auto",
+                alignItems: "center",
+                gap: "8px",
+                padding: "4px 6px",
+                borderRadius: "6px",
+              }}
+            >
+              <span style={{
+                width: "8px", height: "8px", borderRadius: "999px",
+                background: color,
+              }} />
+              <span style={{
+                fontSize: "11.5px", color: "var(--fg-2)",
+                overflow: "hidden", textOverflow: "ellipsis",
+                whiteSpace: "nowrap" as const,
+              }}>
+                {d.label}
+              </span>
+              <span style={{
+                fontSize: "12px", fontWeight: 700,
+                fontFamily: "var(--font-mono)", color,
+                fontVariantNumeric: "tabular-nums" as const,
+              }}>
+                {d.value !== null ? d.value.toFixed(1) : "—"}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function DimensionRadar({
+  dims,
+}: {
+  dims: Array<{ label: string; short: string; value: number | null }>
+}) {
+  const N = dims.length
+  const R = 70
+  const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / N
+  const polar = (i: number, v: number): [number, number] => {
+    const r = (v / 10) * R
+    return [Math.cos(angle(i)) * r, Math.sin(angle(i)) * r]
+  }
+
+  const gridLevels = [0.2, 0.4, 0.6, 0.8, 1.0]
+  const polyPoints = dims
+    .map((d, i) => {
+      const [x, y] = polar(i, d.value ?? 0)
+      return `${x.toFixed(2)},${y.toFixed(2)}`
+    })
+    .join(" ")
+
+  return (
+    <div style={{
+      width: 288, flexShrink: 0, position: "relative",
+      padding: "0 10px", boxSizing: "content-box" as const,
+    }}>
+      <svg
+        width={288}
+        height={180}
+        viewBox="-180 -100 320 200"
+        style={{ overflow: "visible", display: "block" }}
+        aria-hidden="true"
+      >
+        {/* Grid */}
+        {gridLevels.map((scale, idx) => {
+          const pts = dims
+            .map((_, i) => {
+              const [x, y] = polar(i, scale * 10)
+              return `${x.toFixed(2)},${y.toFixed(2)}`
+            })
+            .join(" ")
+          return (
+            <polygon
+              key={idx}
+              points={pts}
+              fill="none"
+              stroke="var(--border)"
+              strokeWidth={1}
+              opacity={idx === gridLevels.length - 1 ? 1 : 0.7}
+            />
+          )
+        })}
+
+        {/* Axes */}
+        {dims.map((_, i) => {
+          const [x, y] = polar(i, 10)
+          return (
+            <line
+              key={i}
+              x1={0}
+              y1={0}
+              x2={x.toFixed(2)}
+              y2={y.toFixed(2)}
+              stroke="var(--border)"
+              strokeWidth={1}
+              strokeDasharray="2 3"
+            />
+          )
+        })}
+
+        {/* Data polygon */}
+        <polygon
+          points={polyPoints}
+          fill="oklch(0.55 0.13 260 / 0.14)"
+          stroke="var(--accent-strong)"
+          strokeWidth={1.5}
+          strokeLinejoin="round"
+        />
+
+        {/* Axis labels — name outside the chart (values shown only in legend).
+            Long multi-word labels split onto two lines so they don't dominate
+            the layout. */}
+        {dims.map((d, i) => {
+          const [x, y] = polar(i, 10)
+          const dir = Math.hypot(x, y) || 1
+          const LABEL_OFFSET = 14
+          const lx = x + (x / dir) * LABEL_OFFSET
+          const ly = y + (y / dir) * LABEL_OFFSET
+          let anchor: "start" | "middle" | "end" = "middle"
+          if (Math.abs(x) > 5) anchor = x > 0 ? "start" : "end"
+          const isUpper = ly < 0
+          const baseline: "auto" | "hanging" = isUpper ? "auto" : "hanging"
+          const lineHeight = 10
+
+          const spaceIdx = d.label.indexOf(" ")
+          const wraps = d.label.length > 14 && spaceIdx !== -1
+          const lines = wraps
+            ? [d.label.slice(0, spaceIdx), d.label.slice(spaceIdx + 1)]
+            : [d.label]
+          // Stack so that the inner edge (closer to the axis) lines up with
+          // where a single line would sit: for upper labels line 2 stays at
+          // ly and line 1 goes above; for lower labels line 1 stays at ly and
+          // line 2 goes below.
+          const y1 = isUpper && lines.length > 1 ? ly - lineHeight : ly
+          const y2 = isUpper ? ly : ly + lineHeight
+
+          const textProps = {
+            textAnchor: anchor,
+            dominantBaseline: baseline,
+            fontFamily: "var(--font-sans)",
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: "0.02em",
+            fill: "var(--fg-2)",
+          } as const
+
+          if (lines.length === 1) {
+            return (
+              <text key={i} x={lx.toFixed(2)} y={ly.toFixed(2)} {...textProps}>
+                {d.label}
+              </text>
+            )
+          }
+          return (
+            <g key={i}>
+              <text x={lx.toFixed(2)} y={y1.toFixed(2)} {...textProps}>
+                {lines[0]}
+              </text>
+              <text x={lx.toFixed(2)} y={y2.toFixed(2)} {...textProps}>
+                {lines[1]}
+              </text>
+            </g>
+          )
+        })}
+
+        {/* Solid dots at each vertex of the data polygon */}
+        {dims.map((d, i) => {
+          if (d.value === null) return null
+          const [x, y] = polar(i, d.value)
+          const color = dimensionColor(d.value)
+          return (
+            <circle
+              key={i}
+              cx={x.toFixed(2)}
+              cy={y.toFixed(2)}
+              r={3}
+              fill={color}
+              stroke="var(--surface)"
+              strokeWidth={1.5}
+            />
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
 export function DashboardView() {
   const { t } = useLanguage()
   const d = t.dashboard
@@ -476,12 +717,12 @@ export function DashboardView() {
           {/* Judge dimensions breakdown — collapsible. Only shown when there
               are organic stories (forced bucket has caps and would distort). */}
           {(stats?.quality_count_organic ?? 0) > 0 ? (() => {
-            const dims: Array<[string, number | null]> = [
-              [d.stats.dimCompleteness, stats?.quality_organic_avg_completeness ?? null],
-              [d.stats.dimSpecificity, stats?.quality_organic_avg_specificity ?? null],
-              [d.stats.dimFeasibility, stats?.quality_organic_avg_feasibility ?? null],
-              [d.stats.dimRiskCoverage, stats?.quality_organic_avg_risk_coverage ?? null],
-              [d.stats.dimLanguageConsistency, stats?.quality_organic_avg_language_consistency ?? null],
+            const dims: Array<{ label: string; short: string; value: number | null }> = [
+              { label: d.stats.dimCompleteness,         short: d.stats.dimCompleteness,              value: stats?.quality_organic_avg_completeness ?? null },
+              { label: d.stats.dimSpecificity,          short: d.stats.dimSpecificityShort,          value: stats?.quality_organic_avg_specificity ?? null },
+              { label: d.stats.dimFeasibility,          short: d.stats.dimFeasibility,               value: stats?.quality_organic_avg_feasibility ?? null },
+              { label: d.stats.dimRiskCoverage,         short: d.stats.dimRiskCoverageShort,         value: stats?.quality_organic_avg_risk_coverage ?? null },
+              { label: d.stats.dimLanguageConsistency,  short: d.stats.dimLanguageConsistencyShort,  value: stats?.quality_organic_avg_language_consistency ?? null },
             ]
             return (
               <div style={{
@@ -528,52 +769,7 @@ export function DashboardView() {
                     }}
                   />
                 </button>
-                {showDimensions ? (
-                  <div style={{
-                    padding: "12px 14px 14px",
-                    borderTop: "1px solid var(--border)",
-                    display: "flex", flexDirection: "column", gap: "8px",
-                  }}>
-                    {dims.map(([label, value]) => {
-                      const pct = value !== null ? Math.max(0, Math.min(100, (value / 10) * 100)) : 0
-                      return (
-                        <div
-                          key={label}
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "minmax(120px, 1fr) minmax(80px, 3fr) 36px",
-                            alignItems: "center",
-                            gap: "12px",
-                          }}
-                        >
-                          <div style={{
-                            fontSize: "12px", color: "var(--fg-2)",
-                            fontFamily: "var(--font-sans)",
-                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const,
-                          }}>
-                            {label}
-                          </div>
-                          <div style={{
-                            height: "6px", background: "var(--surface)",
-                            borderRadius: "3px", overflow: "hidden",
-                          }}>
-                            <div style={{
-                              width: `${pct}%`, height: "100%",
-                              background: dimensionColor(value),
-                              transition: "width 200ms ease",
-                            }} />
-                          </div>
-                          <div style={{
-                            fontFamily: "var(--font-mono)", fontSize: "12px",
-                            color: "var(--fg)", textAlign: "right" as const,
-                          }}>
-                            {value !== null ? value.toFixed(1) : "—"}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : null}
+                {showDimensions ? <DimensionBreakdownBody dims={dims} /> : null}
               </div>
             )
           })() : null}
