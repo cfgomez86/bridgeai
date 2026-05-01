@@ -124,17 +124,30 @@ class AIStoryGenerator:
         self._provider = provider
         self._max_retries = (settings or get_settings()).AI_MAX_RETRIES
         self._logger = get_logger(__name__)
+        # Provider calls spent on the last generate() invocation. Includes retries
+        # AND the AC-repair fast-path (which spends 1 extra call). Read after generate().
+        self.last_call_count: int = 0
+        self._calls_in_progress: int = 0
 
     @property
     def model_name(self) -> str:
         return self._provider.model_name
 
     def generate(self, context: dict) -> dict:
+        try:
+            return self._generate_inner(context)
+        finally:
+            # Ensure last_call_count is always set even if we exit via raise.
+            # _generate_inner mutates self._calls_in_progress; copy on exit.
+            self.last_call_count = self._calls_in_progress
+
+    def _generate_inner(self, context: dict) -> dict:
         last_error: Exception | None = None
         attempt_context = dict(context)
         whitelist = set(context.get("available_file_paths") or [])
         last_validated: dict | None = None
         repair_attempted = False
+        self._calls_in_progress = 0
 
         for attempt in range(self._max_retries + 1):
             try:
@@ -143,6 +156,7 @@ class AIStoryGenerator:
                     attempt + 1,
                     self._max_retries + 1,
                 )
+                self._calls_in_progress += 1
                 raw = self._provider.generate_story(attempt_context)
                 self._logger.debug("Raw story response: %.200s", str(raw))
                 validated = self._validate_shape(raw)
@@ -183,6 +197,7 @@ class AIStoryGenerator:
                     and last_validated is not None
                 ):
                     repair_attempted = True
+                    self._calls_in_progress += 1
                     repaired = self._try_repair_ac(last_validated, exc.reason, context)
                     if repaired is not None:
                         self._logger.info(

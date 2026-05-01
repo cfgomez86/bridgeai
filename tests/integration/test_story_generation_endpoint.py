@@ -282,6 +282,35 @@ def test_entity_found_returns_200_with_flag_false():
     assert data["entity_not_found"] is False
 
 
+def test_entity_not_found_with_force_reason_intentional_new_marks_organic():
+    """Force con reason='intentional_new' (entidad nueva legítima) debe devolver
+    entity_not_found=False para no contaminar el bucket forced del dashboard."""
+    client = make_client_with_checker(EntityCheckResult(
+        entity="Cupon", found=False, matched_files=[], suggestions=[],
+    ))
+    body = _body()
+    body["force"] = True
+    body["force_reason"] = "intentional_new"
+    response = client.post("/api/v1/generate-story", json=body)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["entity_not_found"] is False
+
+
+def test_entity_not_found_with_force_reason_ambiguous_marks_forced():
+    """Force con reason='ambiguous' debe seguir marcando entity_not_found=True."""
+    client = make_client_with_checker(EntityCheckResult(
+        entity="Whatever", found=False, matched_files=[], suggestions=[],
+    ))
+    body = _body()
+    body["force"] = True
+    body["force_reason"] = "ambiguous"
+    response = client.post("/api/v1/generate-story", json=body)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["entity_not_found"] is True
+
+
 # ---------------------------------------------------------------------------
 # GET /stories/{story_id}
 # ---------------------------------------------------------------------------

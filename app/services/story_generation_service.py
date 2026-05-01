@@ -19,7 +19,7 @@ from app.services.entity_existence_checker import (
 from app.services.story_points_calculator import StoryPointsCalculator
 
 _WHITELIST_CAP = 150
-_CREATION_VERBS = {"create", "add", "crear", "añadir", "anadir", "agregar"}
+_VALID_FORCE_REASONS = {"intentional_new", "ambiguous"}
 
 
 class StoryGenerationService:
@@ -52,9 +52,14 @@ class StoryGenerationService:
         source_connection_id: str,
         language: str = "es",
         force: bool = False,
+        force_reason: str | None = None,
     ) -> tuple[UserStory, bool]:
         if not source_connection_id:
             raise ValueError("source_connection_id is required")
+        if force_reason is not None and force_reason not in _VALID_FORCE_REASONS:
+            raise ValueError(
+                f"force_reason must be one of {_VALID_FORCE_REASONS} or omitted"
+            )
 
         cached = self._story_repo.find_by_requirement_and_analysis(
             requirement_id, analysis_id, source_connection_id, language
@@ -80,6 +85,15 @@ class StoryGenerationService:
                 f"ImpactAnalysis {analysis_id} not found for connection {source_connection_id}"
             )
 
+        # Si la entidad principal no existe en el codebase indexado, hay tres
+        # rutas: (1) sin force, levantar 422 para que el frontend muestre el modal;
+        # (2) force con reason='intentional_new', proceder y NO marcar
+        # entity_not_found (es una entidad nueva legítima que el usuario está
+        # creando deliberadamente — no debería contaminar el bucket "forced" del
+        # dashboard ni mostrar banner de degradado); (3) force con
+        # reason='ambiguous' o sin reason, proceder marcando entity_not_found=True
+        # para que el judge aplique más rigor y la HU quede etiquetada como
+        # forzada en métricas.
         entity_not_found = False
         if (
             self._entity_checker is not None
@@ -87,17 +101,13 @@ class StoryGenerationService:
         ):
             check = self._entity_checker.check(requirement.entity, source_connection_id)
             if not check.found:
-                intentional_creation = (
-                    (requirement.action or "").lower() in _CREATION_VERBS
-                )
-                if force or intentional_creation:
-                    entity_not_found = True
-                    self._logger.info(
-                        "Entity '%s' not found, proceeding (force=%s, intentional_creation=%s)",
-                        requirement.entity, force, intentional_creation,
-                    )
-                else:
+                if not force:
                     raise EntityNotFoundError(requirement.entity, check.suggestions)
+                entity_not_found = force_reason != "intentional_new"
+                self._logger.info(
+                    "Entity '%s' not found, proceeding (force=True, reason=%s, entity_not_found=%s)",
+                    requirement.entity, force_reason, entity_not_found,
+                )
 
         impacted_file_paths = self._impact_repo.find_file_paths(analysis_id, source_connection_id)
         all_paths = self._code_file_repo.get_all_paths(source_connection_id)
@@ -125,6 +135,7 @@ class StoryGenerationService:
         start = datetime.now(timezone.utc)
         parsed = self._generator.generate(context)
         generation_time = (datetime.now(timezone.utc) - start).total_seconds()
+        generator_calls = self._generator.last_call_count
 
         story_points = self._points_calculator.calculate(
             requirement.estimated_complexity,
@@ -153,7 +164,9 @@ class StoryGenerationService:
             "generation_time_seconds": generation_time,
             "entity_not_found": entity_not_found,
             "was_forced": force,
+            "force_reason": force_reason if force else None,
             "generator_model": generator_model,
+            "generator_calls": generator_calls,
             "created_at": created_at,
         }, source_connection_id)
         self._logger.info(
@@ -179,7 +192,9 @@ class StoryGenerationService:
                 generation_time_seconds=generation_time,
                 entity_not_found=entity_not_found,
                 was_forced=force,
+                force_reason=force_reason if force else None,
                 generator_model=generator_model,
+                generator_calls=generator_calls,
             ),
             entity_not_found,
         )
@@ -226,5 +241,7 @@ class StoryGenerationService:
             generation_time_seconds=orm.generation_time_seconds,
             entity_not_found=bool(getattr(orm, "entity_not_found", False)),
             was_forced=bool(getattr(orm, "was_forced", False)),
+            force_reason=getattr(orm, "force_reason", None),
             generator_model=getattr(orm, "generator_model", None),
+            generator_calls=int(getattr(orm, "generator_calls", 0) or 0),
         )

@@ -90,6 +90,7 @@ export default function WorkflowPage() {
           <Step3Generate
             state={state}
             completeStep3={workflow.completeStep3}
+            setGeneratorInfo={workflow.setGeneratorInfo}
             goBackToStep1={workflow.goBackToStep1}
           />
         )}

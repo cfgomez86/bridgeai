@@ -468,7 +468,10 @@ def test_entity_not_found_proceeds_with_force():
     assert story.story_id
 
 
-def test_entity_not_found_proceeds_for_intentional_creation():
+def test_entity_not_found_blocks_even_with_creation_verb_no_force():
+    """El bypass automático por verbo de creación fue removido (commit que
+    debilitaba el filtro): action='create'+feature_type='feature' ya NO salta
+    el modal. Sin force=True, siempre levanta EntityNotFoundError."""
     engine = make_engine()
     checker = MagicMock(spec=EntityExistenceChecker)
     checker.check.return_value = EntityCheckResult(
@@ -477,11 +480,8 @@ def test_entity_not_found_proceeds_for_intentional_creation():
     svc, db = make_service_with_checker(engine, checker)
     insert_requirement_custom(db, action="create", feature_type="feature")
     insert_analysis(db)
-    story, entity_not_found = svc.generate(
-        "req-1", "ana-1", "proj", TEST_CONNECTION_ID
-    )
-    assert entity_not_found is True
-    assert story.story_id
+    with pytest.raises(EntityNotFoundError):
+        svc.generate("req-1", "ana-1", "proj", TEST_CONNECTION_ID)
 
 
 def test_entity_found_proceeds_normally():
@@ -500,26 +500,81 @@ def test_entity_found_proceeds_normally():
     assert story.story_id
 
 
-def test_entity_not_found_proceeds_for_creation_verb_with_enhancement_type():
-    """Bypass debe activarse con verbo de creación aunque feature_type sea 'enhancement'.
-
-    Caso real: 'quiero agregar un campo de detalles técnicos…' la IA suele clasificar
-    action='add'/'agregar' y feature_type='enhancement'. Antes el bypass exigía
-    feature_type=='feature' y bloqueaba historias válidas.
-    """
+def test_force_with_intentional_new_marks_story_organic():
+    """force=True con force_reason='intentional_new' debe persistir la HU como
+    organic (entity_not_found=False) — el usuario está creando una entidad nueva
+    a propósito, no debería contaminar las métricas forced ni mostrar banner."""
     engine = make_engine()
     checker = MagicMock(spec=EntityExistenceChecker)
     checker.check.return_value = EntityCheckResult(
-        entity="DetalleTecnico", found=False, matched_files=[], suggestions=[],
+        entity="Cupon", found=False, matched_files=[], suggestions=[],
+    )
+    svc, db = make_service_with_checker(engine, checker)
+    insert_requirement_custom(db, action="crear", feature_type="feature")
+    insert_analysis(db)
+    story, entity_not_found = svc.generate(
+        "req-1", "ana-1", "proj", TEST_CONNECTION_ID,
+        force=True, force_reason="intentional_new",
+    )
+    assert entity_not_found is False
+    assert story.was_forced is True
+    assert story.force_reason == "intentional_new"
+    assert story.entity_not_found is False
+
+
+def test_force_with_ambiguous_marks_story_forced():
+    """force=True con force_reason='ambiguous' debe persistir la HU como forced
+    (entity_not_found=True) — el usuario fuerza pese a la duda."""
+    engine = make_engine()
+    checker = MagicMock(spec=EntityExistenceChecker)
+    checker.check.return_value = EntityCheckResult(
+        entity="Whatever", found=False, matched_files=[], suggestions=[],
     )
     svc, db = make_service_with_checker(engine, checker)
     insert_requirement_custom(db, action="agregar", feature_type="enhancement")
     insert_analysis(db)
     story, entity_not_found = svc.generate(
-        "req-1", "ana-1", "proj", TEST_CONNECTION_ID
+        "req-1", "ana-1", "proj", TEST_CONNECTION_ID,
+        force=True, force_reason="ambiguous",
     )
     assert entity_not_found is True
-    assert story.story_id
+    assert story.was_forced is True
+    assert story.force_reason == "ambiguous"
+    assert story.entity_not_found is True
+
+
+def test_force_without_reason_defaults_to_forced_bucket():
+    """force=True sin force_reason debe seguir comportándose como antes:
+    entity_not_found=True, force_reason no se persiste."""
+    engine = make_engine()
+    checker = MagicMock(spec=EntityExistenceChecker)
+    checker.check.return_value = EntityCheckResult(
+        entity="Whatever", found=False, matched_files=[], suggestions=[],
+    )
+    svc, db = make_service_with_checker(engine, checker)
+    insert_requirement_custom(db, action="agregar", feature_type="enhancement")
+    insert_analysis(db)
+    story, entity_not_found = svc.generate(
+        "req-1", "ana-1", "proj", TEST_CONNECTION_ID, force=True,
+    )
+    assert entity_not_found is True
+    assert story.was_forced is True
+    assert story.force_reason is None
+
+
+def test_invalid_force_reason_raises():
+    """Cualquier force_reason fuera del set conocido debe rechazarse antes de
+    llamar al checker o al generador."""
+    engine = make_engine()
+    checker = MagicMock(spec=EntityExistenceChecker)
+    svc, db = make_service_with_checker(engine, checker)
+    insert_requirement_custom(db, action="agregar", feature_type="enhancement")
+    insert_analysis(db)
+    with pytest.raises(ValueError, match="force_reason"):
+        svc.generate(
+            "req-1", "ana-1", "proj", TEST_CONNECTION_ID,
+            force=True, force_reason="bogus",
+        )
 
 
 def test_entity_validation_mode_off_skips_checker():

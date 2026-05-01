@@ -6,12 +6,24 @@ import {
   understandRequirement,
   listConnections,
   getIndexStatus,
+  ApiError,
   type ConnectionResponse,
   type IndexStatusResponse,
 } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import type { WorkflowState } from "@/hooks/useWorkflow"
 import { Loader2, Globe, CheckCircle, AlertTriangle } from "lucide-react"
+
+const MIN_REQUIREMENT_CHARS = 60
+
+// Identificadores que devuelve el backend en `model_used` cuando el rechazo
+// NO viene de un modelo de IA real (filtros deterministas o etiquetas internas).
+// El usuario no debería ver estos strings — solo nombres reales de modelo.
+const NON_AI_MODEL_TAGS = new Set([
+  "deterministic_gibberish_filter",
+  "stub",
+  "ai_requirement_parser",
+])
 
 const TICKET_PLATFORM_LABELS: Record<string, string> = {
   jira: "Jira Cloud",
@@ -52,6 +64,11 @@ interface Step1Props {
     featureType: string
     complexity: string
     keywords: string[]
+    evaluatedByModel: string | null
+    coherenceModel: string | null
+    coherenceCalls: number
+    parserModel: string | null
+    parserCalls: number
   }) => void
 }
 
@@ -126,6 +143,9 @@ export function Step1Understand({
 }: Step1Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorKind, setErrorKind] = useState<"warn" | "err">("err")
+  const [rejectedText, setRejectedText] = useState<string | null>(null)
+  const [rejectedModel, setRejectedModel] = useState<string | null>(null)
   const [ticketConn, setTicketConn] = useState<ConnectionResponse | null>(null)
   const [scmConn, setScmConn] = useState<ConnectionResponse | null>(null)
   const [indexStatus, setIndexStatus] = useState<IndexStatusResponse | null>(null)
@@ -168,12 +188,18 @@ export function Step1Understand({
     ? Boolean(ticketConn.boards_project)
     : Boolean(ticketConn?.repo_full_name)
   const isReady = Boolean(ticketConn) && hasSite && hasRepo && isIndexed
-  const isValid = state.requirementText.trim().length >= 10 && isReady
+  const textIsRejected =
+    rejectedText !== null && state.requirementText.trim() === rejectedText.trim()
+  const isValid =
+    state.requirementText.trim().length >= MIN_REQUIREMENT_CHARS &&
+    isReady &&
+    !textIsRejected
 
   async function handleSubmit() {
     if (!isValid || !state.sourceConnectionId) return
     setLoading(true)
     setError(null)
+    setErrorKind("err")
     try {
       const result = await understandRequirement(
         state.requirementText,
@@ -181,19 +207,53 @@ export function Step1Understand({
         state.sourceConnectionId,
         state.language,
       )
+      // Éxito: limpiar cualquier estado de rechazo previo.
+      setRejectedText(null)
+      setRejectedModel(null)
       completeStep1({
         requirementId: result.requirement_id,
         intent: result.intent,
         featureType: result.feature_type,
         complexity: result.estimated_complexity,
         keywords: result.keywords ?? [],
+        evaluatedByModel: result.evaluated_by_model ?? null,
+        coherenceModel: result.coherence_model ?? null,
+        coherenceCalls: result.coherence_calls ?? 0,
+        parserModel: result.parser_model ?? null,
+        parserCalls: result.parser_calls ?? 0,
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to analyze requirement")
+      // Coherence pre-filter rejection: render as a soft warning and BLOCK
+      // the submit button until the user edits the requirement text.
+      if (
+        err instanceof ApiError &&
+        err.status === 400 &&
+        err.detail &&
+        typeof err.detail === "object" &&
+        (err.detail as { code?: string }).code === "INCOHERENT_REQUIREMENT"
+      ) {
+        const detail = err.detail as {
+          model_used?: string | null
+        }
+        setErrorKind("warn")
+        setError(err.message)
+        setRejectedText(state.requirementText)
+        setRejectedModel(detail.model_used ?? null)
+      } else {
+        setErrorKind("err")
+        setError(err instanceof Error ? err.message : "Failed to analyze requirement")
+        setRejectedText(null)
+        setRejectedModel(null)
+      }
     } finally {
       setLoading(false)
     }
   }
+
+  // Hide the model tag when it's not from a real AI model — the user shouldn't
+  // see internal labels like "deterministic_gibberish_filter".
+  const showRejectedModel =
+    rejectedModel !== null && !NON_AI_MODEL_TAGS.has(rejectedModel)
 
   // Build detail strings — same muted color regardless of ok/not-ok state
   const ticketDetail = !ticketConn
@@ -310,16 +370,55 @@ export function Step1Understand({
             placeholder={s.placeholder}
             style={{ ...inputStyle, resize: "none", lineHeight: 1.6 }}
           />
-          {state.requirementText.length > 0 && state.requirementText.trim().length < 10 && (
-            <p style={{ fontSize: "11.5px", color: "var(--err-fg)", marginTop: "4px" }}>
+          {state.requirementText.length > 0 && state.requirementText.trim().length < MIN_REQUIREMENT_CHARS && (
+            <p style={{ fontSize: "11.5px", color: "var(--muted-2)", marginTop: "4px" }}>
               {s.min_chars}
             </p>
           )}
         </div>
 
         {error && (
-          <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--err-bg)", color: "var(--err-fg)", fontSize: "12.5px" }}>
-            {error}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "8px",
+              padding: "10px 14px",
+              borderRadius: "var(--radius)",
+              background: "transparent",
+              color: errorKind === "warn" ? "var(--warn-fg)" : "var(--fg)",
+              border: `1px solid ${
+                errorKind === "warn"
+                  ? "color-mix(in oklch, var(--warn-fg) 25%, transparent)"
+                  : "color-mix(in oklch, var(--accent) 25%, transparent)"
+              }`,
+              fontSize: "12.5px",
+              lineHeight: 1.5,
+            }}
+          >
+            <AlertTriangle
+              size={14}
+              style={{
+                flexShrink: 0,
+                marginTop: "1px",
+                color: errorKind === "warn" ? "var(--warn-fg)" : "var(--accent-strong)",
+              }}
+            />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {error}
+              {showRejectedModel && (
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--muted)",
+                    fontFamily: "var(--font-mono)",
+                    marginLeft: "6px",
+                  }}
+                >
+                  · {rejectedModel}
+                </span>
+              )}
+            </span>
           </div>
         )}
 

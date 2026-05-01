@@ -119,6 +119,11 @@ class Settings(BaseSettings):
     AI_JUDGE_TEMPERATURE: float = 0.3
     EVAL_REPORT_PATH: str = "./eval_report.json"
 
+    # Coherence pre-filter (cheap LLM gate before main parsing)
+    # Reuses AI_JUDGE_PROVIDER / AI_JUDGE_MODEL (with fallback to AI_PROVIDER / AI_MODEL)
+    COHERENCE_VALIDATION_ENABLED: bool = True
+    AI_COHERENCE_MAX_TOKENS: int = 200
+
     @property
     def project_root_path(self) -> Path:
         return Path(self.PROJECT_ROOT).resolve()

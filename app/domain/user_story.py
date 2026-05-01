@@ -20,4 +20,6 @@ class UserStory:
     generation_time_seconds: float
     entity_not_found: bool = False
     was_forced: bool = False
+    force_reason: str | None = None
     generator_model: str | None = None
+    generator_calls: int = 0

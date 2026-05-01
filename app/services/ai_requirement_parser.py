@@ -20,9 +20,17 @@ class AIRequirementParser:
         self._provider = provider
         self._max_retries = (settings or get_settings()).AI_MAX_RETRIES
         self._logger = get_logger(__name__)
+        # Provider calls spent on the last parse() invocation (1 + transient retries).
+        # Read this immediately after parse(); subsequent calls overwrite it.
+        self.last_call_count: int = 0
+
+    @property
+    def model_name(self) -> str:
+        return getattr(self._provider, "model_name", "") or ""
 
     def parse(self, requirement_text: str) -> dict:
         last_error: Exception | None = None
+        calls = 0
         for attempt in range(self._max_retries + 1):
             try:
                 self._logger.info(
@@ -31,19 +39,23 @@ class AIRequirementParser:
                     self._max_retries + 1,
                     requirement_text,
                 )
+                calls += 1
                 raw = self._provider.parse_requirement(requirement_text)
                 self._logger.debug("Raw AI response: %.200s", str(raw))
                 validated = self._validate(raw)
                 self._logger.info("Validation passed for requirement parsing")
+                self.last_call_count = calls
                 return validated
             except Exception as exc:
                 last_error = exc
                 if not is_retryable_error(exc):
                     self._logger.warning("Non-retryable error from requirement AI provider: %s", exc)
+                    self.last_call_count = calls
                     raise
                 self._logger.warning("Attempt %d/%d failed (transient): %s", attempt + 1, self._max_retries + 1, exc)
                 if attempt < self._max_retries:
                     continue
+        self.last_call_count = calls
         raise ValueError(f"AI parsing failed after {self._max_retries + 1} transient errors: {last_error}")
 
     def _validate(self, raw: dict) -> dict:
