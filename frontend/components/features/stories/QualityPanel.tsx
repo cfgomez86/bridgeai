@@ -53,7 +53,7 @@ function HelpTip({ text, children }: { text: string; children: React.ReactNode }
       onBlur={hide}
       onClick={(e) => { e.stopPropagation(); setOpen(v => { if (!v) place(); return !v }) }}
     >
-      <span style={{ cursor: "help", lineHeight: "inherit" }}>{children}</span>
+      <span style={{ cursor: "pointer", lineHeight: "inherit" }}>{children}</span>
       {open && anchor && createPortal(
         <span
           role="tooltip"
@@ -293,7 +293,7 @@ export function QualityPanel({ storyId }: QualityPanelProps) {
                           fontSize: "11px",
                           color: dispersionUnstable ? "var(--warn-fg)" : "var(--muted)",
                           fontFamily: "var(--font-mono)",
-                          cursor: "help",
+                          cursor: "pointer",
                         }}>
                           · ±{dispersion.toFixed(2)} ({samplesUsed} {s.dispersion_label})
                           {dispersionUnstable ? ` — ${s.dispersion_unstable}` : ""}
