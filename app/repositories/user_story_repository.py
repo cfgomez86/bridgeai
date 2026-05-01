@@ -75,6 +75,7 @@ class UserStoryRepository:
             created_at=model.created_at,
             generation_time_seconds=model.generation_time_seconds,
             entity_not_found=bool(model.entity_not_found),
+            was_forced=bool(getattr(model, "was_forced", False)),
             generator_model=getattr(model, "generator_model", None),
         )
 
@@ -104,6 +105,33 @@ class UserStoryRepository:
 
     def count_since(self, since: Optional[datetime]) -> int:
         q = self._db.query(UserStory).filter(UserStory.tenant_id == self._tid())
+        if since is not None:
+            q = q.filter(UserStory.created_at >= since)
+        return q.count()
+
+    def avg_generation_time_since(self, since: Optional[datetime]) -> Optional[float]:
+        """Average wall-clock seconds spent on the LLM generation step.
+        Surfaced on the dashboard as a pipeline-performance signal."""
+        q = (
+            self._db.query(func.avg(UserStory.generation_time_seconds))
+            .filter(UserStory.tenant_id == self._tid())
+        )
+        if since is not None:
+            q = q.filter(UserStory.created_at >= since)
+        result = q.scalar()
+        return float(result) if result is not None else None
+
+    def count_unnecessary_force_since(self, since: Optional[datetime]) -> int:
+        """Stories where the user passed force=true but the entity check
+        actually found the entity. UX smell — the override was not needed."""
+        q = (
+            self._db.query(UserStory)
+            .filter(
+                UserStory.tenant_id == self._tid(),
+                UserStory.was_forced.is_(True),
+                UserStory.entity_not_found.is_(False),
+            )
+        )
         if since is not None:
             q = q.filter(UserStory.created_at >= since)
         return q.count()

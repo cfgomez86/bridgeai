@@ -11,37 +11,77 @@ interface QualityPanelProps {
 }
 
 function HelpTip({ text, children }: { text: string; children: React.ReactNode }) {
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
+  // Same look-and-feel as the dashboard's InfoTooltip:
+  // shared design tokens, viewport-aware horizontal alignment, hover + click
+  // (mobile-friendly), portal so it never gets clipped by panel overflow.
+  const [open, setOpen] = useState(false)
+  const [anchor, setAnchor] = useState<{ x: number; y: number; alignRight: boolean } | null>(null)
   const ref = useRef<HTMLSpanElement>(null)
 
-  function handleEnter() {
-    if (ref.current) {
-      const r = ref.current.getBoundingClientRect()
-      setPos({ x: r.left + r.width / 2, y: r.top - 8 })
-    }
+  function place() {
+    if (!ref.current) return
+    const r = ref.current.getBoundingClientRect()
+    const popoverWidth = Math.min(280, window.innerWidth * 0.8)
+    const safeMargin = 16
+    // Anchor below the trigger; left edge at the trigger's left edge by default,
+    // but flip to right edge when the popover would overflow the viewport right.
+    const triggerLeft = r.left
+    const overflowsRight = triggerLeft + popoverWidth > window.innerWidth - safeMargin
+    setAnchor({
+      x: overflowsRight ? r.right : triggerLeft,
+      y: r.bottom + 6,
+      alignRight: overflowsRight,
+    })
+  }
+
+  function show() {
+    place()
+    setOpen(true)
+  }
+
+  function hide() {
+    setOpen(false)
   }
 
   return (
     <span
       ref={ref}
       style={{ display: "inline-flex", alignItems: "center" }}
-      onMouseEnter={handleEnter}
-      onMouseLeave={() => setPos(null)}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+      onClick={(e) => { e.stopPropagation(); setOpen(v => { if (!v) place(); return !v }) }}
     >
-      <span style={{ cursor: "help", lineHeight: "inherit" }}>{children}</span>
-      {pos && createPortal(
-        <span style={{
-          position: "fixed", left: pos.x, top: pos.y,
-          transform: "translateX(-50%) translateY(-100%)",
-          background: "var(--surface)", color: "var(--fg-2)",
-          border: "1px solid var(--border)",
-          fontSize: "11.5px", lineHeight: 1.5,
-          padding: "8px 11px", borderRadius: "var(--radius)",
-          whiteSpace: "normal", width: "220px",
-          zIndex: 9999,
-          boxShadow: "0 4px 12px oklch(0.2 0.02 260 / 0.10), 0 1px 3px oklch(0.2 0.02 260 / 0.08)",
-          pointerEvents: "none",
-        }}>
+      <span style={{ cursor: "pointer", lineHeight: "inherit" }}>{children}</span>
+      {open && anchor && createPortal(
+        <span
+          role="tooltip"
+          style={{
+            position: "fixed",
+            top: anchor.y,
+            ...(anchor.alignRight
+              ? { right: `calc(100vw - ${anchor.x}px)`, left: "auto" }
+              : { left: anchor.x, right: "auto" }),
+            zIndex: 9999,
+            width: "max-content",
+            maxWidth: "min(280px, 80vw)",
+            padding: "10px 12px",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius)",
+            boxShadow: "var(--shadow-sm)",
+            fontFamily: "var(--font-sans)",
+            fontSize: "12px",
+            fontWeight: 400,
+            lineHeight: 1.45,
+            letterSpacing: "normal",
+            textTransform: "none",
+            color: "var(--fg-2)",
+            whiteSpace: "normal",
+            pointerEvents: "none",
+          }}
+        >
           {text}
         </span>,
         document.body
@@ -253,7 +293,7 @@ export function QualityPanel({ storyId }: QualityPanelProps) {
                           fontSize: "11px",
                           color: dispersionUnstable ? "var(--warn-fg)" : "var(--muted)",
                           fontFamily: "var(--font-mono)",
-                          cursor: "help",
+                          cursor: "pointer",
                         }}>
                           · ±{dispersion.toFixed(2)} ({samplesUsed} {s.dispersion_label})
                           {dispersionUnstable ? ` — ${s.dispersion_unstable}` : ""}

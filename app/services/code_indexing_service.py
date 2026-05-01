@@ -17,17 +17,56 @@ DEFAULT_LANGUAGE_MAP: dict[str, str] = {
     ".java": "Java",
     ".js": "JavaScript",
     ".ts": "TypeScript",
+    ".cs": "C#",
+    ".cpp": "C++",
+    ".cc": "C++",
+    ".cxx": "C++",
+    ".hpp": "C++",
+    ".c": "C",
+    ".php": "PHP",
+    ".go": "Go",
+    ".rb": "Ruby",
+    ".rs": "Rust",
+    ".kt": "Kotlin",
+    ".kts": "Kotlin",
+    ".swift": "Swift",
+    ".scala": "Scala",
 }
 
 DEFAULT_IGNORE_PATTERNS: list[str] = [
+    # VCS
     ".git",
-    "node_modules",
-    "venv",
-    "__pycache__",
-    "dist",
-    "build",
-    "target",
-    ".next",
+    # Python — entornos virtuales y caches de tooling
+    "venv", ".venv", "__pycache__",
+    ".pytest_cache", ".tox", ".mypy_cache", ".ruff_cache", ".hypothesis",
+    # Cobertura (multi-lenguaje)
+    "coverage", ".nyc_output", "htmlcov",
+    # JS/TS — package managers y caches
+    "node_modules", ".yarn", ".pnpm-store", "bower_components", "jspm_packages",
+    # JS/TS — build outputs y frameworks modernos
+    "dist", "out",
+    ".next", ".nuxt", ".expo", ".svelte-kit", ".astro",
+    # JS/TS — herramientas de build/deploy
+    ".turbo", ".parcel-cache", ".vercel", ".netlify",
+    # JVM (Java/Kotlin/Scala)
+    "build", "target", ".gradle",
+    # PHP/Go/Ruby — todos llaman "vendor" a la carpeta de dependencias
+    "vendor",
+    # Go — cache local
+    "pkg",
+    # C# / .NET
+    "bin", "obj",
+    # Swift / iOS / macOS
+    "Pods", "Carthage", ".build", "DerivedData",
+    # Ruby
+    ".bundle",
+    # CI / DevOps
+    ".github", ".gitlab", ".circleci", ".azure", ".husky", ".devcontainer",
+    # IDEs y asistentes IA dev
+    ".idea", ".vscode", ".vs",
+    ".claude", ".cursor", ".aider",
+    # Documentación y ejemplos (no son código de producción)
+    "docs", "documentation", "examples", "samples",
 ]
 
 
@@ -228,10 +267,11 @@ class CodeIndexingService:
 
         # 1. Get tree (single API call)
         entries = provider.list_tree(access_token, repo_full_name, branch, base_url=base_url)
+        ignored = set(self._ignore_patterns)
         relevant = [
             e for e in entries
             if os.path.splitext(e.path)[1].lower() in self._language_map
-            and not any(pat in e.path for pat in self._ignore_patterns)
+            and not (ignored & set(e.path.split("/")))
         ]
         files_scanned = len(relevant)
         scanned_paths = {e.path for e in relevant}

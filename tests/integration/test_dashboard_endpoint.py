@@ -49,7 +49,15 @@ def _make_client(Session):
     return TestClient(app)
 
 
-def _seed_story(db, story_id: str, title: str = "Story", points: int = 3, risk: str = "LOW"):
+def _seed_story(
+    db,
+    story_id: str,
+    title: str = "Story",
+    points: int = 3,
+    risk: str = "LOW",
+    entity_not_found: bool = False,
+    was_forced: bool = False,
+):
     db.add(UserStory(
         id=story_id,
         tenant_id=TEST_TENANT_ID,
@@ -66,6 +74,8 @@ def _seed_story(db, story_id: str, title: str = "Story", points: int = 3, risk: 
         story_points=points,
         risk_level=risk,
         generation_time_seconds=0.5,
+        entity_not_found=entity_not_found,
+        was_forced=was_forced,
         created_at=datetime.now(timezone.utc),
     ))
 
@@ -160,6 +170,20 @@ def test_stats_empty_tenant_returns_zeroes(empty_client):
     assert data["feedback_approval_rate"] is None
     assert data["quality_avg_overall"] is None
     assert data["quality_evaluated_count"] == 0
+    assert data["quality_avg_organic"] is None
+    assert data["quality_count_organic"] == 0
+    assert data["quality_avg_forced"] is None
+    assert data["quality_count_forced"] == 0
+    assert data["quality_count_creation_bypass"] == 0
+    assert data["quality_count_override"] == 0
+    assert data["tickets_failed_count"] == 0
+    assert data["avg_generation_time_seconds"] is None
+    assert data["unnecessary_force_count"] == 0
+    assert data["quality_organic_avg_completeness"] is None
+    assert data["quality_organic_avg_specificity"] is None
+    assert data["quality_organic_avg_feasibility"] is None
+    assert data["quality_organic_avg_risk_coverage"] is None
+    assert data["quality_organic_avg_language_consistency"] is None
     assert data["tickets_by_provider"] == {}
     assert data["stories_by_risk"] == {"LOW": 0, "MEDIUM": 0, "HIGH": 0}
 
@@ -180,6 +204,27 @@ def test_stats_populated_tenant_returns_aggregations(populated_client):
     assert data["feedback_approval_rate"] == 0.5
     assert data["quality_avg_overall"] == pytest.approx(7.6)
     assert data["quality_evaluated_count"] == 1
+    # Fixture's only score belongs to a story without entity_not_found, so
+    # it lands in the organic bucket; forced bucket is empty.
+    assert data["quality_avg_organic"] == pytest.approx(7.6)
+    assert data["quality_count_organic"] == 1
+    assert data["quality_avg_forced"] is None
+    assert data["quality_count_forced"] == 0
+    assert data["quality_count_creation_bypass"] == 0
+    assert data["quality_count_override"] == 0
+    # Fixture seeds story-1 with completeness=8, specificity=7, feasibility=8,
+    # risk_coverage=6, language_consistency=9 — all on the organic bucket.
+    assert data["quality_organic_avg_completeness"] == pytest.approx(8.0)
+    assert data["quality_organic_avg_specificity"] == pytest.approx(7.0)
+    assert data["quality_organic_avg_feasibility"] == pytest.approx(8.0)
+    assert data["quality_organic_avg_risk_coverage"] == pytest.approx(6.0)
+    assert data["quality_organic_avg_language_consistency"] == pytest.approx(9.0)
+    # No tickets failed, no unnecessary force in this fixture.
+    assert data["tickets_failed_count"] == 0
+    assert data["unnecessary_force_count"] == 0
+    # generation_time_seconds default is 0.5 in _seed_story; both stories
+    # contribute (story-1 + story-2).
+    assert data["avg_generation_time_seconds"] == pytest.approx(0.5)
     assert data["tickets_by_provider"] == {"jira": 1}
     assert data["stories_by_risk"] == {"LOW": 1, "MEDIUM": 0, "HIGH": 1}
 
@@ -191,6 +236,140 @@ def test_stats_with_window_filters_old_data(populated_client):
     assert data["window_days"] == 30
     # Test data was created "now", so still within 30d window
     assert data["stories_count"] == 2
+
+
+def test_stats_partitions_quality_with_was_forced():
+    """Three scored stories — organic + creation_bypass + override — must
+    populate the new sub-counts and per-bucket averages distinctly."""
+    Session = _make_session()
+    db = Session()
+    seed_source_connection(db)
+
+    now = datetime.now(timezone.utc)
+
+    _seed_story(db, "org-1", title="Organic")
+    _seed_story(db, "creation-1", title="Creation bypass", entity_not_found=True, was_forced=False)
+    _seed_story(db, "override-1", title="User override", entity_not_found=True, was_forced=True)
+
+    db.add(StoryQualityScore(
+        id=uuid.uuid4(), tenant_id=TEST_TENANT_ID, story_id="org-1",
+        completeness=8, specificity=8, feasibility=8, risk_coverage=8,
+        language_consistency=8, overall=8.0, evaluated_at=now,
+    ))
+    db.add(StoryQualityScore(
+        id=uuid.uuid4(), tenant_id=TEST_TENANT_ID, story_id="creation-1",
+        completeness=5, specificity=5, feasibility=5, risk_coverage=5,
+        language_consistency=5, overall=5.0, evaluated_at=now,
+    ))
+    db.add(StoryQualityScore(
+        id=uuid.uuid4(), tenant_id=TEST_TENANT_ID, story_id="override-1",
+        completeness=4, specificity=4, feasibility=4, risk_coverage=4,
+        language_consistency=4, overall=4.0, evaluated_at=now,
+    ))
+    db.commit()
+    db.close()
+
+    client = _make_client(Session)
+    r = client.get("/api/v1/dashboard/stats")
+    assert r.status_code == 200
+    data = r.json()
+
+    assert data["quality_avg_organic"] == pytest.approx(8.0)
+    assert data["quality_count_organic"] == 1
+
+    assert data["quality_avg_forced"] == pytest.approx(4.5)
+    assert data["quality_count_forced"] == 2
+    assert data["quality_count_creation_bypass"] == 1
+    assert data["quality_count_override"] == 1
+
+    assert data["quality_avg_overall"] == pytest.approx(17.0 / 3.0)
+    assert data["quality_evaluated_count"] == 3
+
+
+def test_stats_counts_failed_tickets():
+    """Tickets with status=FAILED feed `tickets_failed_count` while CREATED
+    keeps feeding `tickets_count` — the dashboard sees both numbers."""
+    Session = _make_session()
+    db = Session()
+    seed_source_connection(db)
+    _seed_story(db, "story-1")
+    now = datetime.now(timezone.utc)
+
+    # 2 successful + 1 failed.
+    for ext_id in ("PROJ-1", "PROJ-2"):
+        db.add(TicketIntegration(
+            id=str(uuid.uuid4()), tenant_id=TEST_TENANT_ID, story_id="story-1",
+            provider="jira", project_key="PROJ", issue_type="Story",
+            external_ticket_id=ext_id, status="CREATED", retry_count=0,
+            created_at=now, updated_at=now,
+        ))
+    db.add(TicketIntegration(
+        id=str(uuid.uuid4()), tenant_id=TEST_TENANT_ID, story_id="story-1",
+        provider="jira", project_key="PROJ", issue_type="Story",
+        external_ticket_id=None, status="FAILED", retry_count=2,
+        error_message="invalid token", created_at=now, updated_at=now,
+    ))
+    db.commit()
+    db.close()
+
+    client = _make_client(Session)
+    r = client.get("/api/v1/dashboard/stats")
+    assert r.status_code == 200
+    data = r.json()
+
+    assert data["tickets_count"] == 2
+    assert data["tickets_failed_count"] == 1
+
+
+def test_stats_counts_unnecessary_force():
+    """A story persisted with was_forced=True but entity_not_found=False is a
+    UX smell — count surfaces it even if the rest of the dashboard is empty."""
+    Session = _make_session()
+    db = Session()
+    seed_source_connection(db)
+
+    _seed_story(db, "story-org", entity_not_found=False, was_forced=False)
+    _seed_story(db, "story-unnecessary", entity_not_found=False, was_forced=True)
+    _seed_story(db, "story-override", entity_not_found=True, was_forced=True)
+    db.commit()
+    db.close()
+
+    client = _make_client(Session)
+    r = client.get("/api/v1/dashboard/stats")
+    assert r.status_code == 200
+    data = r.json()
+
+    # Only the (False, True) combination counts as unnecessary.
+    assert data["unnecessary_force_count"] == 1
+
+
+def test_stats_avg_generation_time():
+    """avg_generation_time_seconds averages user_stories.generation_time_seconds."""
+    Session = _make_session()
+    db = Session()
+    seed_source_connection(db)
+    now = datetime.now(timezone.utc)
+
+    for sid, gen_time in (("s-1", 2.0), ("s-2", 4.0)):
+        db.add(UserStory(
+            id=sid, tenant_id=TEST_TENANT_ID, source_connection_id=TEST_CONNECTION_ID,
+            requirement_id="req-x", impact_analysis_id="ana-x", project_id="proj-x",
+            title=sid, story_description="d",
+            acceptance_criteria=json.dumps(["AC"]),
+            subtasks=json.dumps({"frontend": [], "backend": [], "configuration": []}),
+            definition_of_done=json.dumps([]), risk_notes=json.dumps([]),
+            story_points=1, risk_level="LOW",
+            generation_time_seconds=gen_time, created_at=now,
+        ))
+    db.commit()
+    db.close()
+
+    client = _make_client(Session)
+    r = client.get("/api/v1/dashboard/stats")
+    assert r.status_code == 200
+    data = r.json()
+
+    assert data["avg_generation_time_seconds"] == pytest.approx(3.0)
 
 
 # ----------------------------- /dashboard/activity --------------------------------

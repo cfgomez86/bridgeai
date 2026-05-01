@@ -19,4 +19,5 @@ class UserStory:
     created_at: datetime
     generation_time_seconds: float
     entity_not_found: bool = False
+    was_forced: bool = False
     generator_model: str | None = None

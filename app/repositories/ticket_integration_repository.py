@@ -157,6 +157,20 @@ class TicketIntegrationRepository:
             q = q.filter(TicketIntegration.created_at >= since)
         return q.count()
 
+    def count_failed_since(self, since: Optional[datetime]) -> int:
+        """Count integration attempts that ended in FAILED status — operational
+        signal of provider/token health, surfaced on the dashboard."""
+        q = (
+            self._db.query(TicketIntegration)
+            .filter(
+                TicketIntegration.tenant_id == self._tid(),
+                TicketIntegration.status == "FAILED",
+            )
+        )
+        if since is not None:
+            q = q.filter(TicketIntegration.created_at >= since)
+        return q.count()
+
     def count_stories_with_tickets_since(self, since: Optional[datetime]) -> int:
         """Count distinct stories that have at least one successful ticket."""
         q = (

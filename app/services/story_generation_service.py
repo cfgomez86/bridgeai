@@ -152,6 +152,7 @@ class StoryGenerationService:
             "risk_level": analysis.risk_level,
             "generation_time_seconds": generation_time,
             "entity_not_found": entity_not_found,
+            "was_forced": force,
             "generator_model": generator_model,
             "created_at": created_at,
         }, source_connection_id)
@@ -177,6 +178,7 @@ class StoryGenerationService:
                 created_at=created_at,
                 generation_time_seconds=generation_time,
                 entity_not_found=entity_not_found,
+                was_forced=force,
                 generator_model=generator_model,
             ),
             entity_not_found,
@@ -223,5 +225,6 @@ class StoryGenerationService:
             created_at=orm.created_at,
             generation_time_seconds=orm.generation_time_seconds,
             entity_not_found=bool(getattr(orm, "entity_not_found", False)),
+            was_forced=bool(getattr(orm, "was_forced", False)),
             generator_model=getattr(orm, "generator_model", None),
         )

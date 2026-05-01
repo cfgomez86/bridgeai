@@ -76,6 +76,8 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 **Logging** (`app/core/logging.py`) — `RequestLoggingMiddleware` attaches a `request_id` UUID to `request.state` on every request. Access it in route handlers via `request.state.request_id`. Use `get_logger(__name__)` everywhere else.
 
+**Quality metrics partitioning** — `user_stories.entity_not_found` is the partition key for all aggregate judge metrics. When `True`, the requirement's main entity wasn't in the codebase and the judge applies hard score caps by design (`story_quality_judge.py`). `StoryQualityRepository.summary_since()` and `GET /api/v1/system/quality/live` separate **organic** (`entity_not_found=False`) from **forced** (`entity_not_found=True`) buckets so degraded-input runs don't pollute the baseline. The legacy `GET /api/v1/system/quality` keeps reading `eval_report.json` from the offline harness — leave it alone for batch eval.
+
 ### Adding a new feature
 
 1. Define domain objects in `app/domain/`.
