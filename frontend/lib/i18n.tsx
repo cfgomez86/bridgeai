@@ -16,6 +16,7 @@ interface Translations {
     connections: string
     settings: string
     feedback: string
+    feedback_coherence: string
   }
   connections: {
     title: string
@@ -161,6 +162,11 @@ interface Translations {
       affected_modules: string
       complexity: string
       step1_summary: string
+      evaluated_by_label: string
+      coherence_judge_label: string
+      parser_label: string
+      calls_singular: string
+      calls_plural: string
       analyzing: string
       analyze_btn: string
       re_analyze: string
@@ -170,6 +176,12 @@ interface Translations {
       description: string
       step1_summary: string
       step2_summary: string
+      evaluated_by_label: string
+      coherence_judge_label: string
+      parser_label: string
+      generator_label: string
+      calls_singular: string
+      calls_plural: string
       files: string
       complexity: string
       description_label: string
@@ -194,8 +206,11 @@ interface Translations {
         hint_label: string
         suggestions_label: string
         force_create_btn: string
+        force_create_hint: string
         creating_anyway: string
         edit_requirement_btn: string
+        intentional_new_btn: string
+        intentional_new_hint: string
       }
     }
     step4: {
@@ -204,6 +219,12 @@ interface Translations {
       step1_summary: string
       step2_summary: string
       step3_summary: string
+      evaluated_by_label: string
+      coherence_judge_label: string
+      parser_label: string
+      generator_label: string
+      calls_singular: string
+      calls_plural: string
       files: string
       complexity: string
       description_label: string
@@ -353,6 +374,9 @@ interface Translations {
       dimFeasibility: string
       dimRiskCoverage: string
       dimLanguageConsistency: string
+      dimRiskCoverageShort: string
+      dimLanguageConsistencyShort: string
+      dimSpecificityShort: string
       conversion: string
       conversionMeta: string
       conversionEmpty: string
@@ -392,6 +416,26 @@ interface Translations {
     filter_all: string
     filter_positive: string
     filter_negative: string
+  }
+  coherencePage: {
+    title: string
+    subtitle: string
+    empty: string
+    load_more: string
+    loading_more: string
+    error_load: string
+    filter_all: string
+    filter_non_software: string
+    filter_contradictory: string
+    filter_unintelligible: string
+    filter_conversational: string
+    filter_empty_intent: string
+    reason_label: string
+    user_label: string
+    model_label: string
+    project_label: string
+    warning_label: string
+    requirement_label: string
   }
   stories: {
     edit_title: string
@@ -497,6 +541,7 @@ const es: Translations = {
     connections: "Conexiones",
     settings: "Ajustes",
     feedback: "Feedback",
+    feedback_coherence: "Filtros de coherencia",
   },
   connections: {
     title: "Conexiones",
@@ -616,7 +661,7 @@ const es: Translations = {
       description: "Pega el texto del requerimiento y BridgeAI lo analizara para identificar intencion, complejidad y tipo de funcionalidad.",
       requirement_label: "Texto del requerimiento",
       placeholder: "Ej: Implementar sistema de autenticacion con OAuth2 y soporte para MFA...",
-      min_chars: "El requerimiento debe tener al menos 10 caracteres.",
+      min_chars: "El requerimiento debe tener al menos 60 caracteres.",
       story_language: "Idioma de la historia",
       analyzing: "Analizando...",
       analyze_btn: "Analizar requerimiento",
@@ -642,6 +687,11 @@ const es: Translations = {
       affected_modules: "Modulos afectados",
       complexity: "Complejidad:",
       step1_summary: "Requerimiento analizado",
+      evaluated_by_label: "Evaluado por",
+      coherence_judge_label: "Juez de coherencia",
+      parser_label: "Parser",
+      calls_singular: "petición",
+      calls_plural: "peticiones",
       analyzing: "Analizando impacto...",
       analyze_btn: "Analizar impacto",
       re_analyze: "Re-analizar",
@@ -651,6 +701,12 @@ const es: Translations = {
       description: "BridgeAI creara una historia de usuario completa con criterios de aceptacion, subtareas y definicion de terminado.",
       step1_summary: "Requerimiento",
       step2_summary: "Impacto analizado",
+      evaluated_by_label: "Evaluado por",
+      coherence_judge_label: "Juez de coherencia",
+      parser_label: "Parser",
+      generator_label: "Generador",
+      calls_singular: "petición",
+      calls_plural: "peticiones",
       files: "Archivos:",
       complexity: "Complejidad:",
       description_label: "Descripcion",
@@ -675,8 +731,11 @@ const es: Translations = {
         hint_label: "Sugerencia",
         suggestions_label: "Entidades similares que sí existen:",
         force_create_btn: "Crear igualmente",
+        force_create_hint: "Genera la historia aunque la entidad no exista aún. Se marca como forzada: la advertencia aparece en la historia y la calidad de esta historia no cuenta en las métricas orgánicas del dashboard.",
         creating_anyway: "Creando...",
         edit_requirement_btn: "Editar requerimiento",
+        intentional_new_btn: "Crear ignorando evaluación",
+        intentional_new_hint: "Usa esto si fue un falso positivo del juez: la entidad sí existe (o es una creación legítima nueva) y la evaluación se equivocó. La historia se genera sin advertencia y no contamina las métricas de calidad.",
       },
     },
     step4: {
@@ -685,6 +744,12 @@ const es: Translations = {
       step1_summary: "Requerimiento",
       step2_summary: "Impacto analizado",
       step3_summary: "Historia generada",
+      evaluated_by_label: "Evaluado por",
+      coherence_judge_label: "Juez de coherencia",
+      parser_label: "Parser",
+      generator_label: "Generador",
+      calls_singular: "petición",
+      calls_plural: "peticiones",
       files: "Archivos:",
       complexity: "Complejidad:",
       description_label: "Descripcion",
@@ -944,6 +1009,9 @@ const es: Translations = {
       dimFeasibility: "Viabilidad",
       dimRiskCoverage: "Cobertura de riesgo",
       dimLanguageConsistency: "Consistencia de idioma",
+      dimRiskCoverageShort: "Riesgos",
+      dimLanguageConsistencyShort: "Idioma",
+      dimSpecificityShort: "Especif.",
       conversion: "Conversión",
       conversionMeta: "{n} historias",
       conversionEmpty: "sin historias",
@@ -984,6 +1052,26 @@ const es: Translations = {
     filter_positive: "👍 Positivos",
     filter_negative: "👎 Negativos",
   },
+  coherencePage: {
+    title: "Filtros de coherencia",
+    subtitle: "Requerimientos rechazados por el pre-filtro antes de gastar tokens en el pipeline principal.",
+    empty: "Sin rechazos por ahora.",
+    load_more: "Cargar más",
+    loading_more: "Cargando...",
+    error_load: "No se pudo cargar la lista.",
+    filter_all: "Todos",
+    filter_non_software: "No es software",
+    filter_contradictory: "Contradictorio",
+    filter_unintelligible: "Ininteligible",
+    filter_conversational: "Conversacional",
+    filter_empty_intent: "Sin intención",
+    reason_label: "Motivos",
+    user_label: "Usuario",
+    model_label: "Modelo",
+    project_label: "Proyecto",
+    warning_label: "Advertencia",
+    requirement_label: "Texto enviado",
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -998,6 +1086,7 @@ const en: Translations = {
     connections: "Connections",
     settings: "Settings",
     feedback: "Feedback",
+    feedback_coherence: "Coherence filter",
   },
   connections: {
     title: "Connections",
@@ -1117,7 +1206,7 @@ const en: Translations = {
       description: "Paste the requirement text and BridgeAI will analyze it to identify intent, complexity and feature type.",
       requirement_label: "Requirement text",
       placeholder: "E.g.: Implement authentication system with OAuth2 and MFA support...",
-      min_chars: "The requirement must be at least 10 characters long.",
+      min_chars: "The requirement must be at least 60 characters long.",
       story_language: "Story language",
       analyzing: "Analyzing...",
       analyze_btn: "Analyze requirement",
@@ -1143,6 +1232,11 @@ const en: Translations = {
       affected_modules: "Affected modules",
       complexity: "Complexity:",
       step1_summary: "Analyzed requirement",
+      evaluated_by_label: "Evaluated by",
+      coherence_judge_label: "Coherence judge",
+      parser_label: "Parser",
+      calls_singular: "call",
+      calls_plural: "calls",
       analyzing: "Analyzing impact...",
       analyze_btn: "Analyze impact",
       re_analyze: "Re-analyze",
@@ -1152,6 +1246,12 @@ const en: Translations = {
       description: "BridgeAI will create a complete user story with acceptance criteria, subtasks and definition of done.",
       step1_summary: "Requirement",
       step2_summary: "Analyzed impact",
+      evaluated_by_label: "Evaluated by",
+      coherence_judge_label: "Coherence judge",
+      parser_label: "Parser",
+      generator_label: "Generator",
+      calls_singular: "call",
+      calls_plural: "calls",
       files: "Files:",
       complexity: "Complexity:",
       description_label: "Description",
@@ -1176,8 +1276,11 @@ const en: Translations = {
         hint_label: "Hint",
         suggestions_label: "Similar entities that do exist:",
         force_create_btn: "Create anyway",
+        force_create_hint: "Generate the story even though the entity doesn't exist yet. It will be flagged as forced: the warning shows on the story and this story's quality won't count toward the dashboard's organic metrics.",
         creating_anyway: "Creating...",
         edit_requirement_btn: "Edit requirement",
+        intentional_new_btn: "Create ignoring evaluation",
+        intentional_new_hint: "Use this if it was a false positive from the judge: the entity does exist (or it's a legitimate new creation) and the evaluation got it wrong. The story is generated without the warning and doesn't contaminate quality metrics.",
       },
     },
     step4: {
@@ -1186,6 +1289,12 @@ const en: Translations = {
       step1_summary: "Requirement",
       step2_summary: "Analyzed impact",
       step3_summary: "Generated story",
+      evaluated_by_label: "Evaluated by",
+      coherence_judge_label: "Coherence judge",
+      parser_label: "Parser",
+      generator_label: "Generator",
+      calls_singular: "call",
+      calls_plural: "calls",
       files: "Files:",
       complexity: "Complexity:",
       description_label: "Description",
@@ -1355,6 +1464,9 @@ const en: Translations = {
       dimFeasibility: "Feasibility",
       dimRiskCoverage: "Risk coverage",
       dimLanguageConsistency: "Language consistency",
+      dimRiskCoverageShort: "Risks",
+      dimLanguageConsistencyShort: "Language",
+      dimSpecificityShort: "Specif.",
       conversion: "Conversion",
       conversionMeta: "{n} stories",
       conversionEmpty: "no stories yet",
@@ -1394,6 +1506,26 @@ const en: Translations = {
     filter_all: "All",
     filter_positive: "👍 Positive",
     filter_negative: "👎 Negative",
+  },
+  coherencePage: {
+    title: "Coherence filter",
+    subtitle: "Requirements rejected by the pre-filter before spending tokens on the main pipeline.",
+    empty: "No rejections yet.",
+    load_more: "Load more",
+    loading_more: "Loading...",
+    error_load: "Could not load the list.",
+    filter_all: "All",
+    filter_non_software: "Not software",
+    filter_contradictory: "Contradictory",
+    filter_unintelligible: "Unintelligible",
+    filter_conversational: "Conversational",
+    filter_empty_intent: "No intent",
+    reason_label: "Reasons",
+    user_label: "User",
+    model_label: "Model",
+    project_label: "Project",
+    warning_label: "Warning",
+    requirement_label: "Submitted text",
   },
   stories: {
     edit_title: "Edit story",
@@ -1499,6 +1631,7 @@ const ca: Translations = {
     connections: "Connexions",
     settings: "Configuració",
     feedback: "Feedback",
+    feedback_coherence: "Filtres de coherència",
   },
   connections: {
     title: "Connexions",
@@ -1618,7 +1751,7 @@ const ca: Translations = {
       description: "Enganxa el text del requeriment i BridgeAI l'analitzarà per identificar la intenció, complexitat i tipus de funcionalitat.",
       requirement_label: "Text del requeriment",
       placeholder: "Ex: Implementar sistema d'autenticació amb OAuth2 i suport per a MFA...",
-      min_chars: "El requeriment ha de tenir almenys 10 caràcters.",
+      min_chars: "El requeriment ha de tenir almenys 60 caràcters.",
       story_language: "Idioma de la història",
       analyzing: "Analitzant...",
       analyze_btn: "Analitzar requeriment",
@@ -1644,6 +1777,11 @@ const ca: Translations = {
       affected_modules: "Mòduls afectats",
       complexity: "Complexitat:",
       step1_summary: "Requeriment analitzat",
+      evaluated_by_label: "Avaluat per",
+      coherence_judge_label: "Jutge de coherència",
+      parser_label: "Parser",
+      calls_singular: "petició",
+      calls_plural: "peticions",
       analyzing: "Analitzant impacte...",
       analyze_btn: "Analitzar impacte",
       re_analyze: "Re-analitzar",
@@ -1653,6 +1791,12 @@ const ca: Translations = {
       description: "BridgeAI crearà una història d'usuari completa amb criteris d'acceptació, subtasques i definició d'acabat.",
       step1_summary: "Requeriment",
       step2_summary: "Impacte analitzat",
+      evaluated_by_label: "Avaluat per",
+      coherence_judge_label: "Jutge de coherència",
+      parser_label: "Parser",
+      generator_label: "Generador",
+      calls_singular: "petició",
+      calls_plural: "peticions",
       files: "Arxius:",
       complexity: "Complexitat:",
       description_label: "Descripció",
@@ -1677,8 +1821,11 @@ const ca: Translations = {
         hint_label: "Suggeriment",
         suggestions_label: "Entitats semblants que sí existeixen:",
         force_create_btn: "Crear igualment",
+        force_create_hint: "Genera la història encara que l'entitat no existeixi. Es marcarà com a forçada: l'advertència apareix a la història i la qualitat d'aquesta història no compta a les mètriques orgàniques del dashboard.",
         creating_anyway: "Creant...",
         edit_requirement_btn: "Editar requeriment",
+        intentional_new_btn: "Crear ignorant l'avaluació",
+        intentional_new_hint: "Fes-ho servir si va ser un fals positiu del jutge: l'entitat sí que existeix (o és una creació nova legítima) i l'avaluació s'equivoca. La història es genera sense advertència i no contamina les mètriques de qualitat.",
       },
     },
     step4: {
@@ -1687,6 +1834,12 @@ const ca: Translations = {
       step1_summary: "Requeriment",
       step2_summary: "Impacte analitzat",
       step3_summary: "Història generada",
+      evaluated_by_label: "Avaluat per",
+      coherence_judge_label: "Jutge de coherència",
+      parser_label: "Parser",
+      generator_label: "Generador",
+      calls_singular: "petició",
+      calls_plural: "peticions",
       files: "Arxius:",
       complexity: "Complexitat:",
       description_label: "Descripció",
@@ -1856,6 +2009,9 @@ const ca: Translations = {
       dimFeasibility: "Viabilitat",
       dimRiskCoverage: "Cobertura de risc",
       dimLanguageConsistency: "Consistència d'idioma",
+      dimRiskCoverageShort: "Riscos",
+      dimLanguageConsistencyShort: "Idioma",
+      dimSpecificityShort: "Especif.",
       conversion: "Conversió",
       conversionMeta: "{n} històries",
       conversionEmpty: "sense històries",
@@ -1895,6 +2051,26 @@ const ca: Translations = {
     filter_all: "Tots",
     filter_positive: "👍 Positius",
     filter_negative: "👎 Negatius",
+  },
+  coherencePage: {
+    title: "Filtres de coherència",
+    subtitle: "Requeriments rebutjats pel pre-filtre abans de gastar tokens al pipeline principal.",
+    empty: "Sense rebutjos de moment.",
+    load_more: "Carregar més",
+    loading_more: "Carregant...",
+    error_load: "No s'ha pogut carregar la llista.",
+    filter_all: "Tots",
+    filter_non_software: "No és programari",
+    filter_contradictory: "Contradictori",
+    filter_unintelligible: "Inintel·ligible",
+    filter_conversational: "Conversacional",
+    filter_empty_intent: "Sense intenció",
+    reason_label: "Motius",
+    user_label: "Usuari",
+    model_label: "Model",
+    project_label: "Projecte",
+    warning_label: "Avís",
+    requirement_label: "Text enviat",
   },
   stories: {
     edit_title: "Editar història",

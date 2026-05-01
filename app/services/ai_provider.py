@@ -84,6 +84,8 @@ Responde ÚNICAMENTE con el JSON. Sin texto adicional, sin explicaciones, sin ma
 
 
 class AIProvider(ABC):
+    model_name: str = ""
+
     @abstractmethod
     def parse_requirement(self, requirement_text: str) -> dict:
         ...
@@ -93,6 +95,8 @@ class AIProvider(ABC):
 
 
 class StubAIProvider(AIProvider):
+    model_name = "stub"
+
     def parse_requirement(self, requirement_text: str) -> dict:
         return dict(_STUB_RESPONSE)
 
@@ -105,6 +109,7 @@ class AnthropicAIProvider(AIProvider):
         self._model = settings.AI_MODEL or settings.ANTHROPIC_MODEL
         self._timeout = settings.AI_TIMEOUT_SECONDS
         self._max_tokens = settings.AI_PARSE_MAX_TOKENS
+        self.model_name = self._model
 
     def parse_requirement(self, requirement_text: str) -> dict:
         prompt = self._build_prompt(requirement_text)
@@ -137,6 +142,7 @@ class OpenAIAIProvider(AIProvider):
         self._model = settings.AI_MODEL or default_model
         self._timeout = settings.AI_TIMEOUT_SECONDS
         self._max_tokens = settings.AI_PARSE_MAX_TOKENS
+        self.model_name = self._model
 
     def parse_requirement(self, requirement_text: str) -> dict:
         prompt = self._build_prompt(requirement_text)
@@ -159,6 +165,7 @@ class GeminiAIProvider(AIProvider):
         self._client = _genai_lib.Client(api_key=settings.GEMINI_API_KEY)
         self._model = settings.AI_MODEL or settings.GEMINI_MODEL
         self._max_tokens = settings.AI_PARSE_MAX_TOKENS
+        self.model_name = self._model
 
     def parse_requirement(self, requirement_text: str) -> dict:
         prompt = self._build_prompt(requirement_text)

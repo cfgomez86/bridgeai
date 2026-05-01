@@ -1,12 +1,14 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import {
   generateStory,
   getStoryDetail,
   ApiError,
   type StoryDetailResponse,
   type EntityNotFoundDetail,
+  type ForceReason,
 } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import type { WorkflowState } from "@/hooks/useWorkflow"
@@ -15,7 +17,76 @@ import { StepSummaryCard } from "@/components/features/StepSummaryCard"
 import { QualityPanel } from "@/components/features/stories/QualityPanel"
 import { StoryCard } from "@/components/features/stories/StoryCard"
 import { StoryFeedback } from "@/components/features/stories/StoryFeedback"
-import { AlertTriangle, Loader2, Pencil, Search, Wand2, Zap } from "lucide-react"
+import { AlertTriangle, Loader2, Pencil, Search, ShieldOff, Wand2, Zap } from "lucide-react"
+
+function HelpTip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const [anchor, setAnchor] = useState<{ x: number; y: number; alignRight: boolean } | null>(null)
+  const ref = useRef<HTMLSpanElement>(null)
+
+  function place() {
+    if (!ref.current) return
+    const r = ref.current.getBoundingClientRect()
+    const popoverWidth = Math.min(280, window.innerWidth * 0.8)
+    const safeMargin = 16
+    const triggerLeft = r.left
+    const overflowsRight = triggerLeft + popoverWidth > window.innerWidth - safeMargin
+    setAnchor({
+      x: overflowsRight ? r.right : triggerLeft,
+      y: r.bottom + 6,
+      alignRight: overflowsRight,
+    })
+  }
+
+  function show() { place(); setOpen(true) }
+  function hide() { setOpen(false) }
+
+  return (
+    <span
+      ref={ref}
+      style={{ display: "inline-flex", alignItems: "center" }}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+      onClick={(e) => { e.stopPropagation(); setOpen(v => { if (!v) place(); return !v }) }}
+    >
+      <span style={{ cursor: "pointer", lineHeight: "inherit" }}>{children}</span>
+      {open && anchor && createPortal(
+        <span
+          role="tooltip"
+          style={{
+            position: "fixed",
+            top: anchor.y,
+            ...(anchor.alignRight
+              ? { right: `calc(100vw - ${anchor.x}px)`, left: "auto" }
+              : { left: anchor.x, right: "auto" }),
+            zIndex: 9999,
+            width: "max-content",
+            maxWidth: "min(280px, 80vw)",
+            padding: "10px 12px",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius)",
+            boxShadow: "var(--shadow-sm)",
+            fontFamily: "var(--font-sans)",
+            fontSize: "12px",
+            fontWeight: 400,
+            lineHeight: 1.45,
+            letterSpacing: "normal",
+            textTransform: "none",
+            color: "var(--fg-2)",
+            whiteSpace: "normal",
+            pointerEvents: "none",
+          }}
+        >
+          {text}
+        </span>,
+        document.body
+      )}
+    </span>
+  )
+}
 
 const truncate = (text: string, max: number) =>
   text.length > max ? text.slice(0, max) + "…" : text
@@ -31,10 +102,11 @@ const chip = (): React.CSSProperties => ({
 interface Step3Props {
   state: WorkflowState
   completeStep3: (storyId: string, storyTitle: string, storyPoints: number) => void
+  setGeneratorInfo: (model: string | null, calls: number) => void
   goBackToStep1: () => void
 }
 
-export function Step3Generate({ state, completeStep3, goBackToStep1 }: Step3Props) {
+export function Step3Generate({ state, completeStep3, setGeneratorInfo, goBackToStep1 }: Step3Props) {
   const [loading, setLoading] = useState(false)
   const [forcing, setForcing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -51,7 +123,7 @@ export function Step3Generate({ state, completeStep3, goBackToStep1 }: Step3Prop
     setTimeout(() => setToast(null), 3000)
   }
 
-  function runGenerate(force: boolean) {
+  function runGenerate(force: boolean, forceReason?: ForceReason) {
     if (!state.requirementId || !state.analysisId || !state.sourceConnectionId) return
     if (force) {
       setForcing(true)
@@ -67,6 +139,7 @@ export function Step3Generate({ state, completeStep3, goBackToStep1 }: Step3Prop
       state.sourceConnectionId,
       state.language,
       force || undefined,
+      force ? forceReason : undefined,
     )
       .then(genResult =>
         getStoryDetail(genResult.story_id).then(detail => {
@@ -74,6 +147,7 @@ export function Step3Generate({ state, completeStep3, goBackToStep1 }: Step3Prop
             throw new Error("La historia devuelta pertenece a otro repositorio. Reiniciá el flujo.")
           }
           setStory(detail)
+          setGeneratorInfo(detail.generator_model ?? null, detail.generator_calls ?? 0)
           setPendingComplete({ storyId: genResult.story_id, title: detail.title, points: detail.story_points })
         })
       )
@@ -125,6 +199,26 @@ export function Step3Generate({ state, completeStep3, goBackToStep1 }: Step3Prop
         {state.keywords.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
             {state.keywords.map((kw) => <span key={kw} style={chip()}>{kw}</span>)}
+          </div>
+        )}
+        {(state.coherenceModel || state.parserModel) && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "2px" }}>
+            {state.coherenceModel && (
+              <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0, fontFamily: "var(--font-mono)" }}>
+                {s.coherence_judge_label}: <span style={{ color: "var(--fg-2)" }}>{state.coherenceModel}</span>
+                {state.coherenceCalls > 0 && (
+                  <> · {state.coherenceCalls} {state.coherenceCalls === 1 ? s.calls_singular : s.calls_plural}</>
+                )}
+              </p>
+            )}
+            {state.parserModel && (
+              <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0, fontFamily: "var(--font-mono)" }}>
+                {s.parser_label}: <span style={{ color: "var(--fg-2)" }}>{state.parserModel}</span>
+                {state.parserCalls > 0 && (
+                  <> · {state.parserCalls} {state.parserCalls === 1 ? s.calls_singular : s.calls_plural}</>
+                )}
+              </p>
+            )}
           </div>
         )}
       </StepSummaryCard>
@@ -204,39 +298,65 @@ export function Step3Generate({ state, completeStep3, goBackToStep1 }: Step3Prop
             <button
               type="button"
               disabled={forcing}
-              onClick={() => runGenerate(true)}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: "6px",
-                padding: "8px 14px", borderRadius: "var(--radius)", border: "none",
-                background: forcing ? "var(--surface-3)" : "var(--accent)",
-                color: forcing ? "var(--muted)" : "var(--accent-fg)",
-                fontSize: "12.5px", fontWeight: 600,
-                fontFamily: "var(--font-display)",
-                cursor: forcing ? "not-allowed" : "pointer",
-              }}
-            >
-              {forcing
-                ? <Loader2 size={13} className="animate-spin" />
-                : <Wand2 size={13} />}
-              {forcing ? s.errors.creating_anyway : s.errors.force_create_btn}
-            </button>
-            <button
-              type="button"
-              disabled={forcing}
               onClick={() => { setEntityNotFound(null); goBackToStep1() }}
               style={{
                 display: "inline-flex", alignItems: "center", gap: "6px",
-                padding: "8px 14px", borderRadius: "var(--radius)", border: "none",
-                background: forcing ? "var(--surface-3)" : "var(--accent)",
-                color: forcing ? "var(--muted)" : "var(--accent-fg)",
-                fontSize: "12.5px", fontWeight: 600,
+                padding: "7px 12px", borderRadius: "var(--radius)",
+                border: "1px solid var(--border)",
+                background: "transparent",
+                color: forcing ? "var(--muted)" : "var(--fg-2)",
+                fontSize: "12px", fontWeight: 500,
                 fontFamily: "var(--font-display)",
                 cursor: forcing ? "not-allowed" : "pointer",
               }}
             >
-              <Pencil size={13} />
+              <Pencil size={12} />
               {s.errors.edit_requirement_btn}
             </button>
+
+            <HelpTip text={s.errors.force_create_hint}>
+              <button
+                type="button"
+                disabled={forcing}
+                onClick={() => runGenerate(true, "ambiguous")}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "6px",
+                  padding: "7px 12px", borderRadius: "var(--radius)",
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  color: forcing ? "var(--muted)" : "var(--fg-2)",
+                  fontSize: "12px", fontWeight: 500,
+                  fontFamily: "var(--font-display)",
+                  cursor: forcing ? "not-allowed" : "pointer",
+                }}
+              >
+                {forcing
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <Wand2 size={12} />}
+                {forcing ? s.errors.creating_anyway : s.errors.force_create_btn}
+              </button>
+            </HelpTip>
+
+            <HelpTip text={s.errors.intentional_new_hint}>
+              <button
+                type="button"
+                disabled={forcing}
+                onClick={() => runGenerate(true, "intentional_new")}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "6px",
+                  padding: "7px 12px", borderRadius: "var(--radius)",
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  color: forcing ? "var(--muted)" : "var(--fg-2)",
+                  fontSize: "12px", fontWeight: 500,
+                  fontFamily: "var(--font-display)",
+                  cursor: forcing ? "not-allowed" : "pointer",
+                }}
+              >
+                <ShieldOff size={12} />
+                {s.errors.intentional_new_btn}
+              </button>
+            </HelpTip>
           </div>
         </div>
       )}
@@ -245,6 +365,18 @@ export function Step3Generate({ state, completeStep3, goBackToStep1 }: Step3Prop
         <div style={{ padding: "10px 14px", borderRadius: "var(--radius)", background: "var(--err-bg)", color: "var(--err-fg)", fontSize: "12.5px" }}>
           {error}
         </div>
+      )}
+
+      {story && state.generatorModel && (
+        <p style={{
+          fontSize: "11px", color: "var(--muted)", margin: 0,
+          fontFamily: "var(--font-mono)", paddingLeft: "2px",
+        }}>
+          {s.generator_label}: <span style={{ color: "var(--fg-2)" }}>{state.generatorModel}</span>
+          {state.generatorCalls > 0 && (
+            <> · {state.generatorCalls} {state.generatorCalls === 1 ? s.calls_singular : s.calls_plural}</>
+          )}
+        </p>
       )}
 
       {story && <QualityPanel storyId={story.story_id} />}

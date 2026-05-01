@@ -50,6 +50,12 @@ class StoryGenerationRequest(BaseModel):
     source_connection_id: str
     language: str = "es"
     force: bool = False
+    # Sólo aplica cuando force=true. Distingue dos motivos del override:
+    #   - "intentional_new": el usuario sabe que la entidad no existe y la
+    #     está creando deliberadamente (no contamina métricas forced).
+    #   - "ambiguous": el usuario fuerza pese al aviso de que la entidad
+    #     no existe (cae en el bucket forced).
+    force_reason: Optional[str] = None
 
 
 class StoryGenerationResponse(BaseModel):
@@ -61,6 +67,8 @@ class StoryGenerationResponse(BaseModel):
     generation_time_seconds: float
     request_id: str
     entity_not_found: bool = False
+    generator_model: Optional[str] = None
+    generator_calls: int = 0
 
 
 class SubtaskItem(BaseModel):
@@ -92,6 +100,7 @@ class StoryDetailResponse(BaseModel):
     created_at: str
     is_locked: bool = False
     generator_model: Optional[str] = None
+    generator_calls: int = 0
 
 
 class StoryUpdateRequest(BaseModel):
@@ -263,6 +272,7 @@ def _story_to_detail_response(story, is_locked: bool = False) -> StoryDetailResp
         created_at=story.created_at.isoformat(),
         is_locked=is_locked,
         generator_model=getattr(story, "generator_model", None),
+        generator_calls=int(getattr(story, "generator_calls", 0) or 0),
     )
 
 
@@ -295,6 +305,7 @@ async def generate_story(
             body.source_connection_id,
             body.language,
             body.force,
+            body.force_reason,
         )
     except EntityNotFoundError as exc:
         logger.info(
@@ -347,6 +358,8 @@ async def generate_story(
         generation_time_seconds=result.generation_time_seconds,
         request_id=request_id,
         entity_not_found=entity_not_found,
+        generator_model=result.generator_model,
+        generator_calls=result.generator_calls,
     )
 
 

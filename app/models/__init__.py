@@ -9,6 +9,7 @@ from app.models.user_story import UserStory  # noqa: F401
 from app.models.source_connection import SourceConnection  # noqa: F401
 from app.models.story_feedback import StoryFeedback  # noqa: F401
 from app.models.story_quality_score import StoryQualityScore  # noqa: F401
+from app.models.incoherent_requirement import IncoherentRequirement  # noqa: F401
 
 __all__ = [
     "Tenant",
@@ -24,4 +25,5 @@ __all__ = [
     "SourceConnection",
     "StoryFeedback",
     "StoryQualityScore",
+    "IncoherentRequirement",
 ]

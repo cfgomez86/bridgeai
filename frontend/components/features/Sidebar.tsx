@@ -76,6 +76,15 @@ function IconFeedback() {
   )
 }
 
+function IconShield() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 1.5l5.5 2v4c0 3.3-2.3 6.2-5.5 7-3.2-.8-5.5-3.7-5.5-7v-4l5.5-2z" />
+      <path d="M6 8l1.5 1.5L10.5 6.5" />
+    </svg>
+  )
+}
+
 interface SidebarProps {
   isOpen?: boolean
   onClose?: () => void
@@ -106,7 +115,10 @@ export function Sidebar({ isOpen = false, onClose, isMobile = false }: SidebarPr
     { href: `${prefix}/workflow`, label: t.nav.workflow, icon: <IconWand /> },
     { href: `${prefix}/indexing`, label: t.nav.indexing, icon: <IconDatabase /> },
     ...(isAdmin
-      ? [{ href: `${prefix}/feedback`, label: t.nav.feedback, icon: <IconFeedback /> }]
+      ? [
+          { href: `${prefix}/feedback`, label: t.nav.feedback, icon: <IconFeedback /> },
+          { href: `${prefix}/feedback-coherence`, label: t.nav.feedback_coherence, icon: <IconShield /> },
+        ]
       : []),
     { href: `${prefix}/connections`, label: t.nav.connections, icon: <IconPlug /> },
     { href: `${prefix}/settings`, label: t.nav.settings, icon: <IconSettings /> },

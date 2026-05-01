@@ -76,6 +76,7 @@ class UserStoryRepository:
             generation_time_seconds=model.generation_time_seconds,
             entity_not_found=bool(model.entity_not_found),
             was_forced=bool(getattr(model, "was_forced", False)),
+            force_reason=getattr(model, "force_reason", None),
             generator_model=getattr(model, "generator_model", None),
         )
 
@@ -123,13 +124,19 @@ class UserStoryRepository:
 
     def count_unnecessary_force_since(self, since: Optional[datetime]) -> int:
         """Stories where the user passed force=true but the entity check
-        actually found the entity. UX smell — the override was not needed."""
+        actually found the entity. UX smell — the override was not needed.
+
+        `force_reason='intentional_new'` is excluded: that path also lands with
+        was_forced=True, entity_not_found=False (intentional new entity that the
+        user is creating), but it is a legitimate flow, not a smell.
+        """
         q = (
             self._db.query(UserStory)
             .filter(
                 UserStory.tenant_id == self._tid(),
                 UserStory.was_forced.is_(True),
                 UserStory.entity_not_found.is_(False),
+                UserStory.force_reason.is_(None),
             )
         )
         if since is not None:

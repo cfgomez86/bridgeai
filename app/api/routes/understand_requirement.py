@@ -8,10 +8,15 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.database.session import get_db
+from app.repositories.incoherent_requirement_repository import IncoherentRequirementRepository
 from app.repositories.requirement_repository import RequirementRepository
 from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.ai_provider import get_ai_provider
 from app.services.ai_requirement_parser import AIRequirementParser
+from app.services.requirement_coherence_validator import (
+    IncoherentRequirementError,
+    get_coherence_validator,
+)
 from app.services.requirement_understanding_service import RequirementUnderstandingService
 
 logger = get_logger(__name__)
@@ -34,6 +39,11 @@ class UnderstandResponse(BaseModel):
     keywords: list[str]
     processing_time_seconds: float
     request_id: str
+    evaluated_by_model: str | None = None
+    coherence_model: str | None = None
+    coherence_calls: int = 0
+    parser_model: str | None = None
+    parser_calls: int = 0
 
 
 def get_understanding_service(
@@ -42,7 +52,9 @@ def get_understanding_service(
 ) -> RequirementUnderstandingService:
     repo = RequirementRepository(db)
     parser = AIRequirementParser(get_ai_provider(settings))
-    return RequirementUnderstandingService(parser, repo, settings)
+    validator = get_coherence_validator(settings)
+    incoherent_repo = IncoherentRequirementRepository(db)
+    return RequirementUnderstandingService(parser, repo, settings, validator, incoherent_repo)
 
 
 @router.post("/understand-requirement", response_model=UnderstandResponse)
@@ -70,6 +82,20 @@ async def understand_requirement(
         result = await asyncio.to_thread(
             service.understand, body.requirement, body.project_id, body.source_connection_id
         )
+    except IncoherentRequirementError as exc:
+        logger.info(
+            "POST /understand-requirement rejected by coherence filter request_id=%s codes=%s model=%s",
+            request_id, exc.reason_codes, exc.model_used,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INCOHERENT_REQUIREMENT",
+                "message": exc.warning,
+                "reason_codes": exc.reason_codes,
+                "model_used": exc.model_used,
+            },
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception as exc:
@@ -94,4 +120,9 @@ async def understand_requirement(
         keywords=result.keywords,
         processing_time_seconds=result.processing_time_seconds,
         request_id=request_id,
+        evaluated_by_model=service.parser_model_name or None,
+        coherence_model=result.coherence_model,
+        coherence_calls=result.coherence_calls,
+        parser_model=result.parser_model,
+        parser_calls=result.parser_calls,
     )

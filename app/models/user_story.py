@@ -34,5 +34,7 @@ class UserStory(Base):
     generation_time_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     entity_not_found: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     was_forced: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    force_reason: Mapped[str | None] = mapped_column(String(20), nullable=True)
     generator_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    generator_calls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

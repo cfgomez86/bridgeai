@@ -14,6 +14,13 @@ export type WorkflowState = {
   featureType: string | null
   complexity: string | null
   keywords: string[]
+  evaluatedByModel: string | null
+  coherenceModel: string | null
+  coherenceCalls: number
+  parserModel: string | null
+  parserCalls: number
+  generatorModel: string | null
+  generatorCalls: number
   analysisId: string | null
   filesImpacted: number | null
   modulesImpacted: string[]
@@ -36,6 +43,13 @@ const initialState: WorkflowState = {
   featureType: null,
   complexity: null,
   keywords: [],
+  evaluatedByModel: null,
+  coherenceModel: null,
+  coherenceCalls: 0,
+  parserModel: null,
+  parserCalls: 0,
+  generatorModel: null,
+  generatorCalls: 0,
   analysisId: null,
   filesImpacted: null,
   modulesImpacted: [],
@@ -80,6 +94,11 @@ export function useWorkflow() {
     featureType: string
     complexity: string
     keywords: string[]
+    evaluatedByModel: string | null
+    coherenceModel: string | null
+    coherenceCalls: number
+    parserModel: string | null
+    parserCalls: number
   }) {
     setState((prev) => ({
       ...prev,
@@ -88,6 +107,11 @@ export function useWorkflow() {
       featureType: data.featureType,
       complexity: data.complexity,
       keywords: data.keywords,
+      evaluatedByModel: data.evaluatedByModel,
+      coherenceModel: data.coherenceModel,
+      coherenceCalls: data.coherenceCalls,
+      parserModel: data.parserModel,
+      parserCalls: data.parserCalls,
       currentStep: 2,
     }))
   }
@@ -112,6 +136,10 @@ export function useWorkflow() {
     setState((prev) => ({ ...prev, storyId, storyTitle, storyPoints, currentStep: 4 }))
   }
 
+  function setGeneratorInfo(generatorModel: string | null, generatorCalls: number) {
+    setState((prev) => ({ ...prev, generatorModel, generatorCalls }))
+  }
+
   function completeStep4() {
     setState((prev) => ({ ...prev, currentStep: 5 }))
   }
@@ -128,6 +156,13 @@ export function useWorkflow() {
       featureType: null,
       complexity: null,
       keywords: [],
+      evaluatedByModel: null,
+      coherenceModel: null,
+      coherenceCalls: 0,
+      parserModel: null,
+      parserCalls: 0,
+      generatorModel: null,
+      generatorCalls: 0,
       analysisId: null,
       filesImpacted: null,
       modulesImpacted: [],
@@ -150,6 +185,7 @@ export function useWorkflow() {
     completeStep2,
     completeStep3,
     completeStep4,
+    setGeneratorInfo,
     reset,
     goBackToStep1,
   }

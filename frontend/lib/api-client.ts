@@ -187,6 +187,7 @@ export interface StoryDetailResponse {
   generation_time_seconds: number
   is_locked?: boolean
   generator_model?: string | null
+  generator_calls?: number
 }
 
 export interface StoryUpdateRequest {
@@ -429,6 +430,11 @@ export async function understandRequirement(
   feature_type: string
   estimated_complexity: string
   keywords: string[]
+  evaluated_by_model: string | null
+  coherence_model: string | null
+  coherence_calls: number
+  parser_model: string | null
+  parser_calls: number
 }> {
   return apiFetch("/api/v1/understand-requirement", {
     method: "POST",
@@ -469,6 +475,8 @@ export async function analyzeImpact(
   }
 }
 
+export type ForceReason = "intentional_new" | "ambiguous"
+
 export async function generateStory(
   requirementId: string,
   analysisId: string,
@@ -476,6 +484,7 @@ export async function generateStory(
   sourceConnectionId: string,
   language?: string,
   force?: boolean,
+  forceReason?: ForceReason,
 ): Promise<{
   story_id: string
   source_connection_id: string
@@ -497,6 +506,7 @@ export async function generateStory(
         source_connection_id: sourceConnectionId,
         language,
         ...(force ? { force: true } : {}),
+        ...(force && forceReason ? { force_reason: forceReason } : {}),
       }),
       signal: controller.signal,
     })
@@ -619,6 +629,45 @@ export async function getNegativeFeedback(
   const ratingParam = rating ? `&rating=${encodeURIComponent(rating)}` : ""
   return apiFetch<NegativeFeedbackItem[]>(
     `/api/v1/feedback/comments?limit=${limit}&offset=${offset}${ratingParam}`,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Coherence pre-filter — admin review
+// ---------------------------------------------------------------------------
+
+export interface IncoherentRequirementItem {
+  id: string
+  requirement_text: string
+  warning: string | null
+  reason_codes: string[]
+  user_id: string
+  user_email: string | null
+  project_id: string | null
+  source_connection_id: string | null
+  model_used: string | null
+  created_at: string
+}
+
+export interface IncoherentRequirementListResponse {
+  items: IncoherentRequirementItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export async function getIncoherentRequirements(
+  limit = 20,
+  offset = 0,
+  reason?: string | null,
+): Promise<IncoherentRequirementListResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  })
+  if (reason) params.set("reason", reason)
+  return apiFetch<IncoherentRequirementListResponse>(
+    `/api/v1/admin/incoherent-requirements?${params.toString()}`,
   )
 }
 

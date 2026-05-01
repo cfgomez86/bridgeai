@@ -85,6 +85,26 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
             {state.keywords.map((kw) => <span key={kw} style={chip(kw)}>{kw}</span>)}
           </div>
         )}
+        {(state.coherenceModel || state.parserModel) && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "2px" }}>
+            {state.coherenceModel && (
+              <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0, fontFamily: "var(--font-mono)" }}>
+                {s.coherence_judge_label}: <span style={{ color: "var(--fg-2)" }}>{state.coherenceModel}</span>
+                {state.coherenceCalls > 0 && (
+                  <> · {state.coherenceCalls} {state.coherenceCalls === 1 ? s.calls_singular : s.calls_plural}</>
+                )}
+              </p>
+            )}
+            {state.parserModel && (
+              <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0, fontFamily: "var(--font-mono)" }}>
+                {s.parser_label}: <span style={{ color: "var(--fg-2)" }}>{state.parserModel}</span>
+                {state.parserCalls > 0 && (
+                  <> · {state.parserCalls} {state.parserCalls === 1 ? s.calls_singular : s.calls_plural}</>
+                )}
+              </p>
+            )}
+          </div>
+        )}
       </StepSummaryCard>
 
       {/* Main card */}
