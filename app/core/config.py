@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     # Gemini
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_CACHE_TTL_SECONDS: int = 0  # 0 = disabled; >=60 enables caches.create() for the static block
 
     # Story entity existence validation
     ENTITY_VALIDATION_MODE: str = "warn"  # "warn" | "off"
@@ -114,7 +115,7 @@ class Settings(BaseSettings):
     AI_JUDGE_PROVIDER: str = ""   # if empty, uses AI_PROVIDER
     AI_JUDGE_MODEL: str = ""      # if empty, uses AI_MODEL
     AI_JUDGE_ENABLED: bool = True
-    AI_JUDGE_SAMPLES: int = 3
+    AI_JUDGE_SAMPLES: int = 1
     AI_JUDGE_TEMPERATURE: float = 0.3
     EVAL_REPORT_PATH: str = "./eval_report.json"
 

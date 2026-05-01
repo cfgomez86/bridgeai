@@ -4,10 +4,12 @@ import logging
 import statistics
 import time
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.core.config import Settings, get_settings
 from app.domain.user_story import UserStory
 from app.utils.json_utils import extract_json
+from app.utils.token_logging import log_token_usage
 
 try:
     import anthropic as _anthropic_lib
@@ -293,18 +295,40 @@ class StubQualityJudge(StoryQualityJudge):
 def _collect_samples(call_once, n_samples: int) -> list[dict]:
     """Run the per-call closure N times, parse each result, drop failures.
 
+    With N>=2 samples are run in parallel via ThreadPoolExecutor — the providers
+    are sync HTTP clients releasing the GIL during I/O, so threading cuts wall
+    time ~N× without changing the call shape. N==1 uses a direct call to skip
+    executor overhead.
+
     If every sample fails, propagate the last error so callers see it.
     """
+    n = max(1, n_samples)
+
+    def run_one(idx: int):
+        try:
+            raw = extract_json(call_once())
+            return ("ok", _parse_scores(raw), idx)
+        except (ValueError, KeyError) as exc:
+            return ("err", exc, idx)
+
+    if n == 1:
+        result = run_one(0)
+        if result[0] == "err":
+            logger.warning("Quality judge sample 1/1 failed: %s", result[1])
+            raise result[1]
+        return [result[1]]
+
     samples: list[dict] = []
     last_error: Exception | None = None
-    for i in range(max(1, n_samples)):
-        try:
-            raw_text = call_once()
-            raw = extract_json(raw_text)
-            samples.append(_parse_scores(raw))
-        except (ValueError, KeyError) as exc:
-            last_error = exc
-            logger.warning("Quality judge sample %d/%d failed: %s", i + 1, n_samples, exc)
+    with ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(run_one, i) for i in range(n)]
+        for fut in as_completed(futures):
+            kind, payload, idx = fut.result()
+            if kind == "ok":
+                samples.append(payload)
+            else:
+                last_error = payload
+                logger.warning("Quality judge sample %d/%d failed: %s", idx + 1, n, payload)
     if not samples and last_error is not None:
         raise last_error
     return samples
@@ -336,6 +360,13 @@ class AnthropicQualityJudge(StoryQualityJudge):
                 temperature=self._temperature,
                 messages=[{"role": "user", "content": prompt}],
             )
+            log_token_usage(
+                logger,
+                provider="anthropic",
+                operation="judge",
+                model=self._model,
+                response=response,
+            )
             return response.content[0].text
 
         samples = _collect_samples(call_once, self._n_samples)
@@ -352,6 +383,7 @@ class OpenAIQualityJudge(StoryQualityJudge):
         api_key: str | None = None,
         base_url: str | None = None,
         default_model: str = "gpt-4o-mini",
+        provider_name: str = "openai",
     ) -> None:
         if _openai_lib is None:
             raise ImportError("openai package is required")
@@ -363,6 +395,7 @@ class OpenAIQualityJudge(StoryQualityJudge):
         self._n_samples = max(1, int(settings.AI_JUDGE_SAMPLES))
         self._temperature = float(settings.AI_JUDGE_TEMPERATURE)
         self._max_tokens = settings.AI_JUDGE_MAX_TOKENS
+        self._provider_name = provider_name
 
     def evaluate(
         self,
@@ -380,6 +413,13 @@ class OpenAIQualityJudge(StoryQualityJudge):
                 temperature=self._temperature,
                 response_format={"type": "json_object"},
                 messages=[{"role": "user", "content": prompt}],
+            )
+            log_token_usage(
+                logger,
+                provider=self._provider_name,
+                operation="judge",
+                model=self._model,
+                response=response,
             )
             return response.choices[0].message.content
 
@@ -423,6 +463,13 @@ class GeminiQualityJudge(StoryQualityJudge):
                             response_mime_type="application/json",
                             thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
                         ),
+                    )
+                    log_token_usage(
+                        logger,
+                        provider="gemini",
+                        operation="judge",
+                        model=self._model,
+                        response=response,
                     )
                     # Detect MAX_TOKENS / SAFETY truncations explicitly. Cuando el
                     # finish_reason no es STOP/MODEL_LENGTH-OK, response.text suele
@@ -477,6 +524,7 @@ def get_quality_judge(settings: Settings = None) -> StoryQualityJudge:
             api_key=settings.GROQ_API_KEY,
             base_url=settings.GROQ_BASE_URL,
             default_model=settings.GROQ_MODEL,
+            provider_name="groq",
         )
     if provider == "gemini":
         return GeminiQualityJudge(settings)

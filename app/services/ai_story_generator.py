@@ -95,11 +95,16 @@ class HallucinatedPathError(ValueError):
 
 class StoryQualityRetryError(ValueError):
     """Raised when the response is shape-valid but breaks a quality rule
-    (AC not in Given/When/Then, missing frontend on a UI story, etc.)."""
+    (AC not in Given/When/Then, missing frontend on a UI story, etc.).
 
-    def __init__(self, reason: str) -> None:
+    `kind` lets the retry loop choose between mechanical AC repair (cheap) and
+    full regeneration (expensive). Repair only applies to AC-only failures.
+    """
+
+    def __init__(self, reason: str, kind: str = "other") -> None:
         super().__init__(reason)
         self.reason = reason
+        self.kind = kind
 
 
 class TransientGenerationError(Exception):
@@ -129,6 +134,7 @@ class AIStoryGenerator:
         attempt_context = dict(context)
         whitelist = set(context.get("available_file_paths") or [])
         last_validated: dict | None = None
+        repair_attempted = False
 
         for attempt in range(self._max_retries + 1):
             try:
@@ -168,9 +174,24 @@ class AIStoryGenerator:
             except StoryQualityRetryError as exc:
                 last_error = exc
                 self._logger.warning(
-                    "Attempt %d/%d failed quality check: %s",
-                    attempt + 1, self._max_retries + 1, exc.reason,
+                    "Attempt %d/%d failed quality check (kind=%s): %s",
+                    attempt + 1, self._max_retries + 1, exc.kind, exc.reason,
                 )
+                if (
+                    not repair_attempted
+                    and exc.kind in ("ac_format", "ac_functional")
+                    and last_validated is not None
+                ):
+                    repair_attempted = True
+                    repaired = self._try_repair_ac(last_validated, exc.reason, context)
+                    if repaired is not None:
+                        self._logger.info(
+                            "AC repair succeeded; returning repaired story without full retry"
+                        )
+                        return repaired
+                    self._logger.info(
+                        "AC repair did not produce a valid result; falling back to full retry"
+                    )
                 if attempt < self._max_retries:
                     attempt_context = dict(context)
                     attempt_context["quality_warning_reason"] = exc.reason
@@ -210,7 +231,8 @@ class AIStoryGenerator:
                 "los criterios de aceptación no siguen el formato Given/When/Then verificable "
                 f"(solo {matches} de {len(criteria)} cumplen). Reescribe TODOS los AC en el patrón "
                 "'Dado <contexto>, Cuando <acción>, Entonces <resultado medible>' "
-                "(o 'Given/When/Then' en inglés) con resultados concretos y comprobables."
+                "(o 'Given/When/Then' en inglés) con resultados concretos y comprobables.",
+                kind="ac_format",
             )
 
     @staticmethod
@@ -232,6 +254,38 @@ class AIStoryGenerator:
                             return citations
         return citations
 
+    def _try_repair_ac(self, story: dict, reason: str, context: dict) -> dict | None:
+        """Mini-prompt repair: rewrite ONLY the AC list and substitute it in.
+
+        Returns the full story dict with replaced AC if the repair is valid,
+        or None if the provider can't repair / returns nothing usable / the
+        new AC still fails validation. Caller falls back to full retry on None.
+        """
+        try:
+            new_ac = self._provider.repair_acceptance_criteria(
+                story=story,
+                reason=reason,
+                language=context.get("language", "es"),
+            )
+        except Exception as exc:  # provider call failed — fall back
+            self._logger.warning("AC repair call raised: %s", exc)
+            return None
+        if not new_ac:
+            self._logger.warning("AC repair returned no usable AC")
+            return None
+        try:
+            self._check_ac_format(new_ac)
+            self._check_ac_functional(new_ac)
+        except StoryQualityRetryError as exc:
+            self._logger.warning(
+                "AC repair output still fails validation (kind=%s): %s",
+                exc.kind, exc.reason,
+            )
+            return None
+        repaired = dict(story)
+        repaired["acceptance_criteria"] = new_ac
+        return repaired
+
     def _check_ac_functional(self, criteria: list) -> None:
         """Reject AC that leak implementation detail (paths, HTTP codes, REST routes).
 
@@ -250,7 +304,8 @@ class AIStoryGenerator:
             "describe únicamente el COMPORTAMIENTO OBSERVABLE por el usuario en términos de "
             "negocio. PROHIBIDO en los AC: rutas de archivo, códigos HTTP, métodos REST, "
             "endpoints (/api/..., /v1/...), nombres de clases/módulos/tablas/columnas, "
-            "librerías o frameworks. Mueve esos detalles a las subtareas backend."
+            "librerías o frameworks. Mueve esos detalles a las subtareas backend.",
+            kind="ac_functional",
         )
 
     @staticmethod
@@ -283,7 +338,8 @@ class AIStoryGenerator:
             "contexto) pero subtasks.frontend está vacío. Genera al menos 2 tareas frontend que "
             "cubran (1) estructura del componente o pantalla, (2) validaciones / estados de UI / "
             "mensajes de error y (3) integración con la API. Si no hay archivos UI en el whitelist, "
-            "describe el componente NUEVO a crear sin inventar paths concretos."
+            "describe el componente NUEVO a crear sin inventar paths concretos.",
+            kind="frontend_missing",
         )
 
     def _validate_shape(self, raw: dict) -> dict:
