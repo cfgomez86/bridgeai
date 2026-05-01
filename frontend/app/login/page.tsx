@@ -167,12 +167,12 @@ export default function LoginPage() {
             <div style={{ padding: "12px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "8px" }}>
               <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
                 {[
-                  { el: <GitHubLogo size={15} />, accent: true },
-                  { el: <GitLabLogo size={15} />, accent: false },
-                  { el: <AzureLogo size={15} />, accent: false },
-                  { el: <BitbucketLogo size={15} />, accent: false },
-                ].map(({ el, accent }, i) => (
-                  <div key={i} style={{
+                  { id: "github",    el: <GitHubLogo size={15} />, accent: true },
+                  { id: "gitlab",    el: <GitLabLogo size={15} />, accent: false },
+                  { id: "azure",     el: <AzureLogo size={15} />, accent: false },
+                  { id: "bitbucket", el: <BitbucketLogo size={15} />, accent: false },
+                ].map(({ id, el, accent }) => (
+                  <div key={id} style={{
                     width: "26px", height: "26px", borderRadius: "6px",
                     background: accent ? "var(--accent-soft)" : "var(--surface-2)",
                     border: accent ? "none" : "1px solid var(--border)",
