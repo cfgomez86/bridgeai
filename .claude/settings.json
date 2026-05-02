@@ -1,61 +1,17 @@
 {
   "permissions": {
     "allow": [
-      {
-        "tool": "Bash",
-        "prompt": "git status, git log, git diff, git branch, git show",
-        "description": "Git inspection (read-only)"
-      },
-      {
-        "tool": "Bash",
-        "prompt": "cd, pwd, ls, find, which, which python, which npm",
-        "description": "Navigation & discovery"
-      },
-      {
-        "tool": "Bash",
-        "prompt": "python -m pytest, pytest, npm test, npm run",
-        "description": "Run tests and build scripts"
-      },
-      {
-        "tool": "Bash",
-        "prompt": "python -m alembic, alembic",
-        "description": "Database migrations"
-      },
-      {
-        "tool": "Bash",
-        "prompt": "npm install, pip install, pip list, python -m pip",
-        "description": "Dependency management"
-      },
-      {
-        "tool": "Read",
-        "prompt": "*",
-        "description": "Read all files"
-      },
-      {
-        "tool": "Glob",
-        "prompt": "*",
-        "description": "File pattern matching"
-      },
-      {
-        "tool": "Grep",
-        "prompt": "*",
-        "description": "Content search"
-      },
-      {
-        "tool": "Edit",
-        "prompt": "*.py, *.ts, *.tsx, *.md, *.json",
-        "description": "Edit source files"
-      },
-      {
-        "tool": "Write",
-        "prompt": "app/**, frontend/**, tests/**, docs/**",
-        "description": "Write to project directories"
-      },
-      {
-        "tool": "Skill",
-        "prompt": "simplify, security-review, claude-api, init, review",
-        "description": "Quality gate skills"
-      }
+      "git status, git log, git diff, git branch, git show",
+      "cd, pwd, ls, find, which, which python, which npm",
+      "python -m pytest, pytest, npm test, npm run",
+      "python -m alembic, alembic",
+      "npm install, pip install, pip list, python -m pip",
+      "Read: *",
+      "Glob: *",
+      "Grep: *",
+      "Edit: *.py, *.ts, *.tsx, *.md, *.json",
+      "Write: app/**, frontend/**, tests/**, docs/**",
+      "Skill: simplify, security-review, claude-api, init, review"
     ],
     "require_confirmation": [
       {
