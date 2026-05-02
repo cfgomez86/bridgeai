@@ -1,0 +1,103 @@
+{
+  "permissions": {
+    "allow": [
+      {
+        "tool": "Bash",
+        "prompt": "git status, git log, git diff, git branch, git show",
+        "description": "Git inspection (read-only)"
+      },
+      {
+        "tool": "Bash",
+        "prompt": "cd, pwd, ls, find, which, which python, which npm",
+        "description": "Navigation & discovery"
+      },
+      {
+        "tool": "Bash",
+        "prompt": "python -m pytest, pytest, npm test, npm run",
+        "description": "Run tests and build scripts"
+      },
+      {
+        "tool": "Bash",
+        "prompt": "python -m alembic, alembic",
+        "description": "Database migrations"
+      },
+      {
+        "tool": "Bash",
+        "prompt": "npm install, pip install, pip list, python -m pip",
+        "description": "Dependency management"
+      },
+      {
+        "tool": "Read",
+        "prompt": "*",
+        "description": "Read all files"
+      },
+      {
+        "tool": "Glob",
+        "prompt": "*",
+        "description": "File pattern matching"
+      },
+      {
+        "tool": "Grep",
+        "prompt": "*",
+        "description": "Content search"
+      },
+      {
+        "tool": "Edit",
+        "prompt": "*.py, *.ts, *.tsx, *.md, *.json",
+        "description": "Edit source files"
+      },
+      {
+        "tool": "Write",
+        "prompt": "app/**, frontend/**, tests/**, docs/**",
+        "description": "Write to project directories"
+      },
+      {
+        "tool": "Skill",
+        "prompt": "simplify, security-review, claude-api, init, review",
+        "description": "Quality gate skills"
+      }
+    ],
+    "require_confirmation": [
+      {
+        "tool": "Bash",
+        "prompt": "git commit, git push, git reset, git rebase, git checkout --, git clean",
+        "description": "Destructive git operations"
+      },
+      {
+        "tool": "Bash",
+        "prompt": "rm -rf, rm -f, drop table, delete from",
+        "description": "Destructive filesystem/DB operations"
+      },
+      {
+        "tool": "Bash",
+        "prompt": "docker, docker compose down",
+        "description": "Container destruction"
+      },
+      {
+        "tool": "Agent",
+        "prompt": "*",
+        "description": "All agent spawning (verify context before delegating)"
+      }
+    ]
+  },
+  "hooks": {
+    "post_bash_git_commit": "If this commit includes features/fixes/major docs, update MEMORY.md to capture decisions.",
+    "post_edit_app_files": "IMPORTANT: After editing app/** files, I will invoke clean-arch-guardian to verify layer compliance before proceeding. You can skip this by saying 'no arch check needed'.",
+    "post_write_frontend_files": "After writing frontend/** files, verify TypeScript: `cd frontend && npx tsc --noEmit`"
+  },
+  "defaults": {
+    "model": "haiku-4-5",
+    "advisor_model": "opus-4-7",
+    "auto_context_compression": true,
+    "verbose_tool_results": false
+  },
+  "project": {
+    "name": "BridgeAI",
+    "language_backend": "Python",
+    "framework_backend": "FastAPI",
+    "language_frontend": "TypeScript/React",
+    "framework_frontend": "Next.js 16",
+    "database": "PostgreSQL",
+    "architecture": "Clean Architecture (domain → services → api/routes)"
+  }
+}

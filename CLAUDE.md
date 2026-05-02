@@ -148,20 +148,26 @@ AUTH0_CLIENT_SECRET=your-client-secret
 AUTH0_AUDIENCE=https://your-api-audience
 ```
 
-## Development agents (`.claude/agents/`)
+## Development workflow
 
-Specialized Claude Code roles for common development tasks:
+**Quick reference:** See `docs/WORKFLOW_GUIDE.md` for detailed workflow, decision tree, and examples.
 
-| Agent | When to invoke |
-|---|---|
-| `clean-arch-guardian` | Review any new/modified `app/` file for layer violations |
-| `clean-arch-guardian` | Review any new/modified `app/` file for layer violations |
-| `domain-modeler` | Create a new frozen dataclass in `app/domain/` |
-| `api-route-builder` | Scaffold a full vertical slice (domain → service → route → test) |
-| `test-specialist` | Write or expand tests for any layer |
-| `phase-implementer` | Implement an entire roadmap phase end-to-end |
-| `nextjs-frontend-builder` | Build, extend, or fix any part of the Next.js frontend in `frontend/` |
-| `security-guardian` | Audit, find, and fix security vulnerabilities; apply current best practices |
+**Development agents** (`.claude/agents/`) — specialized roles for common tasks:
+
+| Agent | Triggers | Use when |
+|---|---|---|
+| **domain-modeler** | "create domain object", "add domain entity", "model the X domain" | Create frozen dataclass in `app/domain/` |
+| **api-route-builder** | "add endpoint", "create route", "new API for X" | Full vertical slice: domain + service + route + test |
+| **test-specialist** | "write tests for", "add test coverage", "test this service" | Unit/integration tests with coverage |
+| **nextjs-frontend-builder** | "create page", "add component", "build frontend for X", "crear componente" | React component/page with i18n + design tokens |
+| **clean-arch-guardian** | "review architecture", "check clean arch", "validate layers" | Audit code for layer violations (also runs auto on `app/` edits) |
+| **security-guardian** | "security audit", "find vulnerabilities", "security review", "harden the API" | Audit for security vulns (CRITICAL/HIGH/MEDIUM/LOW) |
+
+**How it works:** Say what you need (e.g., "create domain object User with fields id, email, role") and I invoke the right agent automatically. See `docs/WORKFLOW_GUIDE.md` for decision tree + all triggers.
+
+**Automatic checks:**
+- After editing `app/` files, `clean-arch-guardian` runs automatically to catch layer violations.
+- Use `/simplify` and `/security-review` after large edits (skills are pre-allowed in settings).
 
 ## Roadmap phases — status
 
