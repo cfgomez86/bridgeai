@@ -26,8 +26,15 @@ def set_tenant_context():
 @pytest.fixture(autouse=True)
 def mock_httpx_async_client(request):
     """Mock httpx.AsyncClient only in ticket provider tests to avoid slow initialization."""
-    test_path = request.node.fspath.strpath
-    if "ticket_provider" in test_path or "test_jira_provider" in test_path or "test_azure_devops_provider" in test_path:
+    # Only apply to specific test files that use ticket providers
+    test_filename = request.node.fspath.basename
+    ticket_provider_tests = {
+        "test_jira_provider.py",
+        "test_azure_devops_provider.py",
+        "test_jira_oauth_provider.py",
+    }
+
+    if test_filename in ticket_provider_tests:
         with patch("httpx.AsyncClient") as mock_client:
             mock_client.return_value = MagicMock()
             yield mock_client
