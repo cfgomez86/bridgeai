@@ -16,26 +16,27 @@ def provider():
     return AzureDevOpsProvider()
 
 
+def _make_resp(data: dict) -> MagicMock:
+    resp = MagicMock()
+    resp.read.return_value = json.dumps(data).encode()
+    resp.__enter__.return_value = resp
+    return resp
+
+
 class TestAzureDevOpsPATValidation:
     """Test PAT validation with scope and endpoint checking."""
 
     def test_validate_pat_success(self, provider):
         """Verify successful PAT validation."""
-        mock_response = {
-            "value": [
-                {
-                    "id": "user-1",
-                    "displayName": "Alice Smith",
-                    "uniqueName": "alice@example.com"
-                }
-            ]
-        }
+        projects_data = {"value": [{"id": "proj-1", "name": "MyProject"}]}
 
         with patch("urllib.request.urlopen") as mock_urlopen:
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = json.dumps(mock_response).encode()
-            mock_resp.__enter__.return_value = mock_resp
-            mock_urlopen.return_value = mock_resp
+            def side_effect(req, *args, **kwargs):
+                if "_apis/projects" in req.full_url:
+                    return _make_resp(projects_data)
+                return _make_resp({})
+
+            mock_urlopen.side_effect = side_effect
 
             result = provider.validate_pat(
                 "token-123",
@@ -47,18 +48,18 @@ class TestAzureDevOpsPATValidation:
 
     def test_validate_pat_missing_code_scope(self, provider):
         """Verify PAT lacking Code:Read scope is rejected."""
-        # Simulate 404 or 403 on repos endpoint (missing Code scope)
-        with patch("urllib.request.urlopen") as mock_urlopen:
-            mock_error = HTTPError(
-                url="https://dev.azure.com/myorg/_apis/git/repositories",
-                code=403,
-                msg="Forbidden",
-                hdrs={},
-                fp=None
-            )
-            mock_urlopen.side_effect = mock_error
+        projects_data = {"value": [{"id": "proj-1", "name": "MyProject"}]}
 
-            with pytest.raises(ValueError, match="scope|permission"):
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            def side_effect(req, *args, **kwargs):
+                url = req.full_url
+                if "git/repositories" in url:
+                    raise HTTPError(url=url, code=403, msg="Forbidden", hdrs={}, fp=None)
+                return _make_resp(projects_data)
+
+            mock_urlopen.side_effect = side_effect
+
+            with pytest.raises(ValueError, match="Code"):
                 provider.validate_pat(
                     "token-123",
                     org_url="https://dev.azure.com/myorg"
@@ -68,7 +69,7 @@ class TestAzureDevOpsPATValidation:
         """Verify HTTP errors are caught."""
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_error = HTTPError(
-                url="https://dev.azure.com/myorg/_apis",
+                url="https://dev.azure.com/myorg/_apis/projects",
                 code=401,
                 msg="Unauthorized",
                 hdrs={},
@@ -76,7 +77,7 @@ class TestAzureDevOpsPATValidation:
             )
             mock_urlopen.side_effect = mock_error
 
-            with pytest.raises(ValueError, match="invalid|token"):
+            with pytest.raises(ValueError, match="Azure DevOps PAT invalid"):
                 provider.validate_pat(
                     "bad-token",
                     org_url="https://dev.azure.com/myorg"
@@ -106,10 +107,7 @@ class TestAzureDevOpsOAuth:
         }
 
         with patch("urllib.request.urlopen") as mock_urlopen:
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = json.dumps(mock_response).encode()
-            mock_resp.__enter__.return_value = mock_resp
-            mock_urlopen.return_value = mock_resp
+            mock_urlopen.return_value = _make_resp(mock_response)
 
             result = provider.exchange_code(
                 code="code-123",
@@ -123,19 +121,12 @@ class TestAzureDevOpsOAuth:
     def test_get_user_info_oauth(self, provider):
         """Verify get_user_info from OAuth token."""
         mock_response = {
-            "value": [
-                {
-                    "displayName": "Alice Smith",
-                    "uniqueName": "alice@example.com"
-                }
-            ]
+            "emailAddress": "alice@example.com",
+            "displayName": "Alice Smith"
         }
 
         with patch("urllib.request.urlopen") as mock_urlopen:
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = json.dumps(mock_response).encode()
-            mock_resp.__enter__.return_value = mock_resp
-            mock_urlopen.return_value = mock_resp
+            mock_urlopen.return_value = _make_resp(mock_response)
 
             result = provider.get_user_info("token-123")
 
@@ -147,21 +138,18 @@ class TestAzureDevOpsListProjects:
 
     def test_list_projects_pat(self, provider):
         """Verify list_projects with PAT."""
-        mock_response = {
+        projects_data = {
             "value": [
                 {
                     "id": "proj-1",
                     "name": "MyProject",
-                    "visibility": "public"
+                    "capabilities": {"processTemplate": {"templateName": "Agile"}}
                 }
             ]
         }
 
         with patch("urllib.request.urlopen") as mock_urlopen:
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = json.dumps(mock_response).encode()
-            mock_resp.__enter__.return_value = mock_resp
-            mock_urlopen.return_value = mock_resp
+            mock_urlopen.return_value = _make_resp(projects_data)
 
             result = provider.list_projects(
                 "token-123",
@@ -172,39 +160,38 @@ class TestAzureDevOpsListProjects:
 
     def test_list_projects_oauth_iterates_accounts(self, provider):
         """Verify OAuth lists projects via profile + accessible accounts."""
-        profile_response = {
+        profile_response = {"id": "user-123", "displayName": "Alice", "emailAddress": "alice@example.com"}
+        accounts_response = {
             "value": [
                 {
-                    "id": "account-1",
                     "accountName": "myorg",
                     "accountUri": "https://dev.azure.com/myorg"
                 }
             ]
         }
-
         projects_response = {
             "value": [
                 {
                     "id": "proj-1",
                     "name": "MyProject",
-                    "visibility": "public"
+                    "capabilities": {"processTemplate": {"templateName": "Agile"}}
                 }
             ]
         }
 
         with patch("urllib.request.urlopen") as mock_urlopen:
             def urlopen_side_effect(req, *args, **kwargs):
-                resp = MagicMock()
-                if "accounts" in req.full_url:
-                    resp.read.return_value = json.dumps(profile_response).encode()
-                else:
-                    resp.read.return_value = json.dumps(projects_response).encode()
-                resp.__enter__.return_value = resp
-                return resp
+                url = req.full_url
+                if "profiles/me" in url:
+                    return _make_resp(profile_response)
+                if "accounts" in url:
+                    return _make_resp(accounts_response)
+                return _make_resp(projects_response)
 
             mock_urlopen.side_effect = urlopen_side_effect
 
-            result = provider.list_projects("token-123")
+            # Use eyJ prefix to trigger OAuth path
+            result = provider.list_projects("eyJfaketoken")
 
             assert len(result) > 0
 
@@ -215,18 +202,18 @@ class TestAzureDevOpsListTree:
     def test_list_tree_no_commits_error(self, provider):
         """Verify 'Cannot find any branches' error is handled gracefully."""
         with patch("urllib.request.urlopen") as mock_urlopen:
-            # Azure returns 404 with specific message for empty repos
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = json.dumps({
-                "message": "Cannot find any branches for the given repository."
-            }).encode()
-            mock_resp.__enter__.return_value = mock_resp
-            mock_urlopen.return_value = mock_resp
+            error = HTTPError(
+                url="https://dev.azure.com/org/project/_apis/git/repositories/repo/items",
+                code=404,
+                msg="Not Found",
+                hdrs={},
+                fp=MagicMock(read=MagicMock(return_value=b"Cannot find any branches for the given repository."))
+            )
+            error.read = MagicMock(return_value=b"Cannot find any branches for the given repository.")
+            mock_urlopen.side_effect = error
 
-            # Should handle gracefully
-            with patch.object(provider, "_is_branch_not_found_error", return_value=True):
-                with pytest.raises(ValueError):
-                    provider.list_tree("token-123", "project/repo", "main", org_url="https://dev.azure.com/myorg")
+            with pytest.raises(RuntimeError):
+                provider.list_tree("token-123", "org/project/repo", "main")
 
     def test_list_tree_success(self, provider):
         """Verify successful tree listing."""
@@ -234,34 +221,29 @@ class TestAzureDevOpsListTree:
             "value": [
                 {
                     "objectId": "blob-1",
-                    "path": "src",
-                    "isFolder": True
+                    "path": "/src",
+                    "gitObjectType": "tree"
                 },
                 {
                     "objectId": "blob-2",
-                    "path": "main.py",
-                    "isFolder": False
+                    "path": "/main.py",
+                    "gitObjectType": "blob"
                 }
-            ],
-            "pagingToken": None
+            ]
         }
 
         with patch("urllib.request.urlopen") as mock_urlopen:
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = json.dumps(tree_response).encode()
-            mock_resp.__enter__.return_value = mock_resp
-            mock_urlopen.return_value = mock_resp
+            mock_urlopen.return_value = _make_resp(tree_response)
 
             result = provider.list_tree(
                 "token-123",
-                "project/repo",
-                "main",
-                org_url="https://dev.azure.com/myorg"
+                "myorg/myproject/myrepo",
+                "main"
             )
 
             assert len(result) > 0
-            paths = [item.get("path") for item in result]
-            assert "main.py" in paths
+            paths = [item.path for item in result]
+            assert any("main.py" in p for p in paths)
 
 
 class TestAzureDevOpsBasicAuth:
@@ -269,27 +251,22 @@ class TestAzureDevOpsBasicAuth:
 
     def test_pat_basic_auth_header(self, provider):
         """Verify Basic auth header uses token correctly."""
-        mock_response = {
-            "value": [
-                {
-                    "displayName": "Alice",
-                    "uniqueName": "alice@example.com"
-                }
-            ]
-        }
+        projects_data = {"value": [{"id": "proj-1", "name": "MyProject"}]}
 
         with patch("urllib.request.urlopen") as mock_urlopen:
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = json.dumps(mock_response).encode()
-            mock_resp.__enter__.return_value = mock_resp
-            mock_urlopen.return_value = mock_resp
+            def side_effect(req, *args, **kwargs):
+                if "_apis/projects" in req.full_url:
+                    return _make_resp(projects_data)
+                return _make_resp({})
+
+            mock_urlopen.side_effect = side_effect
 
             provider.validate_pat(
                 "token-123",
                 org_url="https://dev.azure.com/myorg"
             )
 
-            call_args = mock_urlopen.call_args[0][0]
+            call_args = mock_urlopen.call_args_list[0][0][0]
             auth_header = call_args.get_header("Authorization")
             # Azure DevOps uses ":<token>" as credentials
             expected = base64.b64encode(b":token-123").decode()

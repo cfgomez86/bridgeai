@@ -87,8 +87,7 @@ class TestGitHubPATValidation:
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_resp = MagicMock()
             mock_resp.read.return_value = json.dumps(mock_response).encode()
-            # Classic token has X-OAuth-Scopes header
-            mock_resp.headers = {"X-OAuth-Scopes": "repo, admin:org_hook"}
+            mock_resp.getheader.return_value = "repo, read:user"
             mock_resp.__enter__.return_value = mock_resp
             mock_urlopen.return_value = mock_resp
 
@@ -107,7 +106,7 @@ class TestGitHubPATValidation:
             mock_resp = MagicMock()
             mock_resp.read.return_value = json.dumps(mock_response).encode()
             # Fine-grained tokens have no X-OAuth-Scopes header
-            mock_resp.headers = {}
+            mock_resp.getheader.return_value = None
             mock_resp.__enter__.return_value = mock_resp
             mock_urlopen.return_value = mock_resp
 
@@ -126,13 +125,12 @@ class TestGitHubPATValidation:
             mock_resp = MagicMock()
             mock_resp.read.return_value = json.dumps(mock_response).encode()
             # Classic token with insufficient scopes
-            mock_resp.headers = {"X-OAuth-Scopes": "public_repo"}  # Missing 'repo' scope
+            mock_resp.getheader.return_value = "public_repo"  # Missing 'repo' scope
             mock_resp.__enter__.return_value = mock_resp
             mock_urlopen.return_value = mock_resp
 
-            # Depending on implementation, may raise or allow
-            # Testing that scope checking happens
-            provider.validate_pat("ghp_token_123")
+            with pytest.raises(ValueError):
+                provider.validate_pat("ghp_token_123")
 
     def test_validate_pat_http_error(self, provider):
         """Verify HTTP errors are caught."""
@@ -146,7 +144,7 @@ class TestGitHubPATValidation:
             )
             mock_urlopen.side_effect = mock_error
 
-            with pytest.raises(ValueError, match="token invalid"):
+            with pytest.raises(ValueError, match="GitHub PAT invalid"):
                 provider.validate_pat("bad-token")
 
 
@@ -171,7 +169,7 @@ class TestGitHubGetFileContent:
             mock_resp.__enter__.return_value = mock_resp
             mock_urlopen.return_value = mock_resp
 
-            result = provider.get_file_content("token-123", "user/repo", "main", "test.py")
+            result = provider.get_file_content("token-123", "user/repo", "test.py")
 
             assert result == file_content
 
@@ -191,7 +189,7 @@ class TestGitHubGetFileContent:
             mock_urlopen.return_value = mock_resp
 
             with pytest.raises(ValueError):
-                provider.get_file_content("token-123", "user/repo", "main", "test.py")
+                provider.get_file_content("token-123", "user/repo", "test.py")
 
     def test_get_file_content_with_sha(self, provider):
         """Verify file retrieval with SHA hash."""
@@ -205,11 +203,11 @@ class TestGitHubGetFileContent:
 
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_resp = MagicMock()
-            mock_resp.read.return_value = json.dumps(mock_response).encode()
+            mock_resp.read.return_value = file_content.encode()
             mock_resp.__enter__.return_value = mock_resp
             mock_urlopen.return_value = mock_resp
 
-            result = provider.get_file_content("token-123", "user/repo", "abc123def456", "file.py")
+            result = provider.get_file_content("token-123", "user/repo", "file.py", sha="abc123def456")
 
             assert result == file_content
             # Verify request included SHA
@@ -223,11 +221,11 @@ class TestGitHubListRepos:
     def test_list_repos_pagination(self, provider):
         """Verify list_repos handles paginated results."""
         page1 = [
-            {"name": "repo1", "full_name": "user/repo1", "default_branch": "main", "private": False},
-            {"name": "repo2", "full_name": "user/repo2", "default_branch": "main", "private": True},
+            {"name": "repo1", "full_name": "user/repo1", "owner": {"login": "user"}, "default_branch": "main", "private": False},
+            {"name": "repo2", "full_name": "user/repo2", "owner": {"login": "user"}, "default_branch": "main", "private": True},
         ]
         page2 = [
-            {"name": "repo3", "full_name": "user/repo3", "default_branch": "main", "private": False},
+            {"name": "repo3", "full_name": "user/repo3", "owner": {"login": "user"}, "default_branch": "main", "private": False},
         ]
 
         with patch("urllib.request.urlopen") as mock_urlopen:
@@ -253,52 +251,35 @@ class TestGitHubListTree:
     """Test file tree traversal."""
 
     def test_list_tree_recursive(self, provider):
-        """Verify list_tree recursively traverses tree structure."""
+        """Verify list_tree returns all blobs via recursive=1 query."""
         tree_response = {
             "tree": [
-                {
-                    "path": "src",
-                    "mode": "040000",
-                    "type": "tree",
-                    "sha": "tree-sha-1"
-                },
                 {
                     "path": "main.py",
                     "mode": "100644",
                     "type": "blob",
-                    "sha": "blob-sha-1"
+                    "sha": "blob-sha-1",
+                    "size": 100
                 },
-            ],
-            "truncated": False
-        }
-
-        nested_tree = {
-            "tree": [
                 {
                     "path": "src/app.py",
                     "mode": "100644",
                     "type": "blob",
-                    "sha": "blob-sha-2"
+                    "sha": "blob-sha-2",
+                    "size": 200
                 },
             ],
             "truncated": False
         }
 
         with patch("urllib.request.urlopen") as mock_urlopen:
-            def urlopen_side_effect(req, *args, **kwargs):
-                resp = MagicMock()
-                if "tree-sha-1" in req.full_url:
-                    resp.read.return_value = json.dumps(nested_tree).encode()
-                else:
-                    resp.read.return_value = json.dumps(tree_response).encode()
-                resp.__enter__.return_value = resp
-                return resp
-
-            mock_urlopen.side_effect = urlopen_side_effect
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = json.dumps(tree_response).encode()
+            mock_resp.__enter__.return_value = mock_resp
+            mock_urlopen.return_value = mock_resp
 
             result = provider.list_tree("token-123", "user/repo", "main")
 
-            # Should include files from root and nested
-            paths = [item.get("path") for item in result]
+            paths = [item.path for item in result]
             assert any("main.py" in p for p in paths)
             assert any("app.py" in p for p in paths)

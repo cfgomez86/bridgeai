@@ -140,7 +140,6 @@ class TestSemanticFilterBatchProcessing:
             f"file_{i}.py": FileAnalysis(file_path=f"file_{i}.py", language="python", classes=[], functions=[], imports=[])
             for i in range(100)
         }
-        result = filter_impl.filter("requirement", candidates)
 
         # Should have processed multiple batches
         assert len(filter_impl.llm_calls) > 1

@@ -105,7 +105,7 @@ class TestGitLabPATValidation:
         mock_response = {
             "username": "alice",
             "name": "Alice",
-            "scopes": ["api", "read_user", "read_repository"]
+            "scopes": ["read_api", "read_user", "read_repository"]
         }
 
         with patch("urllib.request.urlopen") as mock_urlopen:
@@ -138,7 +138,7 @@ class TestGitLabPATValidation:
         """Verify self-hosted instance URL is used."""
         mock_response = {
             "username": "alice",
-            "scopes": ["api", "read_user", "read_repository"]
+            "scopes": ["read_api", "read_user", "read_repository"]
         }
 
         with patch("urllib.request.urlopen") as mock_urlopen:
@@ -164,7 +164,7 @@ class TestGitLabPATValidation:
             )
             mock_urlopen.side_effect = mock_error
 
-            with pytest.raises(ValueError, match="token invalid"):
+            with pytest.raises(ValueError, match="GitLab PAT invalid"):
                 provider.validate_pat("bad-token")
 
 
@@ -174,23 +174,22 @@ class TestGitLabListRepos:
     def test_list_repos_pagination(self, provider):
         """Verify list_repos handles pagination correctly."""
         page1 = [
-            {"id": 1, "name": "repo1", "path_with_namespace": "user/repo1", "default_branch": "main", "visibility": "public"},
-            {"id": 2, "name": "repo2", "path_with_namespace": "user/repo2", "default_branch": "main", "visibility": "private"},
+            {"id": i, "name": f"repo{i}", "path_with_namespace": f"user/repo{i}",
+             "default_branch": "main", "visibility": "public", "namespace": {"path": "user"}}
+            for i in range(100)
         ]
         page2 = [
-            {"id": 3, "name": "repo3", "path_with_namespace": "user/repo3", "default_branch": "main", "visibility": "public"},
+            {"id": 100, "name": "repo100", "path_with_namespace": "user/repo100",
+             "default_branch": "main", "visibility": "public", "namespace": {"path": "user"}},
         ]
 
         with patch("urllib.request.urlopen") as mock_urlopen:
             def urlopen_side_effect(req, *args, **kwargs):
                 resp = MagicMock()
-                # Return different pages based on URL
                 if "page=2" in req.full_url:
                     resp.read.return_value = json.dumps(page2).encode()
-                    resp.headers = {}  # No more pages
                 else:
                     resp.read.return_value = json.dumps(page1).encode()
-                    resp.headers = {"X-Next-Page": "2"}  # Indicates more pages
                 resp.__enter__.return_value = resp
                 return resp
 
@@ -198,9 +197,9 @@ class TestGitLabListRepos:
 
             result = provider.list_repos("token-123")
 
-            assert len(result) == 3
-            assert result[0]["name"] == "repo1"
-            assert result[2]["name"] == "repo3"
+            assert len(result) == 101
+            assert result[0]["name"] == "repo0"
+            assert result[100]["name"] == "repo100"
 
     def test_list_repos_empty(self, provider):
         """Verify empty repo list is handled."""
@@ -220,27 +219,17 @@ class TestGitLabListTree:
     """Test file tree traversal with recursion and pagination."""
 
     def test_list_tree_recursive_traversal(self, provider):
-        """Verify list_tree recursively traverses directories."""
+        """Verify list_tree returns all blobs via recursive=true query."""
         tree_response = [
             {
-                "id": 1,
-                "name": "src",
-                "path": "src",
-                "type": "tree",
-                "mode": "040000"
-            },
-            {
-                "id": 2,
+                "id": "blob-sha-1",
                 "name": "main.py",
                 "path": "main.py",
                 "type": "blob",
                 "mode": "100644"
             },
-        ]
-
-        nested_response = [
             {
-                "id": 3,
+                "id": "blob-sha-2",
                 "name": "app.py",
                 "path": "src/app.py",
                 "type": "blob",
@@ -249,23 +238,13 @@ class TestGitLabListTree:
         ]
 
         with patch("urllib.request.urlopen") as mock_urlopen:
-            call_count = [0]
-
-            def urlopen_side_effect(req, *args, **kwargs):
-                resp = MagicMock()
-                if "src" in req.full_url:
-                    resp.read.return_value = json.dumps(nested_response).encode()
-                else:
-                    resp.read.return_value = json.dumps(tree_response).encode()
-                resp.headers = {}
-                resp.__enter__.return_value = resp
-                call_count[0] += 1
-                return resp
-
-            mock_urlopen.side_effect = urlopen_side_effect
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = json.dumps(tree_response).encode()
+            mock_resp.__enter__.return_value = mock_resp
+            mock_urlopen.return_value = mock_resp
 
             result = provider.list_tree("token-123", "user/repo", "main")
 
-            # Should include both files from root and nested
-            assert any("main.py" in item.get("path", "") for item in result)
-            assert any("src/app.py" in item.get("path", "") for item in result)
+            # Should include both files
+            assert any("main.py" in item.path for item in result)
+            assert any("src/app.py" in item.path for item in result)

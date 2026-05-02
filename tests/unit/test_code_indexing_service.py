@@ -10,6 +10,16 @@ from datetime import datetime
 from app.services.code_indexing_service import CodeIndexingService, DEFAULT_LANGUAGE_MAP, DEFAULT_IGNORE_PATTERNS
 from app.core.config import Settings
 from app.domain.file_info import FileInfo
+from app.repositories.code_file_repository import CodeFileRepository
+from app.models.code_file import CodeFile
+
+
+def _sha256(file_path: Path) -> str:
+    sha = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
 
 
 @pytest.fixture

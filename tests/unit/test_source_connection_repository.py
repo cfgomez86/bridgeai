@@ -11,6 +11,7 @@ from app.models.oauth_state import OAuthState
 from app.models.source_connection import SourceConnection
 from app.models.code_file import CodeFile
 from app.models.impact_analysis import ImpactedFile
+from app.models.connection_audit_log import ConnectionAuditLog
 
 
 @pytest.fixture
@@ -123,7 +124,7 @@ class TestSoftDelete:
         deleted.deleted_at = datetime.utcnow() - timedelta(days=1)
 
         query_mock = MagicMock()
-        query_mock.filter.return_value.first.return_value = active
+        query_mock.filter.return_value.order_by.return_value.first.return_value = active
         mock_db.query.return_value = query_mock
 
         with patch("app.repositories.source_connection_repository.get_tenant_id", return_value="tenant-1"):
@@ -221,7 +222,8 @@ class TestTenantIsolation:
                 repo.create_connection(
                     platform="github",
                     display_name="user@example.com",
-                    access_token="token-123"
+                    access_token="token-123",
+                    refresh_token=None
                 )
 
                 call_args = mock_db.add.call_args[0][0]
@@ -259,5 +261,5 @@ class TestConnectionLog:
         )
 
         call_args = mock_db.add.call_args[0][0]
-        assert hasattr(call_args, "created_at")
-        assert call_args.created_at is not None
+        assert hasattr(call_args, "timestamp")
+        assert call_args.timestamp is not None
