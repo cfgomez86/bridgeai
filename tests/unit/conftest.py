@@ -1,6 +1,8 @@
 """
 Unit test configuration and fixtures.
 """
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from app.core.context import current_tenant_id, current_user_id
@@ -19,3 +21,11 @@ def set_tenant_context():
     yield
     current_tenant_id.reset(token_t)
     current_user_id.reset(token_u)
+
+
+@pytest.fixture(autouse=True)
+def mock_httpx_async_client():
+    """Mock httpx.AsyncClient to avoid slow client initialization in ticket provider tests."""
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_client.return_value = MagicMock()
+        yield mock_client
