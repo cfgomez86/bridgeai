@@ -1,20 +1,15 @@
-import hashlib
-from pathlib import Path
-
+"""
+Tests for CodeIndexingService — language detection, ignore patterns, incremental updates, batch operations.
+"""
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from pathlib import Path
+import hashlib
+from datetime import datetime
 
-from app.models.code_file import CodeFile
-from app.repositories.code_file_repository import CodeFileRepository
-from app.services.code_indexing_service import CodeIndexingService
-
-
-def _sha256(path: Path) -> str:
-    sha = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            sha.update(chunk)
-    return sha.hexdigest()
+from app.services.code_indexing_service import CodeIndexingService, DEFAULT_LANGUAGE_MAP, DEFAULT_IGNORE_PATTERNS
+from app.core.config import Settings
+from app.domain.file_info import FileInfo
 
 
 @pytest.fixture
