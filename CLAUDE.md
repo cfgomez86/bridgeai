@@ -165,9 +165,33 @@ AUTH0_AUDIENCE=https://your-api-audience
 
 **How it works:** Say what you need (e.g., "create domain object User with fields id, email, role") and I invoke the right agent automatically. See `docs/WORKFLOW_GUIDE.md` for decision tree + all triggers.
 
+### Agent invocation modes
+
+| Agent | Manual trigger | Automatic trigger |
+|-------|---|---|
+| domain-modeler | "create domain object X" | — |
+| api-route-builder | "add endpoint X" | — |
+| test-specialist | "write tests for X" | — |
+| nextjs-frontend-builder | "create component X" | — |
+| clean-arch-guardian | "review architecture" | ✅ After editing `app/` files (unless you say "no arch check needed") |
+| security-guardian | "security audit" | — |
+
+**Example:** You edit `app/services/my_service.py` → I automatically invoke `clean-arch-guardian` to verify layer compliance.
+
 **Automatic checks:**
-- After editing `app/` files, `clean-arch-guardian` runs automatically to catch layer violations.
-- Use `/simplify` and `/security-review` after large edits (skills are pre-allowed in settings).
+
+After I edit `app/` files, I will **automatically invoke `clean-arch-guardian`** to verify layer compliance before proceeding. This catches:
+- ❌ Imports flowing outer → inner (layer violations)
+- ❌ Services importing `app.models.*` (ORM leakage)
+- ❌ Routes missing `get_current_user` dependency (auth bypass risk)
+- ❌ Repos missing tenant context calls (cross-tenant leak risk)
+- ❌ Joins without prior tenant filter (SQL injection / data leak)
+
+You can skip by saying **"no arch check needed"** (rare, but ok for trivial edits like typos).
+
+Also available:
+- `/simplify` after large edits (remove duplication, over-engineering)
+- `/security-review` for auth/crypto/SSRF/injection changes
 
 ## Roadmap phases — status
 
