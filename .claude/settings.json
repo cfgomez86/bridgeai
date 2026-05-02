@@ -80,11 +80,6 @@
       }
     ]
   },
-  "hooks": {
-    "post_bash_git_commit": "If this commit includes features/fixes/major docs, update MEMORY.md to capture decisions.",
-    "post_edit_app_files": "IMPORTANT: After editing app/** files, I will invoke clean-arch-guardian to verify layer compliance before proceeding. You can skip this by saying 'no arch check needed'.",
-    "post_write_frontend_files": "After writing frontend/** files, verify TypeScript: `cd frontend && npx tsc --noEmit`"
-  },
   "defaults": {
     "model": "haiku-4-5",
     "advisor_model": "opus-4-7",
