@@ -90,7 +90,8 @@ Tres detalles importantes:
 
 | Campo | Repo + método | Cuenta… |
 |---|---|---|
-| `requirements_count` | `RequirementRepository.count_since` | filas en `requirements` (un requerimiento entendido por el LLM) |
+| `incoherent_count` | `IncoherentRequirementRepository.count_since` | filas en `incoherent_requirements` — requerimientos rechazados por el pre-filtro de coherencia antes de llegar al pipeline principal |
+| `requirements_count` | `RequirementRepository.count_since` | filas en `requirements` (un requerimiento entendido por el LLM — ya pasó el filtro de coherencia) |
 | `impact_analyses_count` | `ImpactAnalysisRepository.count_since` | filas en `impact_analysis` (un análisis de impacto generado) |
 | `stories_count` | `UserStoryRepository.count_since` | filas en `user_stories` (una historia generada) |
 | `tickets_count` | `TicketIntegrationRepository.count_successful_since` | filas en `ticket_integrations` con `status='CREATED'` |
@@ -99,10 +100,11 @@ Tres detalles importantes:
 
 ### Cómo leerlo
 
-El funnel se lee de izquierda a derecha. Cada paso debería tener menos o igual cantidad que el anterior. Las brechas te dicen dónde se pierde valor:
+El funnel se lee de izquierda a derecha. Hay un paso previo invisible en la UI: requerimientos rechazados por el pre-filtro de coherencia (`incoherent_requirements`) que nunca llegan a `requirements`. Cada paso debería tener menos o igual cantidad que el anterior. Las brechas te dicen dónde se pierde valor:
 
 | Patrón | Diagnóstico | Acción |
 |---|---|---|
+| `incoherent_count` alto relativo a `requirements_count` | El usuario está pegando texto que no es un requerimiento de software (conversacional, contradictorio, sin sentido) | Revisar `GET /api/v1/admin/incoherent-requirements` filtrado por `reason` para ver los patrones predominantes; el frontend muestra el `warning` al usuario — asegurarse de que el mensaje es claro |
 | `req >> análisis` (gran caída) | El usuario pega requerimientos pero no llega a correr el análisis (paso lento, no entiende el flujo, error en el medio) | Revisar fricción de UX entre los dos pasos; logs de errores en `/impact-analysis` |
 | `análisis ≈ historias` | Buena conversión: cada análisis se aprovecha | OK |
 | `análisis >> historias` (gran caída) | Análisis termina pero la historia no se genera (rechazo por entity_not_found, error del LLM, usuario abandona) | Cruzar con calidad forzada/override y con logs de `EntityNotFoundError` (HTTP 422) |
@@ -390,6 +392,7 @@ Sin uso, ninguna de las otras métricas dice nada.
 | `GET /api/v1/feedback/comments?rating=...` | JWT Auth0 + role=admin | tenant del JWT | leer comentarios negativos |
 | `GET /api/v1/system/quality/live?days=N` | JWT Auth0 obligatorio | tenant del JWT | dashboards admin / observabilidad |
 | `GET /api/v1/system/quality` | JWT Auth0 obligatorio | global (archivo) | reporte del harness offline |
+| `GET /api/v1/admin/incoherent-requirements` | JWT Auth0 + role=admin | tenant del JWT | lista paginada de requerimientos rechazados; filtra por `reason` y `offset`/`limit`; respuesta `{items, total, limit, offset}` |
 
 Cada endpoint pasa por `get_current_user` (`app/api/dependencies.py`) que valida el JWT contra JWKS de Auth0 (caché 1h), resuelve `User`, y setea `current_tenant_id` en un `ContextVar`. Cualquier query del data layer hace `WHERE tenant_id = :tid` automáticamente — un fallo de auth es `RuntimeError` antes de tocar la BD, no leak silencioso.
 
@@ -417,4 +420,6 @@ Cada endpoint pasa por `get_current_user` (`app/api/dependencies.py`) que valida
 | **Cap del juez** | Límite superior que aplica el `StoryQualityJudge` a las dimensiones cuando la historia tiene `entity_not_found=True`. Por diseño. |
 | **Bucket** | Un sub-conjunto de las historias agrupadas por algún criterio. Hoy: organic / forced / all. |
 | **Dispersion** | Desviación estándar poblacional entre muestras del juez. Indica cuánto se contradice consigo mismo. |
-| **Funnel** | La cadena Requirements → Análisis → Historias → Tickets vista como pasos sucesivos. Cada uno con su propio count en el dashboard. |
+| **Funnel** | La cadena Requirements → Análisis → Historias → Tickets vista como pasos sucesivos. Cada uno con su propio count en el dashboard. Antes del primer paso existe el pre-filtro de coherencia (`incoherent_requirements`). |
+| **Incoherent requirement** | Requerimiento rechazado por el pre-filtro de coherencia (capa heurística o capa LLM) antes de llegar al pipeline principal. Persiste en `incoherent_requirements` con `reason_codes` para diagnóstico. |
+| **Coherence reason codes** | Etiquetas del motivo de rechazo: `non_software_request`, `contradictory`, `unintelligible`, `conversational`, `empty_intent`. Consultables via `GET /api/v1/admin/incoherent-requirements?reason=<code>`. |

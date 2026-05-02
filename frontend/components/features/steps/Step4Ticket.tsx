@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import type { CSSProperties } from "react"
 import {
   createTicket,
   getStoryDetail,
@@ -26,7 +27,7 @@ import {
 const truncate = (text: string, max: number) =>
   text.length > max ? text.slice(0, max) + "…" : text
 
-const chip = (): React.CSSProperties => ({
+const chip = (): CSSProperties => ({
   display: "inline-flex", alignItems: "center",
   padding: "1px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 500,
   fontFamily: "var(--font-mono)",
@@ -34,23 +35,23 @@ const chip = (): React.CSSProperties => ({
   border: "1px solid transparent",
 })
 
-const sectionLabel: React.CSSProperties = {
+const sectionLabel: CSSProperties = {
   fontSize: "10.5px", fontWeight: 600, textTransform: "uppercase",
   letterSpacing: "0.07em", color: "var(--muted)",
 }
 
-const divider: React.CSSProperties = {
+const divider: CSSProperties = {
   height: "1px", background: "var(--border)", margin: "2px 0",
 }
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%", boxSizing: "border-box",
   background: "var(--surface-2)", border: "1px solid var(--border)",
   borderRadius: "var(--radius)", padding: "7px 10px",
   fontSize: "13px", color: "var(--fg)", fontFamily: "var(--font-sans)", outline: "none",
 }
 
-const labelStyle: React.CSSProperties = {
+const labelStyle: CSSProperties = {
   fontSize: "12px", fontWeight: 500, color: "var(--fg-2)",
   display: "block", marginBottom: "5px",
 }
@@ -139,7 +140,9 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
   }, [provider, ticketConn, state.ticketProjectKey])
 
   useEffect(() => {
+    let cancelled = false
     listConnections().then((conns) => {
+      if (cancelled) return
       const conn =
         conns.find((c) => c.platform === "jira") ??
         conns.find((c) => c.platform === "azure_devops" && Boolean(c.boards_project))
@@ -148,9 +151,9 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
       if (conn?.platform === "jira") {
         setProjectsLoading(true)
         listJiraProjects(conn.id)
-          .then(setProjects)
+          .then((p) => { if (!cancelled) setProjects(p) })
           .catch(() => {})
-          .finally(() => setProjectsLoading(false))
+          .finally(() => { if (!cancelled) setProjectsLoading(false) })
       }
       if (conn?.platform === "azure_devops") {
         if (conn.boards_project) {
@@ -159,12 +162,16 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
         }
         setProjectsLoading(true)
         listAzureProjects(conn.id)
-          .then(setAzureProjects)
+          .then((p) => { if (!cancelled) setAzureProjects(p) })
           .catch(() => {})
-          .finally(() => setProjectsLoading(false))
+          .finally(() => { if (!cancelled) setProjectsLoading(false) })
       }
     }).catch(() => {})
-  }, [])
+    return () => { cancelled = true }
+  // setTicketProjectKey comes from the parent dispatch — stable in practice but not
+  // a useState setter, so we list it explicitly to satisfy exhaustive-deps.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setTicketProjectKey])
 
   useEffect(() => {
     if (state.storyId) {
@@ -181,7 +188,7 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
       setTicket(result)
       completeStep4()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create ticket")
+      setError(err instanceof Error ? err.message : s.error_generic)
     } finally {
       setLoading(false)
     }
@@ -196,29 +203,23 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
           {state.featureType && <span style={chip()}>{state.featureType}</span>}
           {state.complexity && <span style={chip()}>{s.complexity} {state.complexity}</span>}
-          {state.language && <span style={chip()}>Lang: {state.language}</span>}
+          {state.language && <span style={chip()}>{s.lang_label} {state.language}</span>}
         </div>
         {state.intent && (
           <p style={{ fontSize: "11.5px", color: "var(--muted)", margin: 0 }}>
-            Intent: <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{state.intent}</span>
+            {s.intent_label} <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{state.intent}</span>
           </p>
         )}
         {(state.coherenceModel || state.parserModel) && (
           <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "2px" }}>
             {state.coherenceModel && (
-              <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0, fontFamily: "var(--font-mono)" }}>
-                {s.coherence_judge_label}: <span style={{ color: "var(--fg-2)" }}>{state.coherenceModel}</span>
-                {state.coherenceCalls > 0 && (
-                  <> · {state.coherenceCalls} {state.coherenceCalls === 1 ? s.calls_singular : s.calls_plural}</>
-                )}
+              <p style={{ fontSize: "11px", color: "var(--fg-2)", margin: 0, fontFamily: "var(--font-mono)" }}>
+                {s.coherence_judge_label}: <span style={{ color: "var(--muted)" }}>{state.coherenceModel}</span>
               </p>
             )}
             {state.parserModel && (
-              <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0, fontFamily: "var(--font-mono)" }}>
-                {s.parser_label}: <span style={{ color: "var(--fg-2)" }}>{state.parserModel}</span>
-                {state.parserCalls > 0 && (
-                  <> · {state.parserCalls} {state.parserCalls === 1 ? s.calls_singular : s.calls_plural}</>
-                )}
+              <p style={{ fontSize: "11px", color: "var(--fg-2)", margin: 0, fontFamily: "var(--font-mono)" }}>
+                {s.parser_label}: <span style={{ color: "var(--muted)" }}>{state.parserModel}</span>
               </p>
             )}
           </div>
@@ -259,14 +260,6 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                 </span>
                 <RiskBadge risk={story.risk_level} />
               </div>
-              {state.generatorModel && (
-                <p style={{ fontSize: "11px", color: "var(--muted)", margin: "6px 0 0", fontFamily: "var(--font-mono)" }}>
-                  {s.generator_label}: <span style={{ color: "var(--fg-2)" }}>{state.generatorModel}</span>
-                  {state.generatorCalls > 0 && (
-                    <> · {state.generatorCalls} {state.generatorCalls === 1 ? s.calls_singular : s.calls_plural}</>
-                  )}
-                </p>
-              )}
             </div>
 
             <div style={divider} />
@@ -290,7 +283,7 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
               </div>
               <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "5px" }}>
                 {story.acceptance_criteria.map((item, i) => (
-                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
+                  <li key={item} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
                     <span style={{
                       flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
                       width: "16px", height: "16px", borderRadius: "50%",
@@ -317,7 +310,7 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                   </div>
                   <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
                     {tasks.map((sub, i) => (
-                      <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
+                      <li key={sub.title ?? i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
                         <span style={{
                           flexShrink: 0, marginTop: "1px",
                           width: "18px", height: "18px", borderRadius: "5px",
@@ -355,7 +348,7 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
               </div>
               <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "5px" }}>
                 {story.definition_of_done.map((item, i) => (
-                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
+                  <li key={item} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
                     <span style={{ flexShrink: 0, marginTop: "3px", width: "12px", height: "12px", borderRadius: "3px", border: "1px solid var(--border)" }} />
                     <span style={{ color: "var(--fg-2)", lineHeight: 1.5, overflowWrap: "break-word", flex: 1, minWidth: 0 }}>{item}</span>
                   </li>
@@ -372,8 +365,8 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                     <span style={sectionLabel}>{s.risk_notes}</span>
                   </div>
                   <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "5px" }}>
-                    {story.risk_notes.map((note, i) => (
-                      <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
+                    {story.risk_notes.map((note) => (
+                      <li key={note} style={{ display: "flex", alignItems: "flex-start", gap: "7px", fontSize: "12px" }}>
                         <span style={{ flexShrink: 0, marginTop: "5px", width: "5px", height: "5px", borderRadius: "50%", background: "var(--warn-fg)" }} />
                         <span style={{ color: "var(--fg-2)", lineHeight: 1.5 }}>{note}</span>
                       </li>
@@ -443,7 +436,7 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                     const title = ticket.subtask_titles?.[i]
                     return (
                       <a
-                        key={i}
+                        key={url}
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -463,8 +456,8 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                   {s.subtasks_failed} ({ticket.failed_subtasks.length})
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                  {ticket.failed_subtasks.map((task, i) => (
-                    <p key={i} style={{ fontSize: "12px", color: "var(--warn-fg, var(--err-fg))", margin: 0, fontFamily: "var(--font-mono)" }}>{task}</p>
+                  {ticket.failed_subtasks.map((task) => (
+                    <p key={task} style={{ fontSize: "12px", color: "var(--warn-fg, var(--err-fg))", margin: 0, fontFamily: "var(--font-mono)" }}>{task}</p>
                   ))}
                 </div>
               </div>

@@ -153,6 +153,7 @@ interface Translations {
       not_indexed: string
       files_indexed: string
       blocked_hint: string
+      error_generic: string
     }
     step2: {
       title: string
@@ -170,6 +171,10 @@ interface Translations {
       analyzing: string
       analyze_btn: string
       re_analyze: string
+      no_active_repo: string
+      intent_label: string
+      lang_label: string
+      error_generic: string
     }
     step3: {
       title: string
@@ -198,6 +203,10 @@ interface Translations {
       regenerating: string
       regenerate_btn: string
       continue_btn: string
+      intent_label: string
+      lang_label: string
+      wrong_repo_error: string
+      error_generic: string
       errors: {
         entity_not_found_title: string
         entity_not_found_desc_with_suggestions: string
@@ -257,6 +266,9 @@ interface Translations {
       no_ticket_provider: string
       subtasks_created: string
       subtasks_failed: string
+      intent_label: string
+      lang_label: string
+      error_generic: string
     }
   }
   indexing: {
@@ -678,6 +690,7 @@ const es: Translations = {
       not_indexed: "Sin datos — ejecuta el indice en el modulo de Indexacion",
       files_indexed: "archivos indexados",
       blocked_hint: "Completa la configuracion anterior para continuar.",
+      error_generic: "Error al analizar el requerimiento.",
     },
     step2: {
       title: "Analisis de impacto",
@@ -695,6 +708,10 @@ const es: Translations = {
       analyzing: "Analizando impacto...",
       analyze_btn: "Analizar impacto",
       re_analyze: "Re-analizar",
+      no_active_repo: "Selecciona un repositorio activo antes de analizar.",
+      intent_label: "Intención:",
+      lang_label: "Idioma:",
+      error_generic: "Error al analizar el impacto.",
     },
     step3: {
       title: "Generar historia de usuario",
@@ -723,6 +740,10 @@ const es: Translations = {
       regenerating: "Regenerando...",
       regenerate_btn: "Regenerar",
       continue_btn: "Continuar al ticket →",
+      intent_label: "Intención:",
+      lang_label: "Idioma:",
+      wrong_repo_error: "La historia generada pertenece a otro repositorio. Reinicia el flujo.",
+      error_generic: "Error al generar la historia.",
       errors: {
         entity_not_found_title: "Entidad no encontrada en el codebase",
         entity_not_found_desc_with_suggestions: "La entidad mencionada en tu requerimiento no existe en el codebase. ¿Quisiste decir alguna de estas?",
@@ -782,6 +803,9 @@ const es: Translations = {
       no_ticket_provider: "No hay proveedor de tickets conectado. Ve a Conexiones para configurarlo.",
       subtasks_created: "Subtareas creadas",
       subtasks_failed: "Subtareas con error",
+      intent_label: "Intención:",
+      lang_label: "Idioma:",
+      error_generic: "Error al crear el ticket.",
     },
   },
   indexing: {
@@ -1223,6 +1247,7 @@ const en: Translations = {
       not_indexed: "No data — run the index in the Indexing module",
       files_indexed: "files indexed",
       blocked_hint: "Complete the setup above to continue.",
+      error_generic: "Failed to analyze requirement.",
     },
     step2: {
       title: "Impact analysis",
@@ -1240,6 +1265,10 @@ const en: Translations = {
       analyzing: "Analyzing impact...",
       analyze_btn: "Analyze impact",
       re_analyze: "Re-analyze",
+      no_active_repo: "Select an active repository before analyzing.",
+      intent_label: "Intent:",
+      lang_label: "Lang:",
+      error_generic: "Failed to analyze impact.",
     },
     step3: {
       title: "Generate user story",
@@ -1268,6 +1297,10 @@ const en: Translations = {
       regenerating: "Regenerating...",
       regenerate_btn: "Regenerate",
       continue_btn: "Continue to ticket →",
+      intent_label: "Intent:",
+      lang_label: "Lang:",
+      wrong_repo_error: "The generated story belongs to a different repository. Please restart the flow.",
+      error_generic: "Failed to generate story.",
       errors: {
         entity_not_found_title: "Entity not found in the codebase",
         entity_not_found_desc_with_suggestions: "The entity mentioned in your requirement does not exist in the codebase. Did you mean one of these?",
@@ -1327,6 +1360,9 @@ const en: Translations = {
       no_ticket_provider: "No ticket provider connected. Go to Connections to set it up.",
       subtasks_created: "Subtasks created",
       subtasks_failed: "Failed subtasks",
+      intent_label: "Intent:",
+      lang_label: "Lang:",
+      error_generic: "Failed to create ticket.",
     },
   },
   indexing: {
@@ -1768,6 +1804,7 @@ const ca: Translations = {
       not_indexed: "Sense dades — executa l'índex al mòdul d'Indexació",
       files_indexed: "arxius indexats",
       blocked_hint: "Completa la configuració anterior per continuar.",
+      error_generic: "Error en analitzar el requeriment.",
     },
     step2: {
       title: "Anàlisi d'impacte",
@@ -1785,6 +1822,10 @@ const ca: Translations = {
       analyzing: "Analitzant impacte...",
       analyze_btn: "Analitzar impacte",
       re_analyze: "Re-analitzar",
+      no_active_repo: "Selecciona un repositori actiu abans d'analitzar.",
+      intent_label: "Intenció:",
+      lang_label: "Idioma:",
+      error_generic: "Error en analitzar l'impacte.",
     },
     step3: {
       title: "Generar història d'usuari",
@@ -1813,6 +1854,10 @@ const ca: Translations = {
       regenerating: "Regenerant...",
       regenerate_btn: "Regenerar",
       continue_btn: "Continuar al tiquet →",
+      intent_label: "Intenció:",
+      lang_label: "Idioma:",
+      wrong_repo_error: "La història generada pertany a un altre repositori. Reinicia el flux.",
+      error_generic: "Error en generar la història.",
       errors: {
         entity_not_found_title: "Entitat no trobada al codebase",
         entity_not_found_desc_with_suggestions: "L'entitat esmentada al teu requeriment no existeix al codebase. Volies dir alguna d'aquestes?",
@@ -1872,6 +1917,9 @@ const ca: Translations = {
       no_ticket_provider: "No hi ha proveïdor de tiquets connectat. Ves a Connexions per configurar-lo.",
       subtasks_created: "Subtasques creades",
       subtasks_failed: "Subtasques amb error",
+      intent_label: "Intenció:",
+      lang_label: "Idioma:",
+      error_generic: "Error en crear el tiquet.",
     },
   },
   indexing: {

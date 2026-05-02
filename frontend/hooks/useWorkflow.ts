@@ -28,7 +28,7 @@ export type WorkflowState = {
   storyId: string | null
   storyTitle: string | null
   storyPoints: number | null
-  currentStep: 1 | 2 | 3 | 4 | 5
+  currentStep: 1 | 2 | 3 | 4
 }
 
 const initialState: WorkflowState = {
@@ -141,7 +141,7 @@ export function useWorkflow() {
   }
 
   function completeStep4() {
-    setState((prev) => ({ ...prev, currentStep: 5 }))
+    // Step stays at 4; ticket success state is driven by local state in Step4Ticket.
   }
 
   function reset() {

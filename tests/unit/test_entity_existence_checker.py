@@ -106,7 +106,7 @@ def test_cross_language_en_to_es():
 
 
 def test_skip_generic_entity():
-    repo, db = make_repo()
+    repo, _ = make_repo()
     # Codebase vacío — pero "system" es genérica, debe devolver found=True
     checker = make_checker(repo)
     result = checker.check("system", TEST_CONNECTION_ID)
@@ -115,7 +115,7 @@ def test_skip_generic_entity():
 
 
 def test_skip_empty_entity():
-    repo, db = make_repo()
+    repo, _ = make_repo()
     checker = make_checker(repo)
     result = checker.check("", TEST_CONNECTION_ID)
     assert result.found is True

@@ -1,16 +1,18 @@
 import json
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, get_incoherent_requirement_repo
 from app.core.logging import get_logger
-from app.database.session import get_db
 from app.models.user import User
-from app.repositories.incoherent_requirement_repository import IncoherentRequirementRepository
 from app.services.requirement_coherence_validator import VALID_REASON_CODES
+
+if TYPE_CHECKING:
+    from app.repositories.incoherent_requirement_repository import IncoherentRequirementRepository
+
+_REQUIREMENT_TEXT_PREVIEW_LEN = 200
 
 logger = get_logger(__name__)
 
@@ -19,7 +21,7 @@ router = APIRouter(dependencies=[Depends(get_current_user)], tags=["admin"])
 
 class IncoherentRequirementItem(BaseModel):
     id: str
-    requirement_text: str
+    requirement_text_preview: str  # first 200 chars; full text available via detail endpoint
     warning: Optional[str] = None
     reason_codes: list[str]
     user_id: str
@@ -45,7 +47,7 @@ async def list_incoherent_requirements(
     reason: Optional[str] = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    db: Session = Depends(get_db),
+    repo: "IncoherentRequirementRepository" = Depends(get_incoherent_requirement_repo),
     user: User = Depends(get_current_user),
 ) -> IncoherentRequirementListResponse:
     if user.role != "admin":
@@ -59,9 +61,7 @@ async def list_incoherent_requirements(
             detail=f"reason must be one of: {', '.join(sorted(VALID_REASON_CODES))}",
         )
 
-    rows, total = IncoherentRequirementRepository(db).list_with_user(
-        limit=limit, offset=offset, reason=reason
-    )
+    rows, total = repo.list_with_user(limit=limit, offset=offset, reason=reason)
 
     items: list[IncoherentRequirementItem] = []
     for record, email in rows:
@@ -71,10 +71,11 @@ async def list_incoherent_requirements(
                 codes = []
         except (json.JSONDecodeError, TypeError):
             codes = []
+        preview = record.requirement_text[:_REQUIREMENT_TEXT_PREVIEW_LEN]
         items.append(
             IncoherentRequirementItem(
                 id=record.id,
-                requirement_text=record.requirement_text,
+                requirement_text_preview=preview,
                 warning=record.warning,
                 reason_codes=[str(c) for c in codes],
                 user_id=record.user_id,

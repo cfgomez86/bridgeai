@@ -59,15 +59,26 @@ término técnico, así que vale la pena explicarlo en partes:
   organizado el código**: qué archivos importan a otros, qué clases
   existen, qué módulos están conectados entre sí.
 
-> **En palabras simples:** otras IAs leen el requerimiento y "se inventan"
-> la solución. BridgeAI primero **investiga el repositorio del cliente**
-> —qué archivos están en juego, qué entidades existen, qué se vería
-> afectado—, y solo entonces le pide al modelo que escriba la historia.
-> El resultado es una historia anclada a la realidad del proyecto, no un
-> texto genérico bonito.
+Para lograr esto, BridgeAI utiliza **Abstract Syntax Trees (AST, o Árbol
+de Sintaxis Abstracta)**. Un AST es una representación matemática de la
+estructura del código: sin ejecutarlo, transforma el texto fuente en un
+árbol donde cada nodo es una entidad del programa (clase, función, 
+variable, import). Esto permite que el sistema **analice el código como
+lo hace un compilador real**, no como texto plano. Con AST, BridgeAI
+detecta relaciones que un análisis por palabras clave nunca vería: si
+una clase hereda de otra, si una función es privada o pública, qué
+métodos toca realmente el cambio solicitado. Esto aporta **seguridad** 
+—el sistema no "adivina" dónde toca cambiar—, y **confianza** —cada 
+historia generada se sustenta en análisis real de dependencias, no en 
+coincidencias de nombres.
 
-### El pipeline en 5 pasos (sin tecnicismos)
+### El pipeline en 6 pasos (sin tecnicismos)
 
+0. **Filtrar basura antes de empezar.** Antes de consumir ningún recurso,
+   el sistema verifica que el texto sea un requerimiento de software real.
+   Primero con reglas simples (sin IA), luego con un modelo de lenguaje
+   liviano. Si el texto es conversacional, contradictorio o sin sentido,
+   se devuelve inmediatamente con una explicación clara al usuario.
 1. **Entender el requerimiento.** El sistema clasifica intención,
    entidad, tipo de feature, prioridad y dominio (autenticación, billing,
    reportes, etc.).
@@ -98,6 +109,7 @@ completa de qué pasó en cada paso.
 | Genera historias listas para Jira/Azure | ❌ | ❌ | **Sí, publicación nativa** |
 | Cita archivos reales del proyecto | ❌ | Limitado | **Sí, con whitelist auditada** |
 | Califica la calidad del output | ❌ | ❌ | **Sí, con juez independiente** |
+| Filtra basura antes de consumir tokens | ❌ Procesa cualquier input | ❌ | **Sí, capa heurística + LLM-gate pre-pipeline** |
 | Multi-tenant con aislamiento estricto | N/A | N/A | **Sí, a nivel de base de datos** |
 | Funciona con tu LLM preferido | Atado al proveedor | Atado al proveedor | **Anthropic, OpenAI, Groq, Gemini** |
 | Garantía de no fuga de código | ❌ Sube tu código | Depende del IDE | **No envía el cuerpo del código al LLM** |
@@ -109,15 +121,17 @@ whitelist** generada del repositorio real: si intenta inventarse un
 archivo, la validación lo rechaza y reintenta. La historia que llega al
 ticket no menciona nada que no exista en producción.
 
-### 4.2 Confidencialidad de la propiedad intelectual
+### 4.2 Confidencialidad de la propiedad intelectual 
 La pregunta de oro de cualquier cliente: *"¿le mandan nuestro código a
 OpenAI o Anthropic?"*. **No.** Solo viajan al LLM:
 
 - nombres de archivos (`app/services/auth.py`),
-- nombres de clases y funciones (`AuthService`, `validate_token`), y
+- nombres de módulos impactados, y
 - el texto que el propio cliente escribió.
 
-**El cuerpo del código nunca sale del perímetro.** Esto es un
+**El cuerpo del código nunca sale del perímetro.** El sistema indexa el
+repositorio localmente y extrae solo los *nombres* de los archivos
+relevantes para orientar al modelo — no sus contenidos. Esto es un
 diferenciador enorme frente a herramientas que suben fragmentos de código
 "para tener contexto".
 
@@ -204,6 +218,6 @@ clic y al ticket.
 > publicada como ticket — sin que el código del cliente salga nunca
 > hacia la IA.**
 
-Es una IA que **investiga antes de hablar**, **cita en lugar de
-inventar**, y **se calla cuando no está segura**. Esa es la diferencia
-con todo lo demás que hay en el mercado.
+Es una IA que **filtra antes de procesar**, **investiga antes de hablar**,
+**cita en lugar de inventar**, y **se calla cuando no está segura**. Esa
+es la diferencia con todo lo demás que hay en el mercado.

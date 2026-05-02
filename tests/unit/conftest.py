@@ -1,6 +1,8 @@
 """
 Unit test configuration and fixtures.
 """
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from app.core.context import current_tenant_id, current_user_id
@@ -19,3 +21,22 @@ def set_tenant_context():
     yield
     current_tenant_id.reset(token_t)
     current_user_id.reset(token_u)
+
+
+@pytest.fixture(autouse=True)
+def mock_httpx_async_client(request):
+    """Mock httpx.AsyncClient only in ticket provider tests to avoid slow initialization."""
+    # Only apply to specific test files that use ticket providers
+    test_filename = request.node.fspath.basename
+    ticket_provider_tests = {
+        "test_jira_provider.py",
+        "test_azure_devops_provider.py",
+        "test_jira_oauth_provider.py",
+    }
+
+    if test_filename in ticket_provider_tests:
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value = MagicMock()
+            yield mock_client
+    else:
+        yield

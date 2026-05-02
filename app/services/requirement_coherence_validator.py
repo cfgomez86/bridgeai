@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
+from functools import lru_cache
 
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.domain.coherence_result import CoherenceResult
 from app.utils.json_utils import extract_json
 
@@ -135,7 +136,8 @@ class RequirementCoherenceValidator(ABC):
         ...
 
     def _build_prompt(self, requirement_text: str) -> str:
-        return _COHERENCE_PROMPT.format(requirement_text=requirement_text)
+        # Use replace() so user-supplied braces or quotes cannot break .format() interpolation.
+        return _COHERENCE_PROMPT.replace("{requirement_text}", requirement_text)
 
 
 class StubCoherenceValidator(RequirementCoherenceValidator):
@@ -241,29 +243,28 @@ class GeminiCoherenceValidator(RequirementCoherenceValidator):
         return _parse_coherence_response(response.text)
 
 
-_validator_cache: dict[str, RequirementCoherenceValidator] = {}
+@lru_cache(maxsize=None)
+def _build_validator(provider_key: str, model_key: str) -> RequirementCoherenceValidator:
+    """Cached factory keyed on primitive strings — consistent with the @lru_cache
+    pattern used by get_settings() and get_ai_provider() elsewhere in the codebase."""
+    settings = get_settings()
+    if provider_key == "anthropic":
+        return AnthropicCoherenceValidator(settings)
+    if provider_key == "openai":
+        return OpenAICoherenceValidator(settings, default_model=settings.OPENAI_MODEL)
+    if provider_key == "groq":
+        return OpenAICoherenceValidator(
+            settings,
+            api_key=settings.GROQ_API_KEY,
+            base_url=settings.GROQ_BASE_URL,
+            default_model=settings.GROQ_MODEL,
+        )
+    if provider_key == "gemini":
+        return GeminiCoherenceValidator(settings)
+    return StubCoherenceValidator()
 
 
 def get_coherence_validator(settings: Settings) -> RequirementCoherenceValidator:
     provider_key = settings.AI_JUDGE_PROVIDER or settings.AI_PROVIDER
     model_key = settings.AI_JUDGE_MODEL or settings.AI_MODEL or ""
-    cache_key = f"{provider_key}:{model_key}"
-    if cache_key not in _validator_cache:
-        if provider_key == "anthropic":
-            _validator_cache[cache_key] = AnthropicCoherenceValidator(settings)
-        elif provider_key == "openai":
-            _validator_cache[cache_key] = OpenAICoherenceValidator(
-                settings, default_model=settings.OPENAI_MODEL
-            )
-        elif provider_key == "groq":
-            _validator_cache[cache_key] = OpenAICoherenceValidator(
-                settings,
-                api_key=settings.GROQ_API_KEY,
-                base_url=settings.GROQ_BASE_URL,
-                default_model=settings.GROQ_MODEL,
-            )
-        elif provider_key == "gemini":
-            _validator_cache[cache_key] = GeminiCoherenceValidator(settings)
-        else:
-            _validator_cache[cache_key] = StubCoherenceValidator()
-    return _validator_cache[cache_key]
+    return _build_validator(provider_key, model_key)

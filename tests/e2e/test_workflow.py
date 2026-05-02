@@ -93,6 +93,150 @@ _QUALITY_METRICS = {
 }
 
 
+def _matches_connections_active(url: str) -> bool:
+    return "/api/v1/connections/active" in url
+
+
+def _matches_jira_projects(url: str) -> bool:
+    return "/jira-projects" in url
+
+
+def _matches_connections(url: str, method: str) -> bool:
+    return "/api/v1/connections" in url and method == "GET"
+
+
+def _matches_index_status(url: str) -> bool:
+    return "/api/v1/index/status" in url
+
+
+def _matches_index(url: str, method: str) -> bool:
+    return "/api/v1/index" in url and method == "POST"
+
+
+def _matches_understand_requirement(url: str) -> bool:
+    return "/api/v1/understand-requirement" in url
+
+
+def _matches_impact_analysis(url: str) -> bool:
+    return "/api/v1/impact-analysis" in url
+
+
+def _matches_generate_story(url: str) -> bool:
+    return "/api/v1/generate-story" in url
+
+
+def _matches_stories_quality(url: str) -> bool:
+    return "/api/v1/stories/" in url and "/quality" in url
+
+
+def _matches_stories_feedback_get(url: str, method: str) -> bool:
+    return "/api/v1/stories/" in url and "/feedback" in url and method == "GET"
+
+
+def _matches_stories_feedback(url: str) -> bool:
+    return "/api/v1/stories/" in url and "/feedback" in url
+
+
+def _matches_stories(url: str) -> bool:
+    return "/api/v1/stories/" in url
+
+
+def _matches_tickets(url: str, method: str) -> bool:
+    return "/api/v1/tickets" in url and method == "POST"
+
+
+def _get_stub_response(url: str, method: str) -> dict | None:
+    """Return stub response data for a given URL and method, or None to continue.
+
+    Uses extracted matcher functions to keep complexity low.
+    Order matters: more-specific patterns should be checked first.
+    """
+    # Order matters: more-specific patterns first
+    if _matches_connections_active(url):
+        return {"body": json.dumps(_CONN_GITHUB), "status": 200}
+
+    if _matches_jira_projects(url):
+        # Return empty list → Step4 shows a text input instead of a select
+        return {"body": json.dumps([]), "status": 200}
+
+    if _matches_connections(url, method):
+        return {"body": json.dumps([_CONN_JIRA, _CONN_GITHUB]), "status": 200}
+
+    if _matches_index_status(url):
+        return {"body": json.dumps({"total_files": 150, "last_indexed_at": "2024-01-01T00:00:00Z"}), "status": 200}
+
+    if _matches_index(url, method):
+        return {"body": json.dumps({
+            "files_indexed": 150,
+            "files_scanned": 150,
+            "files_updated": 0,
+            "files_skipped": 0,
+            "duration_seconds": 1.2,
+            "source": "github",
+            "repo_full_name": "test-org/test-repo",
+        }), "status": 200}
+
+    if _matches_understand_requirement(url):
+        return {"body": json.dumps({
+            "requirement_id": "req-test",
+            "source_connection_id": "conn-gh-test",
+            "intent": "account_recovery",
+            "feature_type": "authentication",
+            "estimated_complexity": "medium",
+            "keywords": ["password", "email", "reset"],
+        }), "status": 200}
+
+    if _matches_impact_analysis(url):
+        return {"body": json.dumps({
+            "analysis_id": "analysis-test",
+            "source_connection_id": "conn-gh-test",
+            "files_impacted": 5,
+            "modules_impacted": ["auth", "email"],
+            "risk_level": "medium",
+        }), "status": 200}
+
+    if _matches_generate_story(url):
+        return {"body": json.dumps({
+            "story_id": "story-test",
+            "source_connection_id": "conn-gh-test",
+            "title": "Password Reset via Email",
+            "story_points": 5,
+            "risk_level": "medium",
+            "generation_time_seconds": 1.0,
+        }), "status": 200}
+
+    if _matches_stories_quality(url):
+        return {"body": json.dumps(_QUALITY_METRICS), "status": 200}
+
+    if _matches_stories_feedback_get(url, method):
+        return {"body": "null", "status": 200}
+
+    if _matches_stories_feedback(url):
+        return {"body": json.dumps({
+            "id": "fb-test",
+            "story_id": "story-test",
+            "user_id": "user-test",
+            "rating": "thumbs_up",
+            "comment": None,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        }), "status": 200}
+
+    if _matches_stories(url):
+        return {"body": json.dumps(_STORY_DETAIL), "status": 200}
+
+    if _matches_tickets(url, method):
+        return {"body": json.dumps({
+            "ticket_id": "TEST-123",
+            "url": "https://test.atlassian.net/browse/TEST-123",
+            "provider": "jira",
+            "status": "created",
+            "message": "Ticket created successfully",
+        }), "status": 200}
+
+    return None
+
+
 def _setup_routes(page) -> None:
     """Intercept all /api/v1/* requests and return deterministic stub data.
 
@@ -112,91 +256,14 @@ def _setup_routes(page) -> None:
     def handle(route: Route) -> None:
         url = route.request.url
         method = route.request.method
+        response = _get_stub_response(url, method)
 
-        def ok(body: object) -> None:
+        if response:
             route.fulfill(
-                status=200,
+                status=response["status"],
                 content_type="application/json",
-                body=json.dumps(body),
+                body=response["body"],
             )
-
-        # Order matters: more-specific patterns first.
-        if "/api/v1/connections/active" in url:
-            ok(_CONN_GITHUB)
-
-        elif "/jira-projects" in url:
-            # Return empty list → Step4 shows a text input instead of a select
-            ok([])
-
-        elif "/api/v1/connections" in url and method == "GET":
-            ok([_CONN_JIRA, _CONN_GITHUB])
-
-        elif "/api/v1/index/status" in url:
-            ok({"total_files": 150, "last_indexed_at": "2024-01-01T00:00:00Z"})
-
-        elif "/api/v1/index" in url and method == "POST":
-            ok({
-                "files_indexed": 150,
-                "files_scanned": 150,
-                "files_updated": 0,
-                "files_skipped": 0,
-                "duration_seconds": 1.2,
-                "source": "github",
-                "repo_full_name": "test-org/test-repo",
-            })
-
-        elif "/api/v1/understand-requirement" in url:
-            ok({
-                "requirement_id": "req-test",
-                "source_connection_id": "conn-gh-test",
-                "intent": "account_recovery",
-                "feature_type": "authentication",
-                "estimated_complexity": "medium",
-                "keywords": ["password", "email", "reset"],
-            })
-
-        elif "/api/v1/impact-analysis" in url:
-            ok({
-                "analysis_id": "analysis-test",
-                "source_connection_id": "conn-gh-test",
-                "files_impacted": 5,
-                "modules_impacted": ["auth", "email"],
-                "risk_level": "medium",
-            })
-
-        elif "/api/v1/generate-story" in url:
-            ok({
-                "story_id": "story-test",
-                "source_connection_id": "conn-gh-test",
-                "title": "Password Reset via Email",
-                "story_points": 5,
-                "risk_level": "medium",
-                "generation_time_seconds": 1.0,
-            })
-
-        elif "/api/v1/stories/" in url and "/feedback" in url:
-            if method == "GET":
-                route.fulfill(status=200, content_type="application/json", body="null")
-            else:
-                ok({"id": "fb-test", "story_id": "story-test", "user_id": "user-test",
-                    "rating": "thumbs_up", "comment": None,
-                    "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"})
-
-        elif "/api/v1/stories/" in url and "/quality" in url:
-            ok(_QUALITY_METRICS)
-
-        elif "/api/v1/stories/" in url:
-            ok(_STORY_DETAIL)
-
-        elif "/api/v1/tickets" in url and method == "POST":
-            ok({
-                "ticket_id": "TEST-123",
-                "url": "https://test.atlassian.net/browse/TEST-123",
-                "provider": "jira",
-                "status": "created",
-                "message": "Ticket created successfully",
-            })
-
         else:
             route.continue_()
 

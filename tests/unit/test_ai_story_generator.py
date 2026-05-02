@@ -623,8 +623,7 @@ def test_ac_repair_returning_none_falls_back_to_full_retry():
     provider = RepairableProvider(bad, repair_response=None)
 
     # After the failed repair we want the next generate_story to return a clean
-    # story so the loop can succeed via full retry.
-    original = provider.generate_story
+    # story so the loop can succeed via full retry
     clean = valid_story()
 
     def fake_generate(context: dict) -> dict:
@@ -656,8 +655,7 @@ def test_ac_repair_with_still_invalid_output_falls_back():
         "Given a successful sign-in, When it completes, Then the user lands on the welcome screen.",
     ]
     provider = RepairableProvider(bad, still_bad_repair)
-    clean = valid_story()
-    original_generate = provider.generate_story
+    clean = valid_story() 
 
     def fake_generate(context: dict) -> dict:
         provider.generate_calls += 1
@@ -700,7 +698,6 @@ def test_ac_repair_skipped_for_frontend_missing_kind():
     good = valid_story()  # has frontend tasks
 
     provider = RepairableProvider(bad, repair_response=_CLEAN_REPAIRED_AC)
-    original = provider.generate_story
 
     def fake_generate(context: dict) -> dict:
         provider.generate_calls += 1
@@ -709,6 +706,10 @@ def test_ac_repair_skipped_for_frontend_missing_kind():
     provider.generate_story = fake_generate  # type: ignore[assignment]
     gen = AIStoryGenerator(provider, settings)
     # UI-implying context so _check_frontend_explicit fires.
-    result = gen.generate({"requirement_text": "registration form for new users"})
+    result = gen.generate({
+        "requirement_text": "Add a registration form for new users",
+        "keywords": ["registro", "formulario"],
+    })
     assert provider.repair_calls == 0, "AC repair must not run for frontend_missing"
     assert provider.generate_calls == 2  # full retry path
+    assert len(result["subtasks"]["frontend"]) >= 1

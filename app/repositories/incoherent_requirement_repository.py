@@ -54,12 +54,12 @@ class IncoherentRequirementRepository:
 
         rows = (
             self._db.query(IncoherentRequirement, User.email)
+            .filter(IncoherentRequirement.tenant_id == tid)
             .outerjoin(
                 User,
                 (User.id == IncoherentRequirement.user_id)
                 & (User.tenant_id == tid),
             )
-            .filter(IncoherentRequirement.tenant_id == tid)
         )
         if reason:
             rows = rows.filter(IncoherentRequirement.reason_codes.like(f'%"{reason}"%'))

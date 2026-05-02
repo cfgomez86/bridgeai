@@ -1,0 +1,54 @@
+{
+  "permissions": {
+    "allow": [
+      "Git status, git log, git diff, git branch, git show",
+      "Cd, pwd, ls, find, which, which python, which npm",
+      "Python -m pytest, pytest, npm test, npm run",
+      "Python -m alembic, alembic",
+      "Npm install, pip install, pip list, python -m pip",
+      "Read: *",
+      "Glob: *",
+      "Grep: *",
+      "Edit: *.py, *.ts, *.tsx, *.md, *.json",
+      "Write: app/**, frontend/**, tests/**, docs/**",
+      "Skill: simplify, security-review, claude-api, init, review"
+    ],
+    "require_confirmation": [
+      {
+        "tool": "Bash",
+        "prompt": "git commit, git push, git reset, git rebase, git checkout --, git clean",
+        "description": "Destructive git operations"
+      },
+      {
+        "tool": "Bash",
+        "prompt": "rm -rf, rm -f, drop table, delete from",
+        "description": "Destructive filesystem/DB operations"
+      },
+      {
+        "tool": "Bash",
+        "prompt": "docker, docker compose down",
+        "description": "Container destruction"
+      },
+      {
+        "tool": "Agent",
+        "prompt": "*",
+        "description": "All agent spawning (verify context before delegating)"
+      }
+    ]
+  },
+  "defaults": {
+    "model": "haiku-4-5",
+    "advisor_model": "opus-4-7",
+    "auto_context_compression": true,
+    "verbose_tool_results": false
+  },
+  "project": {
+    "name": "BridgeAI",
+    "language_backend": "Python",
+    "framework_backend": "FastAPI",
+    "language_frontend": "TypeScript/React",
+    "framework_frontend": "Next.js 16",
+    "database": "PostgreSQL",
+    "architecture": "Clean Architecture (domain → services → api/routes)"
+  }
+}

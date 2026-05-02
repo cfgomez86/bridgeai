@@ -167,7 +167,7 @@ graph LR
 | Servicio | Entrada → Salida | Notas |
 |---|---|---|
 | `CodeIndexingService` | Repo (local o SCM remoto) → registros `CodeFile` | Hash SHA-256, batch save, concurrencia con `ThreadPoolExecutor`, eliminación de stale paths. Detalle de qué se indexa, qué se almacena y qué viaja al LLM en [`specs/indexacion.md`](./specs/indexacion.md) |
-| `RequirementUnderstandingService` | Texto libre → `Requirement` clasificado | Sanitización anti-prompt-injection, caché por `(hash, project, connection)` |
+| `RequirementUnderstandingService` | Texto libre → `Requirement` clasificado | Pipeline de 3 capas: (1) `RequirementGibberishFilter` (heurístico, sin LLM), (2) `RequirementCoherenceValidator` (LLM-gate, **falla-abierta** en red/timeout), (3) fallback si parser devuelve `intent="invalid_requirement"`. Sanitización anti-prompt-injection, caché por `(hash, project, connection)`. Requerimientos rechazados se persisten en `IncoherentRequirement` |
 | `ImpactAnalysisService` | Requerimiento → `ImpactAnalysis` + lista de archivos impactados | Scan keyword + AST imports + filtro semántico LLM + grafo de dependencias |
 | `StoryGenerationService` | `requirement_id` + `analysis_id` → `UserStory` | Validación de existencia de entidad, whitelist de paths, retry inteligente. Marca `entity_not_found=True` cuando el usuario fuerza la generación sobre un requerimiento incoherente — ver §5.1 |
 | `TicketIntegrationService` | `UserStory` + provider → `TicketIntegration` | Idempotencia, retry exponencial, audit log con payload + response |
@@ -249,9 +249,19 @@ classDiagram
     }
     TicketProvider <|-- JiraTicketProvider
     TicketProvider <|-- AzureDevOpsTicketProvider
+
+    class RequirementCoherenceValidator {
+        <<abstract>>
+        +validate(text) CoherenceResult
+    }
+    RequirementCoherenceValidator <|-- AnthropicCoherenceValidator
+    RequirementCoherenceValidator <|-- OpenAICoherenceValidator
+    RequirementCoherenceValidator <|-- GroqCoherenceValidator
+    RequirementCoherenceValidator <|-- GeminiCoherenceValidator
+    RequirementCoherenceValidator <|-- StubCoherenceValidator
 ```
 
-La selección del adaptador se hace en factorías cacheadas (`get_ai_provider`, `get_story_ai_provider`, `get_quality_judge`) leyendo `Settings.AI_PROVIDER`. Cambiar de proveedor es un cambio de variable de entorno, no de código.
+La selección del adaptador se hace en factorías cacheadas (`get_ai_provider`, `get_story_ai_provider`, `get_quality_judge`, `get_coherence_validator`) leyendo `Settings.AI_PROVIDER` / `AI_JUDGE_PROVIDER`. Cambiar de proveedor es un cambio de variable de entorno, no de código.
 
 ---
 
@@ -264,6 +274,8 @@ Variables relevantes (ver [`CLAUDE.md`](../CLAUDE.md) para la lista completa):
 - `DATABASE_URL` — PostgreSQL único soportado
 - `AI_PROVIDER` / `AI_MODEL` — selecciona proveedor y modelo
 - `AI_JUDGE_*` — controla el LLM-as-Judge (provider, samples, temperature)
+- `COHERENCE_VALIDATION_ENABLED` — activa/desactiva el filtro de coherencia LLM (default `true`); usa `AI_JUDGE_PROVIDER` / `AI_JUDGE_MODEL`
+- `AI_COHERENCE_MAX_TOKENS` — max tokens para la llamada de coherencia (default `200`)
 - `AUTH0_DOMAIN` / `AUTH0_AUDIENCE` — validación JWT
 - `FIELD_ENCRYPTION_KEY` — Fernet para encriptar tokens OAuth (obligatorio en prod)
 - `TRUSTED_PROXY_IPS` — IPs autorizadas a setear `X-Forwarded-*`
@@ -276,7 +288,8 @@ Variables relevantes (ver [`CLAUDE.md`](../CLAUDE.md) para la lista completa):
 | Vector | Mitigación |
 |---|---|
 | Cross-tenant data leak | `ContextVar` + `_tid()` en cada repository; query sin contexto = `RuntimeError` |
-| Prompt injection en requerimientos | Lista negra (`ignore previous`, `system:`, `<\|`, `\|\|`) + cap de 2000 chars |
+| Prompt injection en requerimientos | Lista negra (`ignore previous`, `system:`, `<\|`, `\|\|`) + cap de 2000 chars + filtro de incoherencia previo al LLM |
+| Basura / texto no semántico | `RequirementGibberishFilter` (heurístico determinista) rechaza antes de gastar tokens; `RequirementCoherenceValidator` (LLM-gate) rechaza semánticamente. Ambos persisten en `incoherent_requirements` con `tenant_id` |
 | Alucinación de paths en historias | Whitelist exhaustiva en el prompt + validación post-respuesta + retry con feedback al modelo |
 | Token leak en BD | Tipo `EncryptedText` (Fernet) para `access_token` / `refresh_token` en `source_connections` |
 | JWT spoofing | JWKS de Auth0 con caché de 1h, validación de `aud` e `iss` |
@@ -336,6 +349,9 @@ sequenceDiagram
 
     U->>FE: Pegar requerimiento
     FE->>API: POST /api/v1/requirements
+    API->>API: GibberishFilter (heurístico, sin LLM)
+    API->>AI: CoherenceValidator (LLM-gate, falla-abierta)
+    Note over API,AI: Si rechazado → IncoherentRequirement persisted, 422
     API->>AI: parse_requirement (clasificación)
     API->>DB: save Requirement
 
@@ -386,6 +402,7 @@ Hitos relevantes:
 - `b5e2c3d4f901` — encriptación Fernet de tokens
 - `a03dd37be40a` — `story_feedback` y `story_quality_score`
 - `a1b2c3d4e5f6` / `b2c3d4e5f6a7` — preservar historial y soft-delete en connections
+- (Phase 8) `incoherent_requirements` table; `force_reason` + `generator_calls` en `user_stories`; `coherence_model`, `coherence_calls`, `parser_model`, `parser_calls` en `requirements`
 
 ---
 
@@ -401,3 +418,4 @@ Hitos relevantes:
 | 5c | Azure DevOps integration | ✅ |
 | 6 | Frontend Next.js 16 | ✅ |
 | 7 | Repository isolation | ✅ |
+| 8 | Coherence pre-filter (gibberish + LLM-gate + parser fallback) | ✅ |

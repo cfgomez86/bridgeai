@@ -60,7 +60,7 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 **Database** (`app/database/session.py`) — `Base` (DeclarativeBase) lives here; all ORM models must inherit from it so `init_db()` picks them up automatically. Use `get_db()` as a FastAPI dependency for route handlers; use `check_db_connection()` for health checks only.
 
-**Domain objects** (`app/domain/`) — frozen dataclasses with no SQLAlchemy or FastAPI imports. Key entities: `FileInfo`, `RequirementUnderstanding`, `UserStory`, `TicketResult`, `TicketIntegration`.
+**Domain objects** (`app/domain/`) — frozen dataclasses with no SQLAlchemy or FastAPI imports. Key entities: `FileInfo`, `RequirementUnderstanding`, `UserStory`, `TicketResult`, `TicketIntegration`, `CoherenceResult`.
 
 **Services** (`app/services/`) — accept `Settings` via constructor injection (default: `get_settings()`). Ticket providers live in `app/services/ticket_providers/` and follow the `TicketProvider` ABC — `JiraTicketProvider` and `AzureDevOpsTicketProvider` are the two implementations. SCM providers live in `app/services/scm_providers/` and follow the `ScmProvider` ABC — GitHub, GitLab, Azure Repos, and Bitbucket implementations exist.
 
@@ -70,11 +70,35 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 **Tenant context** (`app/core/context.py`) — `ContextVar`-based isolation. `get_tenant_id()` raises `RuntimeError` if the context is not set, making missing auth hard to miss. All repositories call `_tid()` which delegates to `get_tenant_id()` — no cross-tenant query is possible at the data layer.
 
+**Repository query ordering rule** — **critical for multi-tenant safety**: any query that uses `.join()` or `.outerjoin()` must apply `.filter(Model.tenant_id == self._tid())` on the primary table **before** the join. Correct pattern:
+```python
+rows = (
+    self._db.query(Model)
+    .filter(Model.tenant_id == self._tid())  # ← BEFORE join
+    .outerjoin(OtherModel, ...)
+    .all()
+)
+```
+Incorrect (cross-tenant leak risk):
+```python
+rows = self._db.query(Model).outerjoin(...).filter(Model.tenant_id == self._tid()).all()  # ← AFTER join — too late
+```
+The reason: joins are resolved before filters in SQL order of operations. A join without a prior tenant filter can match rows from other tenants before the filter excludes them.
+
 **Repository isolation** (`app/models/code_file.py`) — `CodeFile` has a `source_connection_id` FK scoping files to a specific SCM connection. The unique constraint is `(tenant_id, source_connection_id, file_path)`. All `CodeFileRepository` methods accept an optional `source_connection_id` to filter to a single repo. `ImpactAnalysisService` resolves the active connection before iterating files, so analysis never mixes repos. This means:
 - Two different users never see each other's files.
 - A single user switching repos never gets cross-repo contamination in analysis or status counts.
 
 **Logging** (`app/core/logging.py`) — `RequestLoggingMiddleware` attaches a `request_id` UUID to `request.state` on every request. Access it in route handlers via `request.state.request_id`. Use `get_logger(__name__)` everywhere else.
+
+**Coherence pre-filter** (`app/services/requirement_coherence_validator.py`, `app/services/requirement_gibberish_filter.py`) — 3-layer input gate that runs inside `RequirementUnderstandingService.understand()` **before** the cache lookup, so rejected text is never stored as a valid requirement:
+1. **Gibberish filter** (deterministic, no LLM cost) — rejects random character sequences (`sddssdd`, `fghfgh`).
+2. **Coherence validator** (LLM) — `RequirementCoherenceValidator` ABC; factory `get_coherence_validator(settings)` picks the right implementation (`anthropic`, `openai`, `groq`, `gemini`, or `stub`). Raises `IncoherentRequirementError` on rejection. **Fail-open**: network/timeout errors skip the gate rather than blocking the user. **Prompt injection safety**: when inserting user-supplied text into LLM prompts, always use `.replace("{placeholder}", user_text)`, never `.format(user_text)` or f-strings. This prevents prompt injection where user input could escape template variables and hijack the prompt.
+3. **Invalid-intent fallback** — if the main parser returns `intent="invalid_requirement"`, it is also rejected here.
+
+Rejected requirements are persisted to `incoherent_requirements` table via `IncoherentRequirementRepository`. The admin endpoint `GET /api/v1/admin/incoherent-requirements` (role `admin` only) returns a paginated list filterable by `reason` code. Valid reason codes: `non_software_request`, `contradictory`, `unintelligible`, `conversational`, `empty_intent`.
+
+Controlled by `COHERENCE_VALIDATION_ENABLED` (default `true`). Reuses `AI_JUDGE_PROVIDER`/`AI_JUDGE_MODEL` settings (falls back to `AI_PROVIDER`/`AI_MODEL`).
 
 **Quality metrics partitioning** — `user_stories.entity_not_found` is the partition key for all aggregate judge metrics. When `True`, the requirement's main entity wasn't in the codebase and the judge applies hard score caps by design (`story_quality_judge.py`). `StoryQualityRepository.summary_since()` and `GET /api/v1/system/quality/live` separate **organic** (`entity_not_found=False`) from **forced** (`entity_not_found=True`) buckets so degraded-input runs don't pollute the baseline. The legacy `GET /api/v1/system/quality` keeps reading `eval_report.json` from the offline harness — leave it alone for batch eval.
 
@@ -108,6 +132,8 @@ Copy `.env.example` to `.env` before running. Relevant variables:
 | `AZURE_DEVOPS_TOKEN` | — | Azure DevOps Personal Access Token |
 | `AZURE_ORG_URL` | — | e.g. `https://dev.azure.com/your-org` |
 | `AZURE_PROJECT` | — | Azure DevOps project name |
+| `COHERENCE_VALIDATION_ENABLED` | `true` | Enable/disable the coherence pre-filter gate |
+| `AI_COHERENCE_MAX_TOKENS` | `200` | Max tokens for the coherence validator LLM call |
 
 Frontend env — create `frontend/.env.local`:
 
@@ -122,20 +148,50 @@ AUTH0_CLIENT_SECRET=your-client-secret
 AUTH0_AUDIENCE=https://your-api-audience
 ```
 
-## Development agents (`.claude/agents/`)
+## Development workflow
 
-Specialized Claude Code roles for common development tasks:
+**Quick reference:** See `docs/WORKFLOW_GUIDE.md` for detailed workflow, decision tree, and examples.
 
-| Agent | When to invoke |
-|---|---|
-| `clean-arch-guardian` | Review any new/modified `app/` file for layer violations |
-| `clean-arch-guardian` | Review any new/modified `app/` file for layer violations |
-| `domain-modeler` | Create a new frozen dataclass in `app/domain/` |
-| `api-route-builder` | Scaffold a full vertical slice (domain → service → route → test) |
-| `test-specialist` | Write or expand tests for any layer |
-| `phase-implementer` | Implement an entire roadmap phase end-to-end |
-| `nextjs-frontend-builder` | Build, extend, or fix any part of the Next.js frontend in `frontend/` |
-| `security-guardian` | Audit, find, and fix security vulnerabilities; apply current best practices |
+**Development agents** (`.claude/agents/`) — specialized roles for common tasks:
+
+| Agent | Triggers | Use when |
+|---|---|---|
+| **domain-modeler** | "create domain object", "add domain entity", "model the X domain" | Create frozen dataclass in `app/domain/` |
+| **api-route-builder** | "add endpoint", "create route", "new API for X" | Full vertical slice: domain + service + route + test |
+| **test-specialist** | "write tests for", "add test coverage", "test this service" | Unit/integration tests with coverage |
+| **nextjs-frontend-builder** | "create page", "add component", "build frontend for X", "crear componente" | React component/page with i18n + design tokens |
+| **clean-arch-guardian** | "review architecture", "check clean arch", "validate layers" | Audit code for layer violations (also runs auto on `app/` edits) |
+| **security-guardian** | "security audit", "find vulnerabilities", "security review", "harden the API" | Audit for security vulns (CRITICAL/HIGH/MEDIUM/LOW) |
+
+**How it works:** Say what you need (e.g., "create domain object User with fields id, email, role") and I invoke the right agent automatically. See `docs/WORKFLOW_GUIDE.md` for decision tree + all triggers.
+
+### Agent invocation modes
+
+| Agent | Manual trigger | Automatic trigger |
+|-------|---|---|
+| domain-modeler | "create domain object X" | — |
+| api-route-builder | "add endpoint X" | — |
+| test-specialist | "write tests for X" | — |
+| nextjs-frontend-builder | "create component X" | — |
+| clean-arch-guardian | "review architecture" | ✅ After editing `app/` files (unless you say "no arch check needed") |
+| security-guardian | "security audit" | — |
+
+**Example:** You edit `app/services/my_service.py` → I automatically invoke `clean-arch-guardian` to verify layer compliance.
+
+**Automatic checks:**
+
+After I edit `app/` files, I will **automatically invoke `clean-arch-guardian`** to verify layer compliance before proceeding. This catches:
+- ❌ Imports flowing outer → inner (layer violations)
+- ❌ Services importing `app.models.*` (ORM leakage)
+- ❌ Routes missing `get_current_user` dependency (auth bypass risk)
+- ❌ Repos missing tenant context calls (cross-tenant leak risk)
+- ❌ Joins without prior tenant filter (SQL injection / data leak)
+
+You can skip by saying **"no arch check needed"** (rare, but ok for trivial edits like typos).
+
+Also available:
+- `/simplify` after large edits (remove duplication, over-engineering)
+- `/security-review` for auth/crypto/SSRF/injection changes
 
 ## Roadmap phases — status
 
@@ -150,3 +206,4 @@ Specialized Claude Code roles for common development tasks:
 | 5c | Azure DevOps integration | Done |
 | 6 | Next.js 16 frontend — Auth0, multi-tenant, i18n, dark mode | Done |
 | 7 | Repository isolation — per-connection file scoping, clean re-index | Done |
+| 8 | Coherence pre-filter — gibberish gate, LLM coherence validator, incoherent-requirements audit log, admin endpoint | Done |

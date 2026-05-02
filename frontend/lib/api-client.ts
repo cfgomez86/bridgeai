@@ -70,6 +70,12 @@ export interface EntityNotFoundDetail {
   hint: string
 }
 
+export interface IncoherentRequirementErrorDetail {
+  code: "INCOHERENT_REQUIREMENT"
+  message: string
+  reason_codes: string[]
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = await buildHeaders()
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -638,7 +644,7 @@ export async function getNegativeFeedback(
 
 export interface IncoherentRequirementItem {
   id: string
-  requirement_text: string
+  requirement_text_preview: string  // first 200 chars; full text available via detail endpoint
   warning: string | null
   reason_codes: string[]
   user_id: string

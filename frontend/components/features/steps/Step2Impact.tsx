@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import type { CSSProperties } from "react"
 import { analyzeImpact } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import type { WorkflowState } from "@/hooks/useWorkflow"
@@ -10,7 +11,7 @@ import { Loader2, Zap, Search } from "lucide-react"
 
 const truncate = (t: string, n: number) => t.length > n ? t.slice(0, n) + "…" : t
 
-const chip = (text: string, accent?: boolean): React.CSSProperties => ({
+const chip = (text: string, accent?: boolean): CSSProperties => ({
   display: "inline-flex", alignItems: "center",
   padding: "1px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 500,
   fontFamily: "var(--font-mono)",
@@ -37,7 +38,7 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
 
   async function handleAnalyze() {
     if (!state.sourceConnectionId) {
-      setError("Selecciona un repositorio activo antes de analizar.")
+      setError(s.no_active_repo)
       return
     }
     setLoading(true)
@@ -55,7 +56,7 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
         riskLevel: result.risk_level,
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to analyze impact")
+      setError(err instanceof Error ? err.message : s.error_generic)
     } finally {
       setLoading(false)
     }
@@ -70,7 +71,7 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
           {state.intent && (
             <span style={{ fontSize: "11.5px", color: "var(--muted)" }}>
-              Intent: <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{state.intent}</span>
+              {s.intent_label} <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{state.intent}</span>
             </span>
           )}
           {state.featureType && <span style={chip(state.featureType, true)}>{state.featureType}</span>}

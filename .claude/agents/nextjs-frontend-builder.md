@@ -191,7 +191,182 @@ Always read `app/api/routes/` to confirm backend route paths before adding a fun
 - **No hardcoded API URLs**: never use `http://localhost:8000` in client components — use relative paths
 - **No hardcoded colors**: always use CSS variable tokens via inline styles
 
+## Pre-writing checks (before touching any file)
+
+1. **Read globals.css** — verify all available CSS custom properties and their current values. No assumptions about token names.
+2. **Read lib/i18n.tsx** — check the `Translations` interface to see what keys already exist. DO NOT create overlapping keys.
+3. **Read existing feature component** — if extending an existing feature, read the full file first to understand the i18n and style patterns it uses.
+4. **Inspect api-client.ts** — confirm the endpoint path before writing API calls.
+
+## Design Tokens Compliance Checklist (mandatory before submit)
+
+**FORBIDDEN patterns — will cause test failure:**
+```tsx
+// ✗ Hardcoded Tailwind color classes
+className="text-slate-500"        ← FORBIDDEN
+className="bg-indigo-50"          ← FORBIDDEN
+className="border-gray-200"       ← FORBIDDEN
+
+// ✗ Inline color hex codes
+style={{ color: "#333", background: "#f5f5f5" }}  ← FORBIDDEN
+
+// ✗ Inline gray/transparent
+style={{ color: "gray" }}         ← FORBIDDEN
+
+// ✗ Mixing Tailwind colors with CSS vars
+className="bg-white text-slate-600"  ← FORBIDDEN
+```
+
+**REQUIRED patterns — always use these:**
+```tsx
+// ✓ CSS variable tokens (inline styles)
+style={{ background: "var(--surface-2)", color: "var(--fg)" }}
+
+// ✓ Layout utilities ONLY (no color)
+className="flex gap-4 p-6 max-w-2xl"
+
+// ✓ Mixed (layout + tokens)
+className="flex gap-4" style={{ background: "var(--surface)", color: "var(--fg)" }}
+```
+
+**Automated check — run before delivery:**
+```bash
+# Detect hardcoded colors (should return empty)
+grep -rn "text-slate\|text-gray\|text-zinc\|bg-slate\|bg-gray\|bg-white\|border-gray" frontend/components/features/ | grep -v ".next\|node_modules"
+
+# Detect hex colors (should return empty)
+grep -rn "#[0-9a-f]\{3,6\}\|color:\s*\"[a-z]*\"" frontend/components/features/ | grep -v ".next\|node_modules"
+```
+
+**Status colors — special case, use these tokens:**
+- Success: `color: "var(--ok-fg)"`, `background: "var(--ok-bg)"`
+- Warning: `color: "var(--warn-fg)"`, `background: "var(--warn-bg)"`
+- Error: `color: "var(--err-fg)"`, `background: "var(--err-bg)"`
+
+## Internationalization Compliance Checklist (mandatory)
+
+**FORBIDDEN — hardcoded user-visible strings:**
+```tsx
+// ✗ Any of these will fail
+<h1>Dashboard</h1>
+<button>Submit</button>
+<p>Loading...</p>
+<span>No results found</span>
+throw new Error("Invalid input")  ← error messages too
+```
+
+**REQUIRED — all user text from i18n:**
+```tsx
+"use client"
+import { useLanguage } from "@/lib/i18n"
+
+export function MyComponent() {
+  const { t } = useLanguage()
+  return (
+    <>
+      <h1>{t.dashboard.title}</h1>
+      <button>{t.dashboard.submitBtn}</button>
+      <p>{t.dashboard.loading}</p>
+      <span>{t.dashboard.noResults}</span>
+    </>
+  )
+}
+```
+
+**Before adding new text:**
+1. Read `lib/i18n.tsx` — check if the key already exists
+2. Add to the `Translations` interface (the source of truth)
+3. Add to both `es` and `en` objects
+4. Use the key in the component: `t.section.key`
+
+**Automated check — run before delivery:**
+```bash
+# Find all quoted strings in feature components (flag anything outside t. usage)
+grep -rn "\"[A-Z][^\"]*\"" frontend/components/features/ | grep -v "\.next\|node_modules" | grep -v "t\." | grep -v "export\|import\|key=\|href=\|className=\|placeholder=\|pattern=\|@" | head -20
+```
+
+## Auth Pattern Compliance Checklist (mandatory)
+
+**Server Components — MUST verify session:**
+```tsx
+// ✓ Correct — gates page behind auth
+export default async function SomePage() {
+  const session = await auth0.getSession()
+  if (!session) redirect("/login")
+  // now safe to use session
+}
+
+// ✗ Wrong — no auth check, exposes to public
+export default async function SomePage() {
+  // forgot session check!
+}
+```
+
+**Client Components — MUST check user state:**
+```tsx
+// ✓ Correct — handles loading and unauthenticated state
+"use client"
+import { useUser } from "@auth0/nextjs-auth0/client"
+
+export function MyComponent() {
+  const { user, isLoading } = useUser()
+  if (isLoading) return <Spinner />
+  if (!user) return <RedirectToLogin />
+  // now safe to use user
+}
+
+// ✗ Wrong — assumes user exists (crashes if unauthenticated)
+export function MyComponent() {
+  const { user } = useUser()
+  return <div>{user.email}</div>  ← will crash if user is null
+}
+```
+
+**API calls — MUST use api-client.ts:**
+```tsx
+// ✓ Correct — auth header automatic
+const result = await someEndpoint({ data })
+
+// ✗ Wrong — hardcoded fetch, no auth
+fetch("http://localhost:8000/api/...", {
+  method: "POST",
+  body: JSON.stringify(data)
+})
+```
+
+## Common mistakes to avoid
+
+❌ **Design tokens:**
+- Hardcoded Tailwind color classes (text-gray-500, bg-white, border-indigo-200)
+- Inline hex colors (#333, #f5f5f5, #ddd)
+- Color strings ("gray", "transparent", "blue")
+- Mixing Tailwind and CSS vars (className="bg-white" + style vars)
+
+❌ **i18n:**
+- Any user-visible text hardcoded in JSX
+- Adding new text keys without updating `lib/i18n.tsx` interface
+- Forgetting to add both `es` and `en` translations
+- Using wrong namespace (t.dashboard vs t.workflow) → no errors, but wrong text
+
+❌ **Auth:**
+- Server components without session check
+- Client components that don't handle `isLoading` and `!user` states
+- Direct `fetch()` calls (use api-client.ts)
+- Using session data before checking it exists
+
+❌ **API contracts:**
+- Hardcoding API paths in components (always use api-client.ts)
+- Forgetting to read api-client.ts and app/api/routes/ before writing calls
+- Mismatch between frontend path and backend path (e.g., `/api/v1/users` vs `/api/users`)
+
 ## Post-generation quality gates (mandatory, in order)
 
-1. **`/simplify`** — review all written files. Fix duplication, unnecessary state, over-engineering. Re-run type check after any fix.
-2. **`/security-review`** — audit all changes. Fix any HIGH or MEDIUM findings (XSS, token leakage, open redirects) before delivering.
+1. **Design token check** — run automated grep above. ZERO hardcoded colors allowed. Pattern: any Tailwind color class or hex code = fail.
+2. **i18n check** — run automated grep above. Flag all hardcoded strings. Every user-visible string MUST come from `t.` namespace.
+3. **Auth check** — manually verify:
+   - Every protected page has `const session = await auth0.getSession()` + redirect
+   - Every Client Component checking user has `if (isLoading)` and `if (!user)` guards
+   - All API calls use api-client.ts, never direct fetch()
+4. **Type check** — run `cd frontend && npx tsc --noEmit` — zero TypeScript errors
+5. **`/simplify`** — review all written files. Fix duplication, unnecessary state, over-engineering. Re-run type check after any fix.
+6. **`/security-review`** — audit all changes. Fix any HIGH or MEDIUM findings (XSS, token leakage, open redirects) before delivering.
