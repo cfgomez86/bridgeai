@@ -1,23 +1,18 @@
 import asyncio
 import uuid
-from app.api.dependencies import get_current_user
+
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
-from app.core.config import Settings, get_settings
+from app.api.dependencies import get_current_user, get_source_connection_repo, get_understanding_service
 from app.core.logging import get_logger
-from app.database.session import get_db
-from app.repositories.incoherent_requirement_repository import IncoherentRequirementRepository
-from app.repositories.requirement_repository import RequirementRepository
-from app.repositories.source_connection_repository import SourceConnectionRepository
-from app.services.ai_provider import get_ai_provider
-from app.services.ai_requirement_parser import AIRequirementParser
-from app.services.requirement_coherence_validator import (
-    IncoherentRequirementError,
-    get_coherence_validator,
-)
+from app.services.requirement_coherence_validator import IncoherentRequirementError
 from app.services.requirement_understanding_service import RequirementUnderstandingService
+
+if TYPE_CHECKING:
+    from app.repositories.source_connection_repository import SourceConnectionRepository
 
 logger = get_logger(__name__)
 
@@ -46,22 +41,11 @@ class UnderstandResponse(BaseModel):
     parser_calls: int = 0
 
 
-def get_understanding_service(
-    db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-) -> RequirementUnderstandingService:
-    repo = RequirementRepository(db)
-    parser = AIRequirementParser(get_ai_provider(settings))
-    validator = get_coherence_validator(settings)
-    incoherent_repo = IncoherentRequirementRepository(db)
-    return RequirementUnderstandingService(parser, repo, settings, validator, incoherent_repo)
-
-
 @router.post("/understand-requirement", response_model=UnderstandResponse)
 async def understand_requirement(
     body: UnderstandRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    scm_repo: SourceConnectionRepository = Depends(get_source_connection_repo),
     service: RequirementUnderstandingService = Depends(get_understanding_service),
 ) -> UnderstandResponse:
     request_id = str(getattr(request.state, "request_id", uuid.uuid4()))
@@ -71,7 +55,7 @@ async def understand_requirement(
     )
 
     # Valida que la conexión pertenezca al tenant actual
-    conn = SourceConnectionRepository(db).find_by_id(body.source_connection_id)
+    conn = scm_repo.find_by_id(body.source_connection_id)
     if conn is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -93,10 +77,10 @@ async def understand_requirement(
                 "code": "INCOHERENT_REQUIREMENT",
                 "message": exc.warning,
                 "reason_codes": exc.reason_codes,
-                "model_used": exc.model_used,
             },
         )
     except ValueError as exc:
+        # Safe: all ValueErrors from RequirementUnderstandingService are fixed developer strings.
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception as exc:
         logger.error("POST /understand-requirement failed request_id=%s error=%s", request_id, exc)

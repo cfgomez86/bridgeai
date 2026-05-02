@@ -9,6 +9,7 @@ import {
   ApiError,
   type ConnectionResponse,
   type IndexStatusResponse,
+  type IncoherentRequirementErrorDetail,
 } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import type { WorkflowState } from "@/hooks/useWorkflow"
@@ -16,14 +17,6 @@ import { Loader2, Globe, CheckCircle, AlertTriangle } from "lucide-react"
 
 const MIN_REQUIREMENT_CHARS = 60
 
-// Identificadores que devuelve el backend en `model_used` cuando el rechazo
-// NO viene de un modelo de IA real (filtros deterministas o etiquetas internas).
-// El usuario no debería ver estos strings — solo nombres reales de modelo.
-const NON_AI_MODEL_TAGS = new Set([
-  "deterministic_gibberish_filter",
-  "stub",
-  "ai_requirement_parser",
-])
 
 const TICKET_PLATFORM_LABELS: Record<string, string> = {
   jira: "Jira Cloud",
@@ -145,7 +138,7 @@ export function Step1Understand({
   const [error, setError] = useState<string | null>(null)
   const [errorKind, setErrorKind] = useState<"warn" | "err">("err")
   const [rejectedText, setRejectedText] = useState<string | null>(null)
-  const [rejectedModel, setRejectedModel] = useState<string | null>(null)
+  const [rejectedReasonCodes, setRejectedReasonCodes] = useState<string[]>([])
   const [ticketConn, setTicketConn] = useState<ConnectionResponse | null>(null)
   const [scmConn, setScmConn] = useState<ConnectionResponse | null>(null)
   const [indexStatus, setIndexStatus] = useState<IndexStatusResponse | null>(null)
@@ -209,7 +202,7 @@ export function Step1Understand({
       )
       // Éxito: limpiar cualquier estado de rechazo previo.
       setRejectedText(null)
-      setRejectedModel(null)
+      setRejectedReasonCodes([])
       completeStep1({
         requirementId: result.requirement_id,
         intent: result.intent,
@@ -232,28 +225,22 @@ export function Step1Understand({
         typeof err.detail === "object" &&
         (err.detail as { code?: string }).code === "INCOHERENT_REQUIREMENT"
       ) {
-        const detail = err.detail as {
-          model_used?: string | null
-        }
+        const detail = err.detail as IncoherentRequirementErrorDetail
         setErrorKind("warn")
-        setError(err.message)
+        setError(detail.message)
         setRejectedText(state.requirementText)
-        setRejectedModel(detail.model_used ?? null)
+        setRejectedReasonCodes(detail.reason_codes ?? [])
       } else {
         setErrorKind("err")
-        setError(err instanceof Error ? err.message : "Failed to analyze requirement")
+        setError(err instanceof Error ? err.message : s.error_generic)
         setRejectedText(null)
-        setRejectedModel(null)
+        setRejectedReasonCodes([])
       }
     } finally {
       setLoading(false)
     }
   }
 
-  // Hide the model tag when it's not from a real AI model — the user shouldn't
-  // see internal labels like "deterministic_gibberish_filter".
-  const showRejectedModel =
-    rejectedModel !== null && !NON_AI_MODEL_TAGS.has(rejectedModel)
 
   // Build detail strings — same muted color regardless of ok/not-ok state
   const ticketDetail = !ticketConn
@@ -406,16 +393,24 @@ export function Step1Understand({
             />
             <span style={{ flex: 1, minWidth: 0 }}>
               {error}
-              {showRejectedModel && (
-                <span
-                  style={{
-                    fontSize: "11px",
-                    color: "var(--muted)",
-                    fontFamily: "var(--font-mono)",
-                    marginLeft: "6px",
-                  }}
-                >
-                  · {rejectedModel}
+              {rejectedReasonCodes.length > 0 && (
+                <span style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "6px" }}>
+                  {rejectedReasonCodes.map((code) => (
+                    <span
+                      key={code}
+                      style={{
+                        fontSize: "10px",
+                        fontFamily: "var(--font-mono)",
+                        padding: "1px 6px",
+                        borderRadius: "4px",
+                        background: "color-mix(in oklch, var(--warn-fg) 12%, transparent)",
+                        color: "var(--warn-fg)",
+                        border: "1px solid color-mix(in oklch, var(--warn-fg) 25%, transparent)",
+                      }}
+                    >
+                      {code}
+                    </span>
+                  ))}
                 </span>
               )}
             </span>

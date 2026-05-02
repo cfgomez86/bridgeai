@@ -10,7 +10,9 @@ Este documento describe el pipeline de IA que convierte un texto de requerimient
 
 ```mermaid
 flowchart LR
-    A[Texto en lenguaje natural] --> B[1 · Requirement<br/>Understanding]
+    A[Texto en lenguaje natural] --> PRE["0 · Coherence<br/>Pre-filter"]
+    PRE -- rechazado --> INC[(incoherent_requirements)]
+    PRE -- ok --> B[1 · Requirement<br/>Understanding]
     B --> C[2 · Impact<br/>Analysis]
     D[Repositorio indexado<br/>code_files] --> C
     C --> E[3 · Entity Existence<br/>Checker]
@@ -21,12 +23,13 @@ flowchart LR
     H --> I[(user_stories +<br/>story_quality_score)]
 
     style A fill:#5af,color:#000
+    style PRE fill:#f90,color:#000
     style F fill:#fa5,color:#000
     style H fill:#0f5,color:#000
     click H "./ai-judge.md" "Documentación del Quality Judge"
 ```
 
-Este documento cubre las fases **1 a 5** (entendimiento, análisis de impacto, validación de entidad, generación de historia y validaciones deterministas). La fase 6 — el Quality Judge — está documentada en [`ai-judge.md`](./ai-judge.md).
+Este documento cubre la **fase 0** (pre-filtro de coherencia) y las **fases 1 a 5** (entendimiento, análisis de impacto, validación de entidad, generación de historia y validaciones deterministas). La fase 6 — el Quality Judge — está documentada en [`ai-judge.md`](./ai-judge.md).
 
 Cada fase tiene un **proveedor IA** (Anthropic, OpenAI, Groq, Gemini o `stub`) configurable vía `Settings.AI_PROVIDER`. La selección de modelo concreto sigue la jerarquía: `AI_MODEL` (override universal) → `<PROVIDER>_MODEL` → default.
 
@@ -62,6 +65,16 @@ classDiagram
     SemanticImpactFilter <|-- AnthropicSemanticFilter
     SemanticImpactFilter <|-- OpenAISemanticFilter
     SemanticImpactFilter <|-- PassthroughFilter
+
+    class RequirementCoherenceValidator {
+        <<abstract>>
+        +validate(text) CoherenceResult
+    }
+    RequirementCoherenceValidator <|-- AnthropicCoherenceValidator
+    RequirementCoherenceValidator <|-- OpenAICoherenceValidator
+    RequirementCoherenceValidator <|-- GroqCoherenceValidator
+    RequirementCoherenceValidator <|-- GeminiCoherenceValidator
+    RequirementCoherenceValidator <|-- StubCoherenceValidator
 ```
 
 > El juez (`StoryQualityJudge`) usa el mismo patrón ABC + factoría pero se configura de forma independiente. Ver [`ai-judge.md`](./ai-judge.md).
@@ -82,14 +95,94 @@ classDiagram
 | `GEMINI_MODEL` | `gemini-2.5-flash` | |
 | `GEMINI_CACHE_TTL_SECONDS` | 0 | `>=60` activa `caches.create()` para el bloque estático |
 | `ENTITY_VALIDATION_MODE` | `warn` | `warn` advierte/permite con `force`; `off` desactiva el chequeo |
+| `COHERENCE_VALIDATION_ENABLED` | `true` | `false` desactiva el validador LLM de coherencia; el filtro heurístico sigue activo |
+| `AI_COHERENCE_MAX_TOKENS` | `200` | Max tokens para la llamada de coherencia (respuesta corta, solo `{is_coherent, reason_codes, warning}`) |
 
-> Las variables `AI_JUDGE_*` están documentadas en [`ai-judge.md`](./ai-judge.md).
+> Las variables `AI_JUDGE_*` (provider, model, samples, temperature…) y `COHERENCE_VALIDATION_ENABLED` / `AI_COHERENCE_MAX_TOKENS` comparten el proveedor `AI_JUDGE_PROVIDER` / `AI_JUDGE_MODEL`. Documentación del juez en [`ai-judge.md`](./ai-judge.md).
 
 ---
 
-## 3. Fase 1 — Requirement Understanding
+## 3. Fase 0 — Coherence Pre-filter
+
+Esta fase ocurre **antes** del caché y **antes** del parser LLM. Su objetivo es proteger el pipeline de texto basura (texto aleatorio, pedidos conversacionales, requerimientos contradictorios) sin desperdiciar tokens. Consta de tres sub-capas ejecutadas en orden:
+
+```mermaid
+flowchart TB
+    T[Texto requerimiento] --> G[Capa 1: GibberishFilter<br/>heurístico · sin LLM]
+    G -- rechazado --> SAVE1[(incoherent_requirements<br/>is_gibberish=true)]
+    G -- ok --> CV[Capa 2: CoherenceValidator<br/>LLM-gate · falla-abierta]
+    CV -- rechazado --> SAVE2[(incoherent_requirements<br/>is_gibberish=false)]
+    CV -- ok / network error --> NEXT[Continúa al parser]
+    NEXT --> PARSER[Capa 3: Parser LLM]
+    PARSER -- intent=invalid_requirement --> SAVE3[(incoherent_requirements)]
+    PARSER -- ok --> REQ[(requirements)]
+
+    style G fill:#f90,color:#000
+    style CV fill:#f90,color:#000
+    style SAVE1 fill:#f55,color:#fff
+    style SAVE2 fill:#f55,color:#fff
+    style SAVE3 fill:#f55,color:#fff
+```
+
+### Capa 1: `RequirementGibberishFilter` (heurístico determinista)
+
+Detecta texto que no puede ser un requerimiento de software mediante heurísticas simples (proporción de palabras reconocibles, longitud mínima, ratio alfanumérico, patrones de repetición). No llama al LLM. Muy rápido y sin costo.
+
+Si rechaza → persiste en `incoherent_requirements` con `is_gibberish=True` y los `reason_codes` correspondientes. Lanza `IncoherentRequirementError` → HTTP 422 al caller, con el campo `warning` descriptivo.
+
+### Capa 2: `RequirementCoherenceValidator` (LLM-gate)
+
+ABC `RequirementCoherenceValidator` con implementaciones para Anthropic, OpenAI, Groq, Gemini y Stub. Factoría: `get_coherence_validator(settings)`. Reutiliza `AI_JUDGE_PROVIDER` / `AI_JUDGE_MODEL`.
+
+Devuelve un `CoherenceResult` (dataclass frozen):
+
+```python
+@dataclass(frozen=True)
+class CoherenceResult:
+    is_coherent: bool
+    warning: str | None
+    reason_codes: list[str]  # non_software_request | contradictory | unintelligible | conversational | empty_intent
+```
+
+**Política de falla abierta (fail-open)**: si la llamada al LLM falla por error de red, timeout o parsing inválido, el validator devuelve `CoherenceResult(is_coherent=True, ...)` — el pipeline continúa. Esto evita que una interrupción del proveedor de coherencia bloquee el flujo principal.
+
+Si rechaza (`is_coherent=False`) → persiste en `incoherent_requirements` con `is_gibberish=False` + `reason_codes`. Lanza `IncoherentRequirementError` → HTTP 422. El frontend muestra el `warning` al usuario en la página `/feedback-coherence`.
+
+Controlado por `COHERENCE_VALIDATION_ENABLED` (default `true`). Desactivarlo con `false` pasa a `StubCoherenceValidator` que siempre devuelve `is_coherent=True`.
+
+### Capa 3: Fallback del parser (intent="invalid_requirement")
+
+Si el parser LLM clasifica el texto con `intent="invalid_requirement"`, el servicio también persiste en `incoherent_requirements` y lanza `IncoherentRequirementError`. Esta capa captura casos que pasaron los dos filtros anteriores pero el parser detectó como no accionables.
+
+### Endpoint admin
+
+`GET /api/v1/admin/incoherent-requirements` — paginado, filtrable por `reason` code, admin-only.
+
+```json
+{
+  "items": [
+    {
+      "id": "...",
+      "requirement_text": "comprar leche",
+      "reason_codes": ["non_software_request"],
+      "warning": "Este texto no describe un requerimiento de software.",
+      "is_gibberish": false,
+      "created_at": "2026-05-02T..."
+    }
+  ],
+  "total": 12,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+---
+
+## 4. Fase 1 — Requirement Understanding
 
 **Servicio**: `RequirementUnderstandingService` → `AIRequirementParser` → `AIProvider.parse_requirement()`.
+
+Solo llega aquí texto que pasó el pre-filtro de coherencia (Fase 0).
 
 ```mermaid
 flowchart LR
@@ -98,7 +191,8 @@ flowchart LR
     S -- no --> V[Validaciones:<br/>≤2000 chars<br/>sin patrones de injection]
     V --> P[LLM: clasificar a JSON]
     P --> J[Parse JSON]
-    J --> DB[(requirements)]
+    J -- intent=invalid_requirement --> INC[(incoherent_requirements)]
+    J -- ok --> DB[(requirements)]
     DB --> R
 ```
 
@@ -132,7 +226,7 @@ El prompt incluye reglas + few-shot en español. Idempotencia: `(tenant_id, sour
 
 ---
 
-## 4. Fase 2 — Impact Analysis
+## 5. Fase 2 — Impact Analysis
 
 **Servicio**: `ImpactAnalysisService` con dos colaboradores: `DependencyAnalyzer` (estático) y `SemanticImpactFilter` (LLM).
 
@@ -166,7 +260,7 @@ Notas clave:
 
 ---
 
-## 5. Fase 3 — Entity Existence Checker
+## 6. Fase 3 — Entity Existence Checker
 
 ```mermaid
 flowchart LR
@@ -188,11 +282,11 @@ Su rol: evitar generar historias sobre entidades que **no existen** en el reposi
 
 ---
 
-## 6. Fase 4 — Story Generation
+## 7. Fase 4 — Story Generation
 
 **Servicio**: `StoryGenerationService` → `AIStoryGenerator` → `StoryAIProvider.generate_story()`.
 
-### 6.1 Construcción del contexto
+### 7.1 Construcción del contexto
 
 ```mermaid
 flowchart LR
@@ -211,7 +305,7 @@ La **whitelist** es exhaustiva: el prompt prohíbe citar paths que no estén en 
 2. Añade hermanos del mismo directorio (mismo módulo).
 3. Rellena hasta 150 con el resto del repo.
 
-### 6.2 Prompt de generación (anatomía)
+### 7.2 Prompt de generación (anatomía)
 
 El prompt se divide en dos bloques para aprovechar **prompt caching**:
 
@@ -232,7 +326,7 @@ Reglas duras codificadas en el prompt (ver `_STORY_STATIC_TEMPLATE`):
 5. Tres categorías de subtareas: `frontend`, `backend`, `configuration`. Cada una con `title` (≤150 chars) y `description` (≥30 chars con qué/por qué/dónde/cómo verificar).
 6. Output 100% en el `language` indicado.
 
-### 6.3 Caché de prompt (significativo en costo)
+### 7.3 Caché de prompt (significativo en costo)
 
 | Provider | Mecanismo | Notas |
 |---|---|---|
@@ -240,7 +334,7 @@ Reglas duras codificadas en el prompt (ver `_STORY_STATIC_TEMPLATE`):
 | Gemini | `caches.create()` keyed por `(model, sha256(static_block))` con TTL configurable | `GEMINI_CACHE_TTL_SECONDS=0` lo desactiva; fallback a uncached si `caches.create()` falla |
 | OpenAI / Groq | Sin caching explícito (la API no lo expone igual) | El prompt se manda íntegro |
 
-### 6.4 Flujo de retries y reparación quirúrgica
+### 7.4 Flujo de retries y reparación quirúrgica
 
 ```mermaid
 flowchart TB
@@ -280,7 +374,7 @@ Tres tipos de fallo y su tratamiento:
 | Otras excepciones transitorias (`is_retryable_error`) | Retry hasta `AI_MAX_RETRIES`. Tras agotarse → `TransientGenerationError` (504). |
 | Excepciones no retryables | Propaga (4xx). |
 
-### 6.5 Validaciones funcionales — guardrail anti-jerga en AC
+### 7.5 Validaciones funcionales — guardrail anti-jerga en AC
 
 Patrones que invalidan un AC (`_AC_TECHNICAL_PATTERNS`):
 
@@ -292,13 +386,13 @@ Patrones que invalidan un AC (`_AC_TECHNICAL_PATTERNS`):
 
 Esto fuerza a que el AC se lea como un Product Owner lo escribiría, no como un developer.
 
-### 6.6 Detección de UI implícita
+### 7.6 Detección de UI implícita
 
 `_UI_KEYWORD_PATTERN` busca términos como `formulario`, `pantalla`, `dashboard`, `modal`, `register`, `login`, `página`… en `requirement_text + intent + feature_type + keywords`. Si dispara y `subtasks.frontend` está vacío → retry con warning explícito.
 
 ---
 
-## 7. Fase 5 — Quality Judge
+## 8. Fase 5 — Quality Judge
 
 Tras pasar todas las validaciones deterministas, la historia se evalúa con un **LLM-as-Judge** independiente: cinco dimensiones (0-10), clasificación binaria de alineación al requerimiento, caps duros aplicados en código contra el sesgo del juez, y self-consistency con N samples agregadas por mediana.
 
@@ -306,7 +400,7 @@ Tras pasar todas las validaciones deterministas, la historia se evalúa con un *
 
 ---
 
-## 8. Robustez frente al modelo
+## 9. Robustez frente al modelo
 
 | Modo de fallo | Defensa |
 |---|---|
@@ -319,7 +413,7 @@ Tras pasar todas las validaciones deterministas, la historia se evalúa con un *
 
 ---
 
-## 9. Observabilidad
+## 10. Observabilidad
 
 - `RequestLoggingMiddleware` añade un `request_id` UUID por petición.
 - `log_token_usage` (en `app/utils/token_logging.py`) registra prompt/completion tokens y model por cada llamada relevante: `parse_requirement`, `story_gen`, `ac_repair`, `judge`, `semantic_filter`.
@@ -328,25 +422,26 @@ Tras pasar todas las validaciones deterministas, la historia se evalúa con un *
 
 ---
 
-## 10. Modos de operación
+## 11. Modos de operación
 
 | Modo | Cuándo usarlo | Cómo |
 |---|---|---|
-| **Producción** | Tráfico real | `AI_PROVIDER` real + juez activo (ver [`ai-judge.md`](./ai-judge.md)) |
-| **Stub** | Tests, CI, dev sin claves API | `AI_PROVIDER=stub` — devuelve respuestas fijas en todas las fases |
-| **Cost-saving** | Validar UX sin gastar | `AI_PROVIDER=groq` (latencia y costo bajos), juez desactivado |
+| **Producción** | Tráfico real | `AI_PROVIDER` real + juez activo + coherencia activa (ver [`ai-judge.md`](./ai-judge.md)) |
+| **Stub** | Tests, CI, dev sin claves API | `AI_PROVIDER=stub` — devuelve respuestas fijas en todas las fases; `StubCoherenceValidator` siempre devuelve `is_coherent=True` |
+| **Cost-saving** | Validar UX sin gastar | `AI_PROVIDER=groq`, juez desactivado, `COHERENCE_VALIDATION_ENABLED=false` |
+| **Sin coherencia** | Pipeline legacy / migración | `COHERENCE_VALIDATION_ENABLED=false` — pasa a `StubCoherenceValidator`; el filtro heurístico sigue activo |
 | **Cache amistoso (Gemini)** | Whitelists grandes con muchos retries | `GEMINI_CACHE_TTL_SECONDS=300` (mín. 60) |
 
 > Modos específicos del juez (auditoría, modelo juez más fuerte, etc.) en [`ai-judge.md`](./ai-judge.md).
 
 ---
 
-## 11. Cómo extender el pipeline
+## 12. Cómo extender el pipeline
 
 ### Añadir un proveedor de IA nuevo
 
-1. Implementar la(s) clase(s) abstracta(s) (`AIProvider`, `StoryAIProvider`, `SemanticImpactFilter`) en su archivo. Para extender el juez ver [`ai-judge.md`](./ai-judge.md).
-2. Registrarlo en la factoría correspondiente (`get_ai_provider`, `get_story_ai_provider`, `get_semantic_filter`).
+1. Implementar la(s) clase(s) abstracta(s) (`AIProvider`, `StoryAIProvider`, `SemanticImpactFilter`, `RequirementCoherenceValidator`) en su archivo. Para extender el juez ver [`ai-judge.md`](./ai-judge.md).
+2. Registrarlo en la factoría correspondiente (`get_ai_provider`, `get_story_ai_provider`, `get_semantic_filter`, `get_coherence_validator`).
 3. Añadir variables `<NEW>_API_KEY`, `<NEW>_MODEL` a `Settings`.
 4. Actualizar el README/`.env.example`.
 
@@ -364,13 +459,21 @@ Añadir patrones a `_AC_TECHNICAL_PATTERNS` en `app/services/ai_story_generator.
 
 ---
 
-## 12. Métricas operativas
+## 13. Métricas operativas
 
 Cada historia persiste:
 
 - `generation_time_seconds` — wall time del provider call.
 - `generator_model` — modelo concreto usado.
+- `generator_calls` — número de llamadas al LLM generador (incluye retries por validación de forma, paths o AC).
+- `force_reason` — motivo por el que se forzó la generación cuando aplica (ej. `"entity_not_found"`, `"coherence_rejected"`).
 - `entity_not_found` — flag para excluir historias forzadas en métricas de calidad.
+
+Cada requerimiento aceptado persiste además:
+
+- `coherence_model` / `coherence_calls` — modelo y número de llamadas usados en la validación de coherencia.
+- `parser_model` / `parser_calls` — modelo y número de llamadas usados en el parsing.
+- `evaluated_by_model` — campo combinado presente en la respuesta del endpoint `/understand-requirement` que resume qué modelos participaron.
 
 `story_feedback` (`thumbs_up`/`thumbs_down` + comentario) cierra el loop con la opinión humana, que puede correlacionarse con el `overall` del juez para validar su calibrado.
 

@@ -47,7 +47,16 @@ def _word_is_gibberish(word: str) -> bool:
         return length >= 5
 
     if any(ch.isdigit() for ch in lower) and any(ch.isalpha() for ch in lower):
-        return True
+        # Flag tokens with >=4 alternating alpha/digit segments (truly interspersed
+        # gibberish like a1b2c3d4). Allow tokens with only 2 segments — these are
+        # legitimate tech patterns: oauth2, sha256, ipv4, utf8, base64, s3bucket,
+        # ec2instance (letters+digits or digits+letters).
+        # Tokens with 2 segments still fall through to vowel/diversity checks below,
+        # so e.g. "5545tttrtrtrtrtrt" is caught by the low-diversity rule.
+        parts = re.findall(r"[a-z]+|\d+", lower)
+        if len(parts) >= 4:
+            return True
+        # fall through to letter-quality checks
 
     letters = [c for c in lower if c.isalpha()]
     if not letters:

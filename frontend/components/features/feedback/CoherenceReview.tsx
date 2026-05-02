@@ -210,17 +210,24 @@ export function CoherenceReview() {
                   flexWrap: "wrap",
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {item.reason_codes.map((code) => (
-                    <ReasonBadge key={code} code={code} />
-                  ))}
+                <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      color: "var(--muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.14em",
+                    }}
+                  >
+                    {c.reason_label}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                    {item.reason_codes.map((code) => (
+                      <ReasonBadge key={code} code={code} />
+                    ))}
+                  </div>
                 </div>
                 <div
                   style={{
@@ -261,7 +268,7 @@ export function CoherenceReview() {
                     whiteSpace: "pre-wrap" as const,
                   }}
                 >
-                  {item.requirement_text}
+                  {item.requirement_text_preview}
                 </blockquote>
               </div>
 

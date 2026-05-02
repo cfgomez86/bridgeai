@@ -144,7 +144,7 @@ export function Step3Generate({ state, completeStep3, setGeneratorInfo, goBackTo
       .then(genResult =>
         getStoryDetail(genResult.story_id).then(detail => {
           if (detail.source_connection_id !== state.sourceConnectionId) {
-            throw new Error("La historia devuelta pertenece a otro repositorio. Reiniciá el flujo.")
+            throw new Error(s.wrong_repo_error)
           }
           setStory(detail)
           setGeneratorInfo(detail.generator_model ?? null, detail.generator_calls ?? 0)
@@ -165,7 +165,7 @@ export function Step3Generate({ state, completeStep3, setGeneratorInfo, goBackTo
             return
           }
         }
-        setError(err instanceof Error ? err.message : "Failed to generate story")
+        setError(err instanceof Error ? err.message : s.error_generic)
       })
       .finally(() => {
         setLoading(false)
@@ -177,6 +177,8 @@ export function Step3Generate({ state, completeStep3, setGeneratorInfo, goBackTo
     if (triggered.current || !state.requirementId || !state.analysisId || !state.sourceConnectionId) return
     triggered.current = true
     runGenerate(false)
+  // runGenerate closes over state, but triggered.current guarantees this fires exactly
+  // once — all state values are already settled when the three IDs become available.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.requirementId, state.analysisId, state.sourceConnectionId])
 
@@ -189,11 +191,11 @@ export function Step3Generate({ state, completeStep3, setGeneratorInfo, goBackTo
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
           {state.featureType && <span style={chip()}>{state.featureType}</span>}
           {state.complexity && <span style={chip()}>{s.complexity} {state.complexity}</span>}
-          {state.language && <span style={chip()}>Lang: {state.language}</span>}
+          {state.language && <span style={chip()}>{s.lang_label} {state.language}</span>}
         </div>
         {state.intent && (
           <p style={{ fontSize: "11.5px", color: "var(--muted)", margin: 0 }}>
-            Intent: <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{state.intent}</span>
+            {s.intent_label} <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{state.intent}</span>
           </p>
         )}
         {state.keywords.length > 0 && (

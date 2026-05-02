@@ -114,8 +114,12 @@ class RequirementUnderstandingService:
                 coherence_calls = 1
                 coherence = self._coherence_validator.validate(requirement_text)
             except Exception as exc:
-                # Fail-open: una caída del validator (red, timeout, JSON malformado)
-                # NO debe bloquear al usuario. Loguear y continuar al parser.
+                # Fail-open intencional: una caída del validator (red, timeout, JSON
+                # malformado) no bloquea al usuario. El gibberish filter determinístico
+                # ya corrió antes y no falla; el parser principal actúa como segunda
+                # barrera. Un bypass completo requiere fallar ambas capas, por lo que el
+                # riesgo residual es bajo. Mitigación recomendada: rate-limit en el API
+                # gateway por tenant, independiente de este validador.
                 self._logger.warning("Coherence validator failed (fail-open): %s", exc)
             else:
                 if not coherence.is_coherent:

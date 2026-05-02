@@ -30,6 +30,8 @@ erDiagram
     tenants ||--o{ integration_audit_logs : "agrupa"
     tenants ||--o{ connection_audit_logs : "agrupa"
     tenants ||--o{ oauth_states : "agrupa"
+    tenants ||--o{ incoherent_requirements : "agrupa"
+    source_connections ||--o{ incoherent_requirements : "scope"
 
     source_connections ||--o{ code_files : "indexa"
     source_connections ||--o{ requirements : "scope"
@@ -123,6 +125,10 @@ erDiagram
         string estimated_complexity
         text keywords "JSON list"
         float processing_time_seconds
+        string coherence_model "nullable"
+        int coherence_calls "nullable"
+        string parser_model "nullable"
+        int parser_calls "nullable"
         datetime created_at
     }
 
@@ -165,7 +171,22 @@ erDiagram
         string risk_level
         float generation_time_seconds
         bool entity_not_found
+        bool was_forced
+        string force_reason "nullable"
+        int generator_calls
         string generator_model
+        datetime created_at
+    }
+
+    incoherent_requirements {
+        string id PK
+        string tenant_id FK
+        string source_connection_id FK
+        text requirement_text
+        string project_id
+        text reason_codes "JSON list"
+        string warning "nullable"
+        bool is_gibberish "heuristic layer"
         datetime created_at
     }
 
@@ -267,10 +288,11 @@ erDiagram
 
 | Tabla | Propósito | Puntos clave |
 |---|---|---|
-| `requirements` | Clasificación LLM del texto de requerimiento | `UNIQUE (tenant_id, source_connection_id, requirement_text_hash, project_id)` para idempotencia; `keywords` es JSON serializado |
+| `requirements` | Clasificación LLM del texto de requerimiento | `UNIQUE (tenant_id, source_connection_id, requirement_text_hash, project_id)` para idempotencia; `keywords` es JSON serializado; `coherence_model`/`coherence_calls` y `parser_model`/`parser_calls` rastrean qué modelos participaron en el pipeline de validación y cuántas llamadas hizo cada uno |
 | `impact_analysis` | Resultado del análisis de impacto | `risk_level` calculado por número de archivos impactados (LOW <3, MEDIUM 3-10, HIGH >10) |
 | `impacted_files` | Detalle 1:N por análisis | `reason` ∈ `{keyword_match, imports_impacted_file, imported_by_impacted_file}` |
-| `user_stories` | Historia generada (artefacto final) | Listas (AC, subtasks, DoD, risk_notes) se guardan como JSON serializado en `Text`; `entity_not_found` flagea historias generadas sin entidad en código (clave de partición de métricas — ver §4.1); `was_forced` distingue override explícito del usuario (`force=true`) vs creación intencional (auto-bypass por verbo de creación), formando una segunda dimensión de partición; `generator_model` registra el modelo IA usado |
+| `user_stories` | Historia generada (artefacto final) | Listas (AC, subtasks, DoD, risk_notes) se guardan como JSON serializado en `Text`; `entity_not_found` flagea historias generadas sin entidad en código (clave de partición de métricas — ver §4.1); `was_forced` distingue override explícito del usuario (`force=true`) vs creación intencional (auto-bypass por verbo de creación), formando una segunda dimensión de partición; `force_reason` persiste el motivo textual cuando la generación se forzó (ej. `"entity_not_found"`, `"coherence_rejected"`); `generator_calls` registra cuántas llamadas al LLM generador fueron necesarias (incluye retries por validación); `generator_model` registra el modelo IA usado |
+| `incoherent_requirements` | Requerimientos rechazados por el pre-filtro de coherencia | Scoped por `tenant_id` y `source_connection_id`; `reason_codes` es JSON list con valores de `{non_software_request, contradictory, unintelligible, conversational, empty_intent}`; `is_gibberish=true` indica rechazo en capa heurística (sin LLM); accesible vía `GET /api/v1/admin/incoherent-requirements?reason=<code>` (admin-only, paginado) |
 | `story_quality_score` | Output del LLM-as-Judge (5 dimensiones + agregados) | `dispersion` = stdev poblacional cuando hay N>1 muestras; `evidence` = JSON con citas textuales por dimensión baja. Las agregaciones se parten por `user_stories.entity_not_found` para no mezclar runs degradados con runs orgánicos (ver §4.1) |
 | `story_feedback` | Reacción del usuario sobre una historia | `UNIQUE (tenant_id, story_id, user_id)` — un usuario un voto por historia |
 
@@ -404,6 +426,9 @@ python -m alembic downgrade -1
 | `a1b2c3d4e5f6_preserve_history_on_connection_delete` | Quitar FK estricta del audit log |
 | `b2c3d4e5f6a7_soft_delete_connections` | `deleted_at` en `source_connections` |
 | `c6d3e4f5a012_add_connection_audit_log` / `d1e2f3a4b567_ensure_connection_audit_logs` | Audit log de conexiones |
+| (Phase 8) `add_incoherent_requirements` | Nueva tabla `incoherent_requirements` con aislamiento por tenant + conexión |
+| (Phase 8) `add_force_reason_generator_calls_to_user_stories` | `force_reason` y `generator_calls` en `user_stories` |
+| (Phase 8) `add_coherence_parser_tracking_to_requirements` | `coherence_model`, `coherence_calls`, `parser_model`, `parser_calls` en `requirements` |
 
 ---
 

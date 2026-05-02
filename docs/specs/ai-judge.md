@@ -33,8 +33,12 @@ El juez se invoca **después** de que el generador haya producido una historia q
 | `AI_JUDGE_SAMPLES` | 1 | Self-consistency: N llamadas paralelas, agregación por mediana |
 | `AI_JUDGE_TEMPERATURE` | 0.3 | Más alta que la generación: induce variabilidad útil cuando N>1 |
 | `AI_JUDGE_MAX_TOKENS` | 1024 | Suficiente para 5 dims + evidencia + alignment + justification |
+| `AI_COHERENCE_MAX_TOKENS` | 200 | Tokens para la llamada del validador de coherencia (comparte provider/model del juez) |
+| `COHERENCE_VALIDATION_ENABLED` | `true` | `false` → `StubCoherenceValidator` (coherencia siempre aprobada); el heurístico sigue activo |
 
 Patrón de despliegue común: usar **el mismo provider** que la generación pero un **modelo más fuerte** (ej. Sonnet evaluando Haiku). El juez ve menos contexto que el generador, así que el costo extra suele ser bajo.
+
+> `AI_JUDGE_PROVIDER` y `AI_JUDGE_MODEL` se comparten entre el `StoryQualityJudge` y el `RequirementCoherenceValidator`. Ambos usan el mismo modelo pero con prompts y `max_tokens` muy distintos (el de coherencia es mucho más liviano). Si se necesita un proveedor distinto para coherencia, ajustar `COHERENCE_VALIDATION_ENABLED=false` y usar el provider del pipeline principal para esa capa.
 
 ```mermaid
 classDiagram

@@ -3,7 +3,7 @@
 import { useLanguage } from "@/lib/i18n"
 
 interface WorkflowStepperProps {
-  currentStep: 1 | 2 | 3 | 4 | 5
+  currentStep: 1 | 2 | 3 | 4
 }
 
 export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {

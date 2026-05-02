@@ -60,7 +60,7 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 **Database** (`app/database/session.py`) — `Base` (DeclarativeBase) lives here; all ORM models must inherit from it so `init_db()` picks them up automatically. Use `get_db()` as a FastAPI dependency for route handlers; use `check_db_connection()` for health checks only.
 
-**Domain objects** (`app/domain/`) — frozen dataclasses with no SQLAlchemy or FastAPI imports. Key entities: `FileInfo`, `RequirementUnderstanding`, `UserStory`, `TicketResult`, `TicketIntegration`.
+**Domain objects** (`app/domain/`) — frozen dataclasses with no SQLAlchemy or FastAPI imports. Key entities: `FileInfo`, `RequirementUnderstanding`, `UserStory`, `TicketResult`, `TicketIntegration`, `CoherenceResult`.
 
 **Services** (`app/services/`) — accept `Settings` via constructor injection (default: `get_settings()`). Ticket providers live in `app/services/ticket_providers/` and follow the `TicketProvider` ABC — `JiraTicketProvider` and `AzureDevOpsTicketProvider` are the two implementations. SCM providers live in `app/services/scm_providers/` and follow the `ScmProvider` ABC — GitHub, GitLab, Azure Repos, and Bitbucket implementations exist.
 
@@ -75,6 +75,15 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 - A single user switching repos never gets cross-repo contamination in analysis or status counts.
 
 **Logging** (`app/core/logging.py`) — `RequestLoggingMiddleware` attaches a `request_id` UUID to `request.state` on every request. Access it in route handlers via `request.state.request_id`. Use `get_logger(__name__)` everywhere else.
+
+**Coherence pre-filter** (`app/services/requirement_coherence_validator.py`, `app/services/requirement_gibberish_filter.py`) — 3-layer input gate that runs inside `RequirementUnderstandingService.understand()` **before** the cache lookup, so rejected text is never stored as a valid requirement:
+1. **Gibberish filter** (deterministic, no LLM cost) — rejects random character sequences (`sddssdd`, `fghfgh`).
+2. **Coherence validator** (LLM) — `RequirementCoherenceValidator` ABC; factory `get_coherence_validator(settings)` picks the right implementation (`anthropic`, `openai`, `groq`, `gemini`, or `stub`). Raises `IncoherentRequirementError` on rejection. **Fail-open**: network/timeout errors skip the gate rather than blocking the user.
+3. **Invalid-intent fallback** — if the main parser returns `intent="invalid_requirement"`, it is also rejected here.
+
+Rejected requirements are persisted to `incoherent_requirements` table via `IncoherentRequirementRepository`. The admin endpoint `GET /api/v1/admin/incoherent-requirements` (role `admin` only) returns a paginated list filterable by `reason` code. Valid reason codes: `non_software_request`, `contradictory`, `unintelligible`, `conversational`, `empty_intent`.
+
+Controlled by `COHERENCE_VALIDATION_ENABLED` (default `true`). Reuses `AI_JUDGE_PROVIDER`/`AI_JUDGE_MODEL` settings (falls back to `AI_PROVIDER`/`AI_MODEL`).
 
 **Quality metrics partitioning** — `user_stories.entity_not_found` is the partition key for all aggregate judge metrics. When `True`, the requirement's main entity wasn't in the codebase and the judge applies hard score caps by design (`story_quality_judge.py`). `StoryQualityRepository.summary_since()` and `GET /api/v1/system/quality/live` separate **organic** (`entity_not_found=False`) from **forced** (`entity_not_found=True`) buckets so degraded-input runs don't pollute the baseline. The legacy `GET /api/v1/system/quality` keeps reading `eval_report.json` from the offline harness — leave it alone for batch eval.
 
@@ -108,6 +117,8 @@ Copy `.env.example` to `.env` before running. Relevant variables:
 | `AZURE_DEVOPS_TOKEN` | — | Azure DevOps Personal Access Token |
 | `AZURE_ORG_URL` | — | e.g. `https://dev.azure.com/your-org` |
 | `AZURE_PROJECT` | — | Azure DevOps project name |
+| `COHERENCE_VALIDATION_ENABLED` | `true` | Enable/disable the coherence pre-filter gate |
+| `AI_COHERENCE_MAX_TOKENS` | `200` | Max tokens for the coherence validator LLM call |
 
 Frontend env — create `frontend/.env.local`:
 
@@ -150,3 +161,4 @@ Specialized Claude Code roles for common development tasks:
 | 5c | Azure DevOps integration | Done |
 | 6 | Next.js 16 frontend — Auth0, multi-tenant, i18n, dark mode | Done |
 | 7 | Repository isolation — per-connection file scoping, clean re-index | Done |
+| 8 | Coherence pre-filter — gibberish gate, LLM coherence validator, incoherent-requirements audit log, admin endpoint | Done |

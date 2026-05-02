@@ -10,17 +10,17 @@ from app.services.requirement_coherence_validator import (
     IncoherentRequirementError,
     RequirementCoherenceValidator,
     StubCoherenceValidator,
+    _build_validator,
     _parse_coherence_response,
-    _validator_cache,
     get_coherence_validator,
 )
 
 
 @pytest.fixture(autouse=True)
 def clear_validator_cache():
-    _validator_cache.clear()
+    _build_validator.cache_clear()
     yield
-    _validator_cache.clear()
+    _build_validator.cache_clear()
 
 
 def test_stub_always_returns_coherent():
