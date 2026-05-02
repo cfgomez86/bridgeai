@@ -17,6 +17,8 @@ type ReasonFilter =
   | "conversational"
   | "empty_intent"
 
+type DateRange = "all" | "day" | "week" | "month"
+
 function formatDate(iso: string): string {
   if (!iso) return ""
   const utc = iso.endsWith("Z") || iso.includes("+") || iso.includes("-", 10) ? iso : iso + "Z"
@@ -56,6 +58,8 @@ export function CoherenceReview() {
   const c = t.coherencePage
 
   const [filter, setFilter] = useState<ReasonFilter>("all")
+  const [dateRange, setDateRange] = useState<DateRange>("all")
+  const [userFilter, setUserFilter] = useState("")
   const [items, setItems] = useState<IncoherentRequirementItem[] | null>(null)
   const [total, setTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -66,7 +70,9 @@ export function CoherenceReview() {
     setItems(null)
     setError(null)
     const reason = filter === "all" ? null : filter
-    getIncoherentRequirements(PAGE_SIZE, 0, reason)
+    const range = dateRange === "all" ? null : dateRange
+    const userId = userFilter.trim() || null
+    getIncoherentRequirements(PAGE_SIZE, 0, reason, range, userId)
       .then((data) => {
         if (cancelled) return
         setItems(data.items)
@@ -80,14 +86,16 @@ export function CoherenceReview() {
     return () => {
       cancelled = true
     }
-  }, [filter, c.error_load])
+  }, [filter, dateRange, userFilter, c.error_load])
 
   async function loadMore() {
     if (!items) return
     setLoadingMore(true)
     const reason = filter === "all" ? null : filter
+    const range = dateRange === "all" ? null : dateRange
+    const userId = userFilter.trim() || null
     try {
-      const next = await getIncoherentRequirements(PAGE_SIZE, items.length, reason)
+      const next = await getIncoherentRequirements(PAGE_SIZE, items.length, reason, range, userId)
       setItems([...items, ...next.items])
       setTotal(next.total)
     } catch (err) {
@@ -126,7 +134,7 @@ export function CoherenceReview() {
         <p style={{ margin: 0, fontSize: "13px", color: "var(--muted)" }}>{c.subtitle}</p>
       </div>
 
-      {/* Filter bar */}
+      {/* Filter bar - Reason */}
       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
         {FILTERS.map(({ key, label }) => (
           <button
@@ -150,6 +158,55 @@ export function CoherenceReview() {
           </button>
         ))}
       </div>
+
+      {/* Filter bar - Date Range */}
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        {[
+          { key: "all" as DateRange, label: c.filter_date_all },
+          { key: "day" as DateRange, label: c.filter_date_day },
+          { key: "week" as DateRange, label: c.filter_date_week },
+          { key: "month" as DateRange, label: c.filter_date_month },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setDateRange(key)}
+            style={{
+              padding: "5px 14px",
+              borderRadius: "var(--radius)",
+              border: "1px solid",
+              borderColor: dateRange === key ? "var(--accent)" : "var(--border)",
+              background: dateRange === key ? "var(--accent-soft)" : "var(--surface)",
+              color: dateRange === key ? "var(--accent-strong)" : "var(--fg-2)",
+              fontSize: "12.5px",
+              fontWeight: dateRange === key ? 600 : 400,
+              cursor: "pointer",
+              fontFamily: "var(--font-display)",
+              transition: "all 0.1s",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filter bar - User */}
+      <input
+        type="text"
+        placeholder={c.filter_user_placeholder}
+        value={userFilter}
+        onChange={(e) => setUserFilter(e.target.value)}
+        style={{
+          padding: "7px 12px",
+          borderRadius: "var(--radius)",
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+          color: "var(--fg)",
+          fontSize: "13px",
+          fontFamily: "var(--font-display)",
+          outline: "none",
+          maxWidth: "300px",
+        }}
+      />
 
       {error && (
         <div

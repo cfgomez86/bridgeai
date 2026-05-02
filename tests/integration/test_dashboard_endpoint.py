@@ -406,8 +406,10 @@ def test_activity_empty_tenant_returns_empty_list(empty_client):
 def test_feedback_comments_returns_negative_only(populated_client):
     r = populated_client.get("/api/v1/feedback/comments?rating=thumbs_down&limit=10")
     assert r.status_code == 200
-    items = r.json()
-    assert len(items) == 1
+    response = r.json()
+    assert len(response["items"]) == 1
+    assert response["total"] == 1
+    items = response["items"]
     assert items[0]["rating"] == "thumbs_down"
     assert items[0]["story_title"] == "Story Two"
     assert items[0]["comment"] == "Faltan detalles en los AC"
@@ -417,7 +419,9 @@ def test_feedback_comments_returns_negative_only(populated_client):
 def test_feedback_comments_pagination(populated_client):
     r = populated_client.get("/api/v1/feedback/comments?limit=10&offset=10")
     assert r.status_code == 200
-    assert r.json() == []
+    response = r.json()
+    assert response["items"] == []
+    assert response["total"] == 2
 
 
 def test_feedback_comments_rejects_invalid_rating(populated_client):
@@ -428,7 +432,9 @@ def test_feedback_comments_rejects_invalid_rating(populated_client):
 def test_feedback_comments_empty_tenant_returns_empty_list(empty_client):
     r = empty_client.get("/api/v1/feedback/comments?rating=thumbs_down")
     assert r.status_code == 200
-    assert r.json() == []
+    response = r.json()
+    assert response["items"] == []
+    assert response["total"] == 0
 
 
 def test_feedback_comments_non_admin_returns_403(populated_client):

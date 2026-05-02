@@ -155,8 +155,8 @@ def test_invalid_reason_returns_400():
     assert response.status_code == 400
 
 
-def test_tenant_isolation():
-    """Records of another tenant must not leak even to an admin."""
+def test_super_admin_sees_all_tenants():
+    """Admin is a super-admin and sees records from all tenants."""
     c, Session = make_client(role="admin")
     db = Session()
     try:
@@ -168,8 +168,8 @@ def test_tenant_isolation():
     response = c.get("/api/v1/admin/incoherent-requirements")
     assert response.status_code == 200
     ids = {item["id"] for item in response.json()["items"]}
-    assert ids == {"mine"}
-    assert response.json()["total"] == 1
+    assert ids == {"mine", "other"}
+    assert response.json()["total"] == 2
 
 
 def test_user_email_is_resolved_when_user_exists():

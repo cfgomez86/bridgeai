@@ -614,9 +614,17 @@ export interface NegativeFeedbackItem {
   story_id: string
   story_title: string
   user_id: string
+  user_email?: string | null
   rating: string
   comment: string
   created_at: string
+}
+
+export interface FeedbackListResponse {
+  items: NegativeFeedbackItem[]
+  total: number
+  limit: number
+  offset: number
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -631,10 +639,17 @@ export async function getNegativeFeedback(
   limit = 20,
   offset = 0,
   rating?: string | null,
-): Promise<NegativeFeedbackItem[]> {
-  const ratingParam = rating ? `&rating=${encodeURIComponent(rating)}` : ""
-  return apiFetch<NegativeFeedbackItem[]>(
-    `/api/v1/feedback/comments?limit=${limit}&offset=${offset}${ratingParam}`,
+  dateRange?: string | null,
+  userId?: string | null,
+): Promise<FeedbackListResponse> {
+  const params = new URLSearchParams()
+  params.append("limit", String(limit))
+  params.append("offset", String(offset))
+  if (rating) params.append("rating", rating)
+  if (dateRange) params.append("date_range", dateRange)
+  if (userId) params.append("user_id", userId)
+  return apiFetch<FeedbackListResponse>(
+    `/api/v1/feedback/comments?${params.toString()}`,
   )
 }
 
@@ -666,12 +681,16 @@ export async function getIncoherentRequirements(
   limit = 20,
   offset = 0,
   reason?: string | null,
+  dateRange?: string | null,
+  userId?: string | null,
 ): Promise<IncoherentRequirementListResponse> {
   const params = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
   })
   if (reason) params.set("reason", reason)
+  if (dateRange) params.set("date_range", dateRange)
+  if (userId) params.set("user_id", userId)
   return apiFetch<IncoherentRequirementListResponse>(
     `/api/v1/admin/incoherent-requirements?${params.toString()}`,
   )

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import func
@@ -38,31 +39,42 @@ class IncoherentRequirementRepository:
         limit: int,
         offset: int,
         reason: Optional[str] = None,
+        user_id: Optional[str] = None,
+        since: Optional[datetime] = None,
+        skip_tenant_filter: bool = False,
     ) -> tuple[list[tuple[IncoherentRequirement, Optional[str]]], int]:
         """Return (rows, total) where each row is (record, user_email).
 
-        `reason` filters by membership in the JSON-serialized `reason_codes` list.
+        If skip_tenant_filter=True, returns records from all tenants (super-admin).
         """
-        tid = self._tid()
-        base = self._db.query(IncoherentRequirement).filter(
-            IncoherentRequirement.tenant_id == tid
-        )
+        tid = self._tid() if not skip_tenant_filter else None
+
+        base = self._db.query(IncoherentRequirement)
+        if not skip_tenant_filter:
+            base = base.filter(IncoherentRequirement.tenant_id == tid)
         if reason:
             base = base.filter(IncoherentRequirement.reason_codes.like(f'%"{reason}"%'))
+        if user_id:
+            base = base.filter(IncoherentRequirement.user_id == user_id)
+        if since and isinstance(since, datetime):
+            base = base.filter(IncoherentRequirement.created_at >= since)
 
         total = base.with_entities(func.count(IncoherentRequirement.id)).scalar() or 0
 
-        rows = (
-            self._db.query(IncoherentRequirement, User.email)
-            .filter(IncoherentRequirement.tenant_id == tid)
-            .outerjoin(
-                User,
-                (User.id == IncoherentRequirement.user_id)
-                & (User.tenant_id == tid),
-            )
-        )
+        rows = self._db.query(IncoherentRequirement, User.email)
+        if not skip_tenant_filter:
+            rows = rows.filter(IncoherentRequirement.tenant_id == tid)
+        join_condition = User.id == IncoherentRequirement.user_id
+        if not skip_tenant_filter:
+            join_condition = join_condition & (User.tenant_id == tid)
+        rows = rows.outerjoin(User, join_condition)
         if reason:
             rows = rows.filter(IncoherentRequirement.reason_codes.like(f'%"{reason}"%'))
+        if user_id:
+            rows = rows.filter(IncoherentRequirement.user_id == user_id)
+        if since and isinstance(since, datetime):
+            rows = rows.filter(IncoherentRequirement.created_at >= since)
+
         rows = (
             rows.order_by(IncoherentRequirement.created_at.desc())
             .offset(offset)

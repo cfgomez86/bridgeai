@@ -174,9 +174,10 @@ class DashboardService:
                 )
             )
 
-        for feedback, story_title in self._feedback_repo.list_negative_with_comments(
+        rows, _ = self._feedback_repo.list_negative_with_comments(
             per_source_limit, 0
-        ):
+        )
+        for feedback, story_title, _ in rows:
             comment = (feedback.comment or "").strip()
             preview = comment if len(comment) <= 80 else comment[:77] + "..."
             events.append(

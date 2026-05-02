@@ -7,6 +7,7 @@ import { useLanguage } from "@/lib/i18n"
 const PAGE_SIZE = 20
 
 type RatingFilter = "all" | "thumbs_up" | "thumbs_down"
+type DateRange = "all" | "day" | "week" | "month"
 
 function formatDate(iso: string): string {
   if (!iso) return ""
@@ -42,22 +43,25 @@ export function FeedbackReview() {
   const f = t.feedbackPage
 
   const [filter, setFilter] = useState<RatingFilter>("all")
+  const [dateRange, setDateRange] = useState<DateRange>("all")
+  const [userFilter, setUserFilter] = useState("")
   const [items, setItems] = useState<NegativeFeedbackItem[] | null>(null)
+  const [total, setTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     setItems(null)
     setError(null)
-    setHasMore(true)
     const rating = filter === "all" ? null : filter
-    getNegativeFeedback(PAGE_SIZE, 0, rating)
+    const range = dateRange === "all" ? null : dateRange
+    const userId = userFilter.trim() || null
+    getNegativeFeedback(PAGE_SIZE, 0, rating, range, userId)
       .then((data) => {
         if (cancelled) return
-        setItems(data)
-        setHasMore(data.length === PAGE_SIZE)
+        setItems(data.items)
+        setTotal(data.total)
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -65,22 +69,26 @@ export function FeedbackReview() {
         setItems([])
       })
     return () => { cancelled = true }
-  }, [filter, f.error_load])
+  }, [filter, dateRange, userFilter, f.error_load])
 
   async function loadMore() {
     if (!items) return
     setLoadingMore(true)
     const rating = filter === "all" ? null : filter
+    const range = dateRange === "all" ? null : dateRange
+    const userId = userFilter.trim() || null
     try {
-      const next = await getNegativeFeedback(PAGE_SIZE, items.length, rating)
-      setItems([...items, ...next])
-      setHasMore(next.length === PAGE_SIZE)
+      const next = await getNegativeFeedback(PAGE_SIZE, items.length, rating, range, userId)
+      setItems([...items, ...next.items])
+      setTotal(next.total)
     } catch (err) {
       setError(err instanceof Error ? err.message : f.error_load)
     } finally {
       setLoadingMore(false)
     }
   }
+
+  const hasMore = items !== null && items.length < total
 
   const FILTERS: { key: RatingFilter; label: string }[] = [
     { key: "all", label: f.filter_all },
@@ -102,8 +110,8 @@ export function FeedbackReview() {
         </p>
       </div>
 
-      {/* Filter bar */}
-      <div style={{ display: "flex", gap: "6px" }}>
+      {/* Filter bar - Rating */}
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
         {FILTERS.map(({ key, label }) => (
           <button
             key={key}
@@ -126,6 +134,55 @@ export function FeedbackReview() {
           </button>
         ))}
       </div>
+
+      {/* Filter bar - Date Range */}
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        {[
+          { key: "all" as DateRange, label: f.filter_date_all },
+          { key: "day" as DateRange, label: f.filter_date_day },
+          { key: "week" as DateRange, label: f.filter_date_week },
+          { key: "month" as DateRange, label: f.filter_date_month },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setDateRange(key)}
+            style={{
+              padding: "5px 14px",
+              borderRadius: "var(--radius)",
+              border: "1px solid",
+              borderColor: dateRange === key ? "var(--accent)" : "var(--border)",
+              background: dateRange === key ? "var(--accent-soft)" : "var(--surface)",
+              color: dateRange === key ? "var(--accent-strong)" : "var(--fg-2)",
+              fontSize: "12.5px",
+              fontWeight: dateRange === key ? 600 : 400,
+              cursor: "pointer",
+              fontFamily: "var(--font-display)",
+              transition: "all 0.1s",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filter bar - User */}
+      <input
+        type="text"
+        placeholder={f.filter_user_placeholder}
+        value={userFilter}
+        onChange={(e) => setUserFilter(e.target.value)}
+        style={{
+          padding: "7px 12px",
+          borderRadius: "var(--radius)",
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+          color: "var(--fg)",
+          fontSize: "13px",
+          fontFamily: "var(--font-display)",
+          outline: "none",
+          maxWidth: "300px",
+        }}
+      />
 
       {error && (
         <div style={{
@@ -230,7 +287,7 @@ export function FeedbackReview() {
               )}
 
               <div style={{ fontSize: "11.5px", color: "var(--muted)", fontFamily: "var(--font-mono)" }}>
-                {item.user_id}
+                {item.user_email ?? item.user_id}
               </div>
             </div>
           ))}

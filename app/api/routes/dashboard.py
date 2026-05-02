@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -66,9 +67,17 @@ class NegativeFeedbackItem(BaseModel):
     story_id: str
     story_title: str
     user_id: str
+    user_email: Optional[str] = None
     rating: str
     comment: str
     created_at: str
+
+
+class FeedbackListResponse(BaseModel):
+    items: list[NegativeFeedbackItem]
+    total: int
+    limit: int
+    offset: int
 
 
 def _service(db: Session, window_days: Optional[int] = None) -> DashboardService:
@@ -138,14 +147,29 @@ async def get_dashboard_activity(
     ]
 
 
-@router.get("/feedback/comments", response_model=list[NegativeFeedbackItem])
+def _parse_date_range(date_range: Optional[str]) -> Optional[datetime]:
+    if not date_range:
+        return None
+    now = datetime.now(timezone.utc)
+    if date_range == "day":
+        return now - timedelta(days=1)
+    elif date_range == "week":
+        return now - timedelta(days=7)
+    elif date_range == "month":
+        return now - timedelta(days=30)
+    return None
+
+
+@router.get("/feedback/comments", response_model=FeedbackListResponse)
 async def list_feedback_comments(
     rating: Optional[str] = Query(default=None),
+    date_range: Optional[str] = Query(default=None),
+    user_id: Optional[str] = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-) -> list[NegativeFeedbackItem]:
+) -> FeedbackListResponse:
     if user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -157,16 +181,33 @@ async def list_feedback_comments(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"rating must be one of: {', '.join(sorted(valid_ratings))}",
         )
-    rows = StoryFeedbackRepository(db).list_with_comments(limit, offset, rating=rating)
-    return [
-        NegativeFeedbackItem(
-            id=str(fb.id),
-            story_id=str(fb.story_id),
-            story_title=title,
-            user_id=fb.user_id,
-            rating=fb.rating,
-            comment=fb.comment or "",
-            created_at=fb.created_at.isoformat() if fb.created_at else "",
+    valid_ranges = {"day", "week", "month"}
+    if date_range is not None and date_range not in valid_ranges:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"date_range must be one of: {', '.join(sorted(valid_ranges))}",
         )
-        for fb, title in rows
-    ]
+
+    since = _parse_date_range(date_range)
+    rows, total = StoryFeedbackRepository(db).list_with_comments(
+        limit, offset, rating=rating, user_id=user_id, since=since,
+        skip_tenant_filter=True
+    )
+    return FeedbackListResponse(
+        items=[
+            NegativeFeedbackItem(
+                id=str(fb.id),
+                story_id=str(fb.story_id),
+                story_title=title,
+                user_id=fb.user_id,
+                user_email=email,
+                rating=fb.rating,
+                comment=fb.comment or "",
+                created_at=fb.created_at.isoformat() if fb.created_at else "",
+            )
+            for fb, title, email in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )

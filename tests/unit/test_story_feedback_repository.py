@@ -77,9 +77,9 @@ def test_list_with_comments_does_not_leak_other_tenant_feedback():
 
     # Query from tenant A's context (set by the autouse fixture in conftest.py)
     repo = StoryFeedbackRepository(db)
-    results = repo.list_with_comments(limit=100, offset=0)
+    results, total = repo.list_with_comments(limit=100, offset=0)
 
-    story_ids = [fb.story_id for fb, _ in results]
+    story_ids = [fb.story_id for fb, _, _ in results]
     assert STORY_A in story_ids, "Tenant A's own feedback should be returned"
     assert STORY_B not in story_ids, "Tenant B's feedback must NOT appear in tenant A's results"
 
@@ -94,10 +94,11 @@ def test_list_with_comments_returns_own_tenant_data():
     db.commit()
 
     repo = StoryFeedbackRepository(db)
-    results = repo.list_with_comments(limit=100, offset=0)
+    results, total = repo.list_with_comments(limit=100, offset=0)
 
     assert len(results) == 1
-    fb, title = results[0]
+    assert total == 1
+    fb, title, email = results[0]
     assert fb.story_id == STORY_A
     assert fb.tenant_id == TEST_TENANT_ID
     assert isinstance(title, str)
@@ -119,9 +120,9 @@ def test_list_with_comments_rating_filter_still_applies():
     db.commit()
 
     repo = StoryFeedbackRepository(db)
-    results = repo.list_with_comments(limit=100, offset=0, rating="thumbs_up")
+    results, total = repo.list_with_comments(limit=100, offset=0, rating="thumbs_up")
 
-    story_ids = [fb.story_id for fb, _ in results]
+    story_ids = [fb.story_id for fb, _, _ in results]
     assert STORY_B not in story_ids, "Tenant B's thumbs_up must not leak into tenant A's results"
 
 
@@ -135,6 +136,7 @@ def test_list_with_comments_empty_when_no_feedback_for_tenant():
     db.commit()
 
     repo = StoryFeedbackRepository(db)
-    results = repo.list_with_comments(limit=100, offset=0)
+    results, total = repo.list_with_comments(limit=100, offset=0)
 
     assert results == [], "No feedback should be returned for a tenant with no data"
+    assert total == 0, "Total count should be 0 for a tenant with no data"

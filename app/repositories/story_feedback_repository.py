@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.context import get_tenant_id
 from app.models.story_feedback import StoryFeedback
 from app.models.user_story import UserStory
+from app.models.user import User
 
 
 class StoryFeedbackRepository:
@@ -81,27 +82,56 @@ class StoryFeedbackRepository:
         return self.list_with_comments(limit, offset, rating="thumbs_down")
 
     def list_with_comments(
-        self, limit: int, offset: int, rating: Optional[str] = None
-    ) -> list[tuple[StoryFeedback, str]]:
-        tid = self._tid()
-        q = (
-            self._db.query(StoryFeedback, UserStory.title)
-            .filter(StoryFeedback.tenant_id == tid)
-            .join(
-                UserStory,
-                (UserStory.id == StoryFeedback.story_id)
-                & (UserStory.tenant_id == tid),
-            )
-        )
+        self,
+        limit: int,
+        offset: int,
+        rating: Optional[str] = None,
+        user_id: Optional[str] = None,
+        since: Optional[datetime] = None,
+        skip_tenant_filter: bool = False,
+    ) -> tuple[list[tuple[StoryFeedback, str, Optional[str]]], int]:
+        tid = self._tid() if not skip_tenant_filter else None
+
+        q = self._db.query(StoryFeedback, UserStory.title)
+        if not skip_tenant_filter:
+            q = q.filter(StoryFeedback.tenant_id == tid)
+        q = q.join(UserStory, UserStory.id == StoryFeedback.story_id)
+        if not skip_tenant_filter:
+            q = q.filter(UserStory.tenant_id == tid)
+
         if rating:
             q = q.filter(StoryFeedback.rating == rating)
+        if user_id:
+            q = q.filter(StoryFeedback.user_id == user_id)
+        if since:
+            q = q.filter(StoryFeedback.created_at >= since)
+
+        total = (
+            q.with_entities(func.count(StoryFeedback.id)).scalar() or 0
+        )
+
+        rows = self._db.query(StoryFeedback, UserStory.title, User.email)
+        if not skip_tenant_filter:
+            rows = rows.filter(StoryFeedback.tenant_id == tid)
+        rows = rows.outerjoin(UserStory, UserStory.id == StoryFeedback.story_id)
+        if not skip_tenant_filter:
+            rows = rows.filter(UserStory.tenant_id == tid)
+        rows = rows.outerjoin(User, User.id == StoryFeedback.user_id)
+
+        if rating:
+            rows = rows.filter(StoryFeedback.rating == rating)
+        if user_id:
+            rows = rows.filter(StoryFeedback.user_id == user_id)
+        if since:
+            rows = rows.filter(StoryFeedback.created_at >= since)
+
         rows = (
-            q.order_by(StoryFeedback.created_at.desc())
+            rows.order_by(StoryFeedback.created_at.desc())
             .offset(offset)
             .limit(limit)
             .all()
         )
-        return [(fb, title) for fb, title in rows]
+        return [(fb, title, email) for fb, title, email in rows], int(total)
 
     def list_recent(self, limit: int) -> list[StoryFeedback]:
         return (
