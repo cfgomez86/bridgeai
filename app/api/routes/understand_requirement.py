@@ -1,18 +1,14 @@
 import asyncio
 import uuid
 
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.api.dependencies import get_current_user, get_source_connection_repo, get_understanding_service
 from app.core.logging import get_logger
+from app.repositories.source_connection_repository import SourceConnectionRepository
 from app.services.requirement_coherence_validator import IncoherentRequirementError
 from app.services.requirement_understanding_service import RequirementUnderstandingService
-
-if TYPE_CHECKING:
-    from app.repositories.source_connection_repository import SourceConnectionRepository
 
 logger = get_logger(__name__)
 
