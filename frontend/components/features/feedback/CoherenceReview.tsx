@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { CSSProperties, useEffect, useState } from "react"
 import {
   getIncoherentRequirements,
   type IncoherentRequirementItem,
@@ -18,6 +18,7 @@ type ReasonFilter =
   | "empty_intent"
 
 type DateRange = "all" | "day" | "week" | "month"
+type SortBy = "desc" | "asc"
 
 function formatDate(iso: string): string {
   if (!iso) return ""
@@ -53,6 +54,19 @@ function ReasonBadge({ code }: { code: string }) {
   )
 }
 
+const selectStyle: CSSProperties = {
+  padding: "5px 10px",
+  borderRadius: "var(--radius)",
+  border: "1px solid var(--border)",
+  background: "var(--surface)",
+  color: "var(--fg)",
+  fontSize: "12.5px",
+  fontFamily: "var(--font-display)",
+  cursor: "pointer",
+  outline: "none",
+  height: "30px",
+}
+
 export function CoherenceReview() {
   const { t } = useLanguage()
   const c = t.coherencePage
@@ -60,6 +74,7 @@ export function CoherenceReview() {
   const [filter, setFilter] = useState<ReasonFilter>("all")
   const [dateRange, setDateRange] = useState<DateRange>("all")
   const [userFilter, setUserFilter] = useState("")
+  const [sortBy, setSortBy] = useState<SortBy>("desc")
   const [items, setItems] = useState<IncoherentRequirementItem[] | null>(null)
   const [total, setTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -71,8 +86,8 @@ export function CoherenceReview() {
     setError(null)
     const reason = filter === "all" ? null : filter
     const range = dateRange === "all" ? null : dateRange
-    const userId = userFilter.trim() || null
-    getIncoherentRequirements(PAGE_SIZE, 0, reason, range, userId)
+    const uf = userFilter.trim() || null
+    getIncoherentRequirements(PAGE_SIZE, 0, reason, range, uf, sortBy)
       .then((data) => {
         if (cancelled) return
         setItems(data.items)
@@ -86,16 +101,16 @@ export function CoherenceReview() {
     return () => {
       cancelled = true
     }
-  }, [filter, dateRange, userFilter, c.error_load])
+  }, [filter, dateRange, userFilter, sortBy, c.error_load])
 
   async function loadMore() {
     if (!items) return
     setLoadingMore(true)
     const reason = filter === "all" ? null : filter
     const range = dateRange === "all" ? null : dateRange
-    const userId = userFilter.trim() || null
+    const uf = userFilter.trim() || null
     try {
-      const next = await getIncoherentRequirements(PAGE_SIZE, items.length, reason, range, userId)
+      const next = await getIncoherentRequirements(PAGE_SIZE, items.length, reason, range, uf, sortBy)
       setItems([...items, ...next.items])
       setTotal(next.total)
     } catch (err) {
@@ -106,15 +121,6 @@ export function CoherenceReview() {
   }
 
   const hasMore = items !== null && items.length < total
-
-  const FILTERS: { key: ReasonFilter; label: string }[] = [
-    { key: "all", label: c.filter_all },
-    { key: "non_software_request", label: c.filter_non_software },
-    { key: "contradictory", label: c.filter_contradictory },
-    { key: "unintelligible", label: c.filter_unintelligible },
-    { key: "conversational", label: c.filter_conversational },
-    { key: "empty_intent", label: c.filter_empty_intent },
-  ]
 
   return (
     <div className="page-content" style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -134,79 +140,44 @@ export function CoherenceReview() {
         <p style={{ margin: 0, fontSize: "13px", color: "var(--muted)" }}>{c.subtitle}</p>
       </div>
 
-      {/* Filter bar - Reason */}
-      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-        {FILTERS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setFilter(key)}
-            style={{
-              padding: "5px 14px",
-              borderRadius: "var(--radius)",
-              border: "1px solid",
-              borderColor: filter === key ? "var(--accent)" : "var(--border)",
-              background: filter === key ? "var(--accent-soft)" : "var(--surface)",
-              color: filter === key ? "var(--accent-strong)" : "var(--fg-2)",
-              fontSize: "12.5px",
-              fontWeight: filter === key ? 600 : 400,
-              cursor: "pointer",
-              fontFamily: "var(--font-display)",
-              transition: "all 0.1s",
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Filter bar */}
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+        <select value={filter} onChange={(e) => setFilter(e.target.value as ReasonFilter)} style={selectStyle}>
+          <option value="all">{c.filter_all}</option>
+          <option value="non_software_request">{c.filter_non_software}</option>
+          <option value="contradictory">{c.filter_contradictory}</option>
+          <option value="unintelligible">{c.filter_unintelligible}</option>
+          <option value="conversational">{c.filter_conversational}</option>
+          <option value="empty_intent">{c.filter_empty_intent}</option>
+        </select>
 
-      {/* Filter bar - Date Range */}
-      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-        {[
-          { key: "all" as DateRange, label: c.filter_date_all },
-          { key: "day" as DateRange, label: c.filter_date_day },
-          { key: "week" as DateRange, label: c.filter_date_week },
-          { key: "month" as DateRange, label: c.filter_date_month },
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setDateRange(key)}
-            style={{
-              padding: "5px 14px",
-              borderRadius: "var(--radius)",
-              border: "1px solid",
-              borderColor: dateRange === key ? "var(--accent)" : "var(--border)",
-              background: dateRange === key ? "var(--accent-soft)" : "var(--surface)",
-              color: dateRange === key ? "var(--accent-strong)" : "var(--fg-2)",
-              fontSize: "12.5px",
-              fontWeight: dateRange === key ? 600 : 400,
-              cursor: "pointer",
-              fontFamily: "var(--font-display)",
-              transition: "all 0.1s",
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+        <select value={dateRange} onChange={(e) => setDateRange(e.target.value as DateRange)} style={selectStyle}>
+          <option value="all">{c.filter_date_all}</option>
+          <option value="day">{c.filter_date_day}</option>
+          <option value="week">{c.filter_date_week}</option>
+          <option value="month">{c.filter_date_month}</option>
+        </select>
 
-      {/* Filter bar - User */}
-      <input
-        type="text"
-        placeholder={c.filter_user_placeholder}
-        value={userFilter}
-        onChange={(e) => setUserFilter(e.target.value)}
-        style={{
-          padding: "7px 12px",
-          borderRadius: "var(--radius)",
-          border: "1px solid var(--border)",
-          background: "var(--surface)",
-          color: "var(--fg)",
-          fontSize: "13px",
-          fontFamily: "var(--font-display)",
-          outline: "none",
-          maxWidth: "300px",
-        }}
-      />
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} style={selectStyle}>
+          <option value="desc">{c.sort_newest}</option>
+          <option value="asc">{c.sort_oldest}</option>
+        </select>
+
+        <input
+          type="text"
+          placeholder={c.filter_user_placeholder}
+          value={userFilter}
+          onChange={(e) => setUserFilter(e.target.value)}
+          style={{
+            ...selectStyle,
+            height: "30px",
+            padding: "5px 10px",
+            minWidth: "200px",
+            flex: "1 1 200px",
+            maxWidth: "320px",
+          }}
+        />
+      </div>
 
       {error && (
         <div

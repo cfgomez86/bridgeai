@@ -164,7 +164,8 @@ def _parse_date_range(date_range: Optional[str]) -> Optional[datetime]:
 async def list_feedback_comments(
     rating: Optional[str] = Query(default=None),
     date_range: Optional[str] = Query(default=None),
-    user_id: Optional[str] = Query(default=None),
+    user_filter: Optional[str] = Query(default=None),
+    sort_by: Optional[str] = Query(default="desc"),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -190,8 +191,8 @@ async def list_feedback_comments(
 
     since = _parse_date_range(date_range)
     rows, total = StoryFeedbackRepository(db).list_with_comments(
-        limit, offset, rating=rating, user_id=user_id, since=since,
-        skip_tenant_filter=True
+        limit, offset, rating=rating, user_filter=user_filter, since=since,
+        skip_tenant_filter=True, sort_by=sort_by or "desc",
     )
     return FeedbackListResponse(
         items=[

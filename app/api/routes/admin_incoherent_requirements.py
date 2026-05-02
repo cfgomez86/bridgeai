@@ -60,7 +60,8 @@ def _parse_date_range(date_range: Optional[str]) -> Optional[datetime]:
 async def list_incoherent_requirements(
     reason: Optional[str] = Query(default=None),
     date_range: Optional[str] = Query(default=None),
-    user_id: Optional[str] = Query(default=None),
+    user_filter: Optional[str] = Query(default=None),
+    sort_by: Optional[str] = Query(default="desc"),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     repo: "IncoherentRequirementRepository" = Depends(get_incoherent_requirement_repo),
@@ -85,8 +86,8 @@ async def list_incoherent_requirements(
 
     since = _parse_date_range(date_range)
     rows, total = repo.list_with_user(
-        limit=limit, offset=offset, reason=reason, user_id=user_id, since=since,
-        skip_tenant_filter=True
+        limit=limit, offset=offset, reason=reason, user_filter=user_filter, since=since,
+        skip_tenant_filter=True, sort_by=sort_by or "desc",
     )
 
     items: list[IncoherentRequirementItem] = []

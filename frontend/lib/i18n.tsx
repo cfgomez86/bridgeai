@@ -428,6 +428,14 @@ interface Translations {
     filter_all: string
     filter_positive: string
     filter_negative: string
+    filter_date_all: string
+    filter_date_day: string
+    filter_date_week: string
+    filter_date_month: string
+    filter_user_placeholder: string
+    user_label: string
+    sort_newest: string
+    sort_oldest: string
   }
   coherencePage: {
     title: string
@@ -448,6 +456,13 @@ interface Translations {
     project_label: string
     warning_label: string
     requirement_label: string
+    filter_date_all: string
+    filter_date_day: string
+    filter_date_week: string
+    filter_date_month: string
+    filter_user_placeholder: string
+    sort_newest: string
+    sort_oldest: string
   }
   stories: {
     edit_title: string
@@ -1081,6 +1096,8 @@ const es: Translations = {
     filter_date_month: "Este mes",
     filter_user_placeholder: "Filtrar por usuario...",
     user_label: "Usuario",
+    sort_newest: "Más reciente",
+    sort_oldest: "Más antiguo",
   },
   coherencePage: {
     title: "Filtros de coherencia",
@@ -1106,6 +1123,8 @@ const es: Translations = {
     project_label: "Proyecto",
     warning_label: "Advertencia",
     requirement_label: "Texto enviado",
+    sort_newest: "Más reciente",
+    sort_oldest: "Más antiguo",
   },
 }
 
@@ -1559,6 +1578,8 @@ const en: Translations = {
     filter_date_month: "This month",
     filter_user_placeholder: "Filter by user...",
     user_label: "User",
+    sort_newest: "Newest first",
+    sort_oldest: "Oldest first",
   },
   coherencePage: {
     title: "Coherence filter",
@@ -1584,6 +1605,8 @@ const en: Translations = {
     filter_date_week: "This week",
     filter_date_month: "This month",
     filter_user_placeholder: "Filter by user...",
+    sort_newest: "Newest first",
+    sort_oldest: "Oldest first",
   },
   stories: {
     edit_title: "Edit story",
@@ -2127,6 +2150,8 @@ const ca: Translations = {
     filter_date_month: "Aquest mes",
     filter_user_placeholder: "Filtrar per usuari...",
     user_label: "Usuari",
+    sort_newest: "Més recent",
+    sort_oldest: "Més antic",
   },
   coherencePage: {
     title: "Filtres de coherència",
@@ -2152,6 +2177,8 @@ const ca: Translations = {
     filter_date_week: "Aquesta setmana",
     filter_date_month: "Aquest mes",
     filter_user_placeholder: "Filtrar per usuari...",
+    sort_newest: "Més recent",
+    sort_oldest: "Més antic",
   },
   stories: {
     edit_title: "Editar història",

@@ -86,11 +86,14 @@ class StoryFeedbackRepository:
         limit: int,
         offset: int,
         rating: Optional[str] = None,
-        user_id: Optional[str] = None,
+        user_filter: Optional[str] = None,
         since: Optional[datetime] = None,
         skip_tenant_filter: bool = False,
+        sort_by: str = "desc",
     ) -> tuple[list[tuple[StoryFeedback, str, Optional[str]]], int]:
+        from sqlalchemy import or_
         tid = self._tid() if not skip_tenant_filter else None
+        order = StoryFeedback.created_at.asc() if sort_by == "asc" else StoryFeedback.created_at.desc()
 
         q = self._db.query(StoryFeedback, UserStory.title)
         if not skip_tenant_filter:
@@ -98,17 +101,19 @@ class StoryFeedbackRepository:
         q = q.join(UserStory, UserStory.id == StoryFeedback.story_id)
         if not skip_tenant_filter:
             q = q.filter(UserStory.tenant_id == tid)
+        q = q.outerjoin(User, User.id == StoryFeedback.user_id)
 
         if rating:
             q = q.filter(StoryFeedback.rating == rating)
-        if user_id:
-            q = q.filter(StoryFeedback.user_id == user_id)
+        if user_filter:
+            q = q.filter(or_(
+                User.email.ilike(f"%{user_filter}%"),
+                StoryFeedback.user_id == user_filter,
+            ))
         if since:
             q = q.filter(StoryFeedback.created_at >= since)
 
-        total = (
-            q.with_entities(func.count(StoryFeedback.id)).scalar() or 0
-        )
+        total = q.with_entities(func.count(StoryFeedback.id)).scalar() or 0
 
         rows = self._db.query(StoryFeedback, UserStory.title, User.email)
         if not skip_tenant_filter:
@@ -120,17 +125,15 @@ class StoryFeedbackRepository:
 
         if rating:
             rows = rows.filter(StoryFeedback.rating == rating)
-        if user_id:
-            rows = rows.filter(StoryFeedback.user_id == user_id)
+        if user_filter:
+            rows = rows.filter(or_(
+                User.email.ilike(f"%{user_filter}%"),
+                StoryFeedback.user_id == user_filter,
+            ))
         if since:
             rows = rows.filter(StoryFeedback.created_at >= since)
 
-        rows = (
-            rows.order_by(StoryFeedback.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
+        rows = rows.order_by(order).offset(offset).limit(limit).all()
         return [(fb, title, email) for fb, title, email in rows], int(total)
 
     def list_recent(self, limit: int) -> list[StoryFeedback]:

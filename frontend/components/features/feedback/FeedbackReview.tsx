@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { CSSProperties, useEffect, useState } from "react"
 import { getNegativeFeedback, type NegativeFeedbackItem } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 
@@ -8,6 +8,7 @@ const PAGE_SIZE = 20
 
 type RatingFilter = "all" | "thumbs_up" | "thumbs_down"
 type DateRange = "all" | "day" | "week" | "month"
+type SortBy = "desc" | "asc"
 
 function formatDate(iso: string): string {
   if (!iso) return ""
@@ -38,6 +39,19 @@ function RatingBadge({ rating }: { rating: string }) {
   )
 }
 
+const selectStyle: CSSProperties = {
+  padding: "5px 10px",
+  borderRadius: "var(--radius)",
+  border: "1px solid var(--border)",
+  background: "var(--surface)",
+  color: "var(--fg)",
+  fontSize: "12.5px",
+  fontFamily: "var(--font-display)",
+  cursor: "pointer",
+  outline: "none",
+  height: "30px",
+}
+
 export function FeedbackReview() {
   const { t } = useLanguage()
   const f = t.feedbackPage
@@ -45,6 +59,7 @@ export function FeedbackReview() {
   const [filter, setFilter] = useState<RatingFilter>("all")
   const [dateRange, setDateRange] = useState<DateRange>("all")
   const [userFilter, setUserFilter] = useState("")
+  const [sortBy, setSortBy] = useState<SortBy>("desc")
   const [items, setItems] = useState<NegativeFeedbackItem[] | null>(null)
   const [total, setTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -56,8 +71,8 @@ export function FeedbackReview() {
     setError(null)
     const rating = filter === "all" ? null : filter
     const range = dateRange === "all" ? null : dateRange
-    const userId = userFilter.trim() || null
-    getNegativeFeedback(PAGE_SIZE, 0, rating, range, userId)
+    const uf = userFilter.trim() || null
+    getNegativeFeedback(PAGE_SIZE, 0, rating, range, uf, sortBy)
       .then((data) => {
         if (cancelled) return
         setItems(data.items)
@@ -69,16 +84,16 @@ export function FeedbackReview() {
         setItems([])
       })
     return () => { cancelled = true }
-  }, [filter, dateRange, userFilter, f.error_load])
+  }, [filter, dateRange, userFilter, sortBy, f.error_load])
 
   async function loadMore() {
     if (!items) return
     setLoadingMore(true)
     const rating = filter === "all" ? null : filter
     const range = dateRange === "all" ? null : dateRange
-    const userId = userFilter.trim() || null
+    const uf = userFilter.trim() || null
     try {
-      const next = await getNegativeFeedback(PAGE_SIZE, items.length, rating, range, userId)
+      const next = await getNegativeFeedback(PAGE_SIZE, items.length, rating, range, uf, sortBy)
       setItems([...items, ...next.items])
       setTotal(next.total)
     } catch (err) {
@@ -89,12 +104,6 @@ export function FeedbackReview() {
   }
 
   const hasMore = items !== null && items.length < total
-
-  const FILTERS: { key: RatingFilter; label: string }[] = [
-    { key: "all", label: f.filter_all },
-    { key: "thumbs_up", label: f.filter_positive },
-    { key: "thumbs_down", label: f.filter_negative },
-  ]
 
   return (
     <div className="page-content" style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -110,79 +119,41 @@ export function FeedbackReview() {
         </p>
       </div>
 
-      {/* Filter bar - Rating */}
-      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-        {FILTERS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setFilter(key)}
-            style={{
-              padding: "5px 14px",
-              borderRadius: "var(--radius)",
-              border: "1px solid",
-              borderColor: filter === key ? "var(--accent)" : "var(--border)",
-              background: filter === key ? "var(--accent-soft)" : "var(--surface)",
-              color: filter === key ? "var(--accent-strong)" : "var(--fg-2)",
-              fontSize: "12.5px",
-              fontWeight: filter === key ? 600 : 400,
-              cursor: "pointer",
-              fontFamily: "var(--font-display)",
-              transition: "all 0.1s",
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Filter bar */}
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+        <select value={filter} onChange={(e) => setFilter(e.target.value as RatingFilter)} style={selectStyle}>
+          <option value="all">{f.filter_all}</option>
+          <option value="thumbs_up">{f.filter_positive}</option>
+          <option value="thumbs_down">{f.filter_negative}</option>
+        </select>
 
-      {/* Filter bar - Date Range */}
-      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-        {[
-          { key: "all" as DateRange, label: f.filter_date_all },
-          { key: "day" as DateRange, label: f.filter_date_day },
-          { key: "week" as DateRange, label: f.filter_date_week },
-          { key: "month" as DateRange, label: f.filter_date_month },
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setDateRange(key)}
-            style={{
-              padding: "5px 14px",
-              borderRadius: "var(--radius)",
-              border: "1px solid",
-              borderColor: dateRange === key ? "var(--accent)" : "var(--border)",
-              background: dateRange === key ? "var(--accent-soft)" : "var(--surface)",
-              color: dateRange === key ? "var(--accent-strong)" : "var(--fg-2)",
-              fontSize: "12.5px",
-              fontWeight: dateRange === key ? 600 : 400,
-              cursor: "pointer",
-              fontFamily: "var(--font-display)",
-              transition: "all 0.1s",
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+        <select value={dateRange} onChange={(e) => setDateRange(e.target.value as DateRange)} style={selectStyle}>
+          <option value="all">{f.filter_date_all}</option>
+          <option value="day">{f.filter_date_day}</option>
+          <option value="week">{f.filter_date_week}</option>
+          <option value="month">{f.filter_date_month}</option>
+        </select>
 
-      {/* Filter bar - User */}
-      <input
-        type="text"
-        placeholder={f.filter_user_placeholder}
-        value={userFilter}
-        onChange={(e) => setUserFilter(e.target.value)}
-        style={{
-          padding: "7px 12px",
-          borderRadius: "var(--radius)",
-          border: "1px solid var(--border)",
-          background: "var(--surface)",
-          color: "var(--fg)",
-          fontSize: "13px",
-          fontFamily: "var(--font-display)",
-          outline: "none",
-          maxWidth: "300px",
-        }}
-      />
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} style={selectStyle}>
+          <option value="desc">{f.sort_newest}</option>
+          <option value="asc">{f.sort_oldest}</option>
+        </select>
+
+        <input
+          type="text"
+          placeholder={f.filter_user_placeholder}
+          value={userFilter}
+          onChange={(e) => setUserFilter(e.target.value)}
+          style={{
+            ...selectStyle,
+            height: "30px",
+            padding: "5px 10px",
+            minWidth: "200px",
+            flex: "1 1 200px",
+            maxWidth: "320px",
+          }}
+        />
+      </div>
 
       {error && (
         <div style={{
@@ -287,6 +258,7 @@ export function FeedbackReview() {
               )}
 
               <div style={{ fontSize: "11.5px", color: "var(--muted)", fontFamily: "var(--font-mono)" }}>
+                <strong style={{ color: "var(--fg-2)" }}>{f.user_label}:</strong>{" "}
                 {item.user_email ?? item.user_id}
               </div>
             </div>

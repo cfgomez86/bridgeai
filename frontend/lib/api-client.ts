@@ -640,14 +640,16 @@ export async function getNegativeFeedback(
   offset = 0,
   rating?: string | null,
   dateRange?: string | null,
-  userId?: string | null,
+  userFilter?: string | null,
+  sortBy?: string | null,
 ): Promise<FeedbackListResponse> {
   const params = new URLSearchParams()
   params.append("limit", String(limit))
   params.append("offset", String(offset))
   if (rating) params.append("rating", rating)
   if (dateRange) params.append("date_range", dateRange)
-  if (userId) params.append("user_id", userId)
+  if (userFilter) params.append("user_filter", userFilter)
+  if (sortBy) params.append("sort_by", sortBy)
   return apiFetch<FeedbackListResponse>(
     `/api/v1/feedback/comments?${params.toString()}`,
   )
@@ -682,7 +684,8 @@ export async function getIncoherentRequirements(
   offset = 0,
   reason?: string | null,
   dateRange?: string | null,
-  userId?: string | null,
+  userFilter?: string | null,
+  sortBy?: string | null,
 ): Promise<IncoherentRequirementListResponse> {
   const params = new URLSearchParams({
     limit: String(limit),
@@ -690,7 +693,8 @@ export async function getIncoherentRequirements(
   })
   if (reason) params.set("reason", reason)
   if (dateRange) params.set("date_range", dateRange)
-  if (userId) params.set("user_id", userId)
+  if (userFilter) params.set("user_filter", userFilter)
+  if (sortBy) params.set("sort_by", sortBy)
   return apiFetch<IncoherentRequirementListResponse>(
     `/api/v1/admin/incoherent-requirements?${params.toString()}`,
   )
