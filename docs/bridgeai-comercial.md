@@ -154,6 +154,29 @@ detrás (Claude, GPT, Gemini, Llama vía Groq) **sin tocar la
 configuración del cliente**. Si mañana hay un modelo mejor o más barato,
 se cambia con una variable de entorno. El cliente no queda atrapado.
 
+### 4.6 Panorama del mercado por herramienta
+
+Existen herramientas reconocidas que se solapan parcialmente con BridgeAI,
+pero ninguna cubre el flujo completo: **requisito → impacto en el código
+→ historia de usuario → ticket creado**.
+
+| Herramienta | Qué hace bien | Qué le falta para ser BridgeAI |
+|---|---|---|
+| **GitHub Copilot Workspace** | Toma un issue existente y planifica cambios en el código | No genera historias de usuario; apunta al dev, no al PM; no integra con Jira/ADO |
+| **Atlassian Intelligence** | Mejora y sugiere texto dentro de Jira | No analiza el codebase; parte de que el ticket ya existe |
+| **Linear AI** | Enriquece descripciones de issues y sugiere etiquetas | No toca el código; no genera stories desde un requisito en crudo |
+| **Cursor / Windsurf** | Asistente de código con contexto del repo abierto | No produce artefactos de PM; no integra con Jira/ADO; archivo por archivo |
+| **Aha! + Jira** | Gestión de requisitos end-to-end con roadmaps | No analiza el código; no usa LLM para impact analysis; flujo manual |
+| **CodeScene** | Analiza deuda técnica, hotspots y riesgo del codebase | No entiende requisitos en lenguaje natural; no genera stories ni tickets |
+
+**El diferenciador real es el puente.** Cada herramienta de la tabla vive
+en uno de los dos mundos —el mundo del PM (requisitos, stories, tickets)
+o el mundo del código (qué archivos se ven afectados, qué dependencias
+existen)—. BridgeAI existe exactamente en la intersección: recibe el
+lenguaje del negocio y devuelve artefactos del negocio, pero toma las
+decisiones con el conocimiento del código. Esa combinación no existe
+como producto integrado en ninguna otra solución del mercado hoy.
+
 ---
 
 ## 5. Beneficios concretos para el negocio
@@ -211,7 +234,175 @@ clic y al ticket.
 
 ---
 
-## 8. Cierre — la idea en una frase
+## 8. Segmentación de mercado y viabilidad
+
+### 8.1 Segmento principal: mid-market
+
+**Perfil:** empresas de 50–500 personas, 2–10 PMs, que ya usan
+Jira o Azure DevOps y tienen sus repos en GitHub, GitLab, Azure Repos
+o Bitbucket.
+
+**Por qué es el foco:** sienten el dolor (sin BAs dedicados, tickets
+inconsistentes, PMs desbordados), tienen presupuesto para herramientas
+SaaS, y sus ciclos de compra son manejables — sin procurement de seis
+meses ni comités de seguridad de diez personas.
+
+**Probabilidad estimada de PMF:** 65–70 %, asumiendo que el producto
+entrega calidad consistente en los primeros 30 días de uso.
+
+### 8.2 Segmento secundario: enterprise regulado
+
+**Perfil:** banca, salud, gobierno, defensa — sectores donde las
+políticas de seguridad impiden usar herramientas que envían código a
+proveedores externos de IA.
+
+**Por qué es una oportunidad real:** el argumento de "el código nunca
+sale del perímetro" es estructuralmente irreplicable por los incumbentes
+(Atlassian Intelligence, GitHub Copilot) mientras operen como SaaS
+multi-tenant. Esas empresas *no pueden* usar esas herramientas aunque
+quisieran.
+
+**Requisito para cerrar este segmento:** certificaciones de seguridad
+(SOC2 Type II, ISO 27001) y opción de deployment on-prem o VPC privada.
+Sin esto, la conversación nunca pasa del área de TI al área de compras.
+
+**Probabilidad estimada de PMF:** 30–40 %. Alta recompensa, pero ciclo
+de venta de 6–18 meses y alta inversión previa en compliance.
+
+### 8.3 Segmento descartable como motor de revenue: startups pequeñas
+
+**Perfil:** equipos de menos de 20 personas, repos chicos, procesos de
+PM informales.
+
+**Por qué no es el foco:** adoptan rápido pero pagan poco o nada,
+prefieren pedirle lo mismo a ChatGPT, y el análisis de impacto aporta
+menos valor en codebases pequeñas. Son útiles para tracción inicial y
+testimonios, no para revenue sostenible.
+
+**Probabilidad estimada de PMF:** 20–25 %.
+
+### 8.4 Resumen de segmentos
+
+| Segmento | Potencial de revenue | Dificultad de venta | Recomendación |
+|---|---|---|---|
+| Mid-market (50–500 empl.) | Alto | Media | **Foco principal** |
+| Enterprise regulado (banca, salud, gobierno) | Muy alto | Alta | **Apuesta secundaria con inversión en compliance** |
+| Startups pequeñas | Bajo | Baja | Solo para validación y testimonios |
+
+### 8.5 Principal riesgo de viabilidad: absorción por incumbentes
+
+El riesgo mayor no es técnico, es competitivo. Atlassian, GitHub o
+Linear podrían lanzar una feature similar como parte de sus productos
+en 12–18 meses. Ya tienen los repos, los tickets y los LLMs integrados.
+BridgeAI compite indirectamente contra el roadmap de compañías de miles
+de millones de dólares.
+
+Las tres defensas concretas contra ese riesgo:
+
+1. **Velocidad de distribución.** Llegar a suficientes clientes pagos
+   antes de que los incumbentes lleguen. El go-to-market es tan crítico
+   como el producto.
+2. **Profundidad técnica.** El análisis de código basado en AST y la
+   arquitectura RAG léxico-estructural son más difíciles de replicar
+   rápido que una feature de "mejorar descripción con IA". La superficie
+   copiable es menor de lo que parece.
+3. **El nicho regulado.** Empresas que estructuralmente no pueden usar
+   las herramientas de los incumbentes por compliance son impermeables a
+   esa competencia. Es el segmento donde BridgeAI no tiene sustituto.
+
+### 8.6 Modelo de go-to-market recomendado
+
+1. **Fase 1 (0–6 meses):** cerrar 10–20 clientes mid-market con
+   onboarding guiado. Objetivo: validar que la calidad del output
+   sostiene la retención mes a mes. Priorizar recomendaciones de boca en
+   boca dentro de comunidades de producto (Product Hunt, comunidades de
+   PMs en LATAM/USA).
+2. **Fase 2 (6–18 meses):** iniciar conversaciones enterprise con el
+   diferenciador de compliance. Paralelamente, obtener SOC2 Type II.
+   Construir casos de estudio de fase 1 como credenciales.
+3. **Fase 3 (18+ meses):** canal de partners — consultoras que entran a
+   proyectos nuevos y necesitan generar backlog inicial son el vendedor
+   natural del producto sin costo marginal de adquisición.
+
+---
+
+## 9. Modelo de precios y planes
+
+### 8.1 El valor que se cobra
+
+Un PM o BA en LATAM cobra ~$15–30/hora; en USA ~$50–80/hora. Escribir
+una historia con análisis de código toma entre 45 y 90 minutos. BridgeAI
+lo hace en segundos. Si un equipo genera 40 historias al mes, el ahorro
+estimado es:
+
+- **LATAM:** ~$600–1,800/mes de tiempo PM recuperado.
+- **USA:** ~$2,000–4,800/mes de tiempo PM recuperado.
+
+Incluso en el plan más caro, el ROI es inmediato y cuantificable. Eso es
+lo que justifica el precio frente a "otra herramienta SaaS".
+
+### 8.2 Modelo: por workspace + límite de historias
+
+BridgeAI **no cobra por asiento**. Las razones:
+
+- Dos PMs pueden generar 200 historias/mes (mucho valor) o 10 (poco
+  valor); el seat no captura esa diferencia.
+- "X por mes para todo tu equipo" es más fácil de aprobar que "X por
+  usuario".
+- El límite de historias crea un upgrade natural sin fricción artificial.
+
+Las historias extra sobre el límite se cobran como overage (~$2–5 c/u);
+**nunca se bloquean**. Bloquear genera churn; el overage genera expansion
+revenue.
+
+### 8.3 Planes — mercado LATAM
+
+| Plan | Precio/mes | Repos | Historias/mes | Usuarios | Integraciones |
+|---|---|---|---|---|---|
+| **Starter** | $79 | 1 | 30 | 3 | Jira o ADO |
+| **Growth** | $199 | 3 | 150 | 10 | Jira + ADO |
+| **Business** | $499 | Ilimitado | 500 | Ilimitado | Todo |
+| **Enterprise** | A consultar | Ilimitado | Ilimitado | Ilimitado | On-prem / VPC |
+
+### 8.4 Planes — mercado USA / global
+
+| Plan | Precio/mes | Repos | Historias/mes | Usuarios | Integraciones |
+|---|---|---|---|---|---|
+| **Starter** | $149 | 1 | 30 | 3 | Jira o ADO |
+| **Growth** | $399 | 3 | 150 | 10 | Jira + ADO |
+| **Business** | $999 | Ilimitado | 500 | Ilimitado | Todo |
+| **Enterprise** | $2,500+ | Ilimitado | Ilimitado | Ilimitado | On-prem / VPC |
+
+**Descuento anual:** 20–25 % sobre el precio mensual (mejora cashflow y
+reduce churn). **Trial:** 14 días gratis, límite de 10 historias, sin
+tarjeta requerida.
+
+### 8.5 El plan que mueve el negocio
+
+**Growth es el caballo de batalla.** Equipos de 5–15 personas con 2–3
+PMs activos que ya usan Jira pueden aprobar $200/mes sin pasar por
+procurement. Ese es el perfil que convierte, paga y renueva.
+
+**Growth → Business** es la palanca de expansión: cuando el equipo crece
+y el límite duele, el upgrade es la solución natural.
+
+**Enterprise** es el plan de largo plazo. El argumento de compliance
+regulado (banca, salud, gobierno) justifica tickets de $2,000–8,000/mes,
+pero el ciclo de venta es más largo y requiere inversión en
+certificaciones (SOC2, ISO 27001) y opción de deployment on-prem o VPC
+privada.
+
+### 8.6 Nota para go-to-market en LATAM
+
+Si el mercado primario es LATAM, los precios en dólares pueden generar
+fricción en algunos países. Se recomienda billing en dólares con
+pasarelas locales (Stripe soporta esto), o una variante LATAM al 60 %
+del precio USD con onboarding completamente en español. Si el target
+desde el inicio es USA, esta consideración no aplica.
+
+---
+
+## 10. Cierre — la idea en una frase
 
 > **BridgeAI convierte el "tenemos que hacer X" del cliente en una
 > historia de usuario aterrizada al código real, con calidad medida y
