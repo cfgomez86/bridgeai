@@ -12,12 +12,12 @@ import {
 } from "@/lib/api-client"
 import { useLanguage } from "@/lib/i18n"
 import type { WorkflowState } from "@/hooks/useWorkflow"
-import { RiskBadge } from "@/components/features/RiskBadge"
-import { StepSummaryCard } from "@/components/features/StepSummaryCard"
+import { Step1SummaryCard } from "@/components/features/workflow/Step1SummaryCard"
+import { Step2SummaryCard } from "@/components/features/workflow/Step2SummaryCard"
 import { QualityPanel } from "@/components/features/stories/QualityPanel"
 import { StoryCard } from "@/components/features/stories/StoryCard"
 import { StoryFeedback } from "@/components/features/stories/StoryFeedback"
-import { AlertTriangle, Loader2, Pencil, Search, ShieldOff, Wand2, Zap } from "lucide-react"
+import { AlertTriangle, Loader2, Pencil, ShieldOff, Wand2 } from "lucide-react"
 
 function HelpTip({ text, children }: { text: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -87,17 +87,6 @@ function HelpTip({ text, children }: { text: string; children: React.ReactNode }
     </span>
   )
 }
-
-const truncate = (text: string, max: number) =>
-  text.length > max ? text.slice(0, max) + "…" : text
-
-const chip = (): React.CSSProperties => ({
-  display: "inline-flex", alignItems: "center",
-  padding: "1px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 500,
-  fontFamily: "var(--font-mono)",
-  background: "var(--surface-3)", color: "var(--fg-2)",
-  border: "1px solid transparent",
-})
 
 interface Step3Props {
   state: WorkflowState
@@ -184,56 +173,8 @@ export function Step3Generate({ state, completeStep3, setGeneratorInfo, goBackTo
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      <StepSummaryCard title={s.step1_summary} icon={<Search size={13} />}>
-        <p style={{ fontSize: "12.5px", color: "var(--fg-2)", fontStyle: "italic", margin: 0 }}>
-          &ldquo;{truncate(state.requirementText, 120)}&rdquo;
-        </p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
-          {state.featureType && <span style={chip()}>{state.featureType}</span>}
-          {state.complexity && <span style={chip()}>{s.complexity} {state.complexity}</span>}
-          {state.language && <span style={chip()}>{s.lang_label} {state.language}</span>}
-        </div>
-        {state.intent && (
-          <p style={{ fontSize: "11.5px", color: "var(--muted)", margin: 0 }}>
-            {s.intent_label} <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{state.intent}</span>
-          </p>
-        )}
-        {state.keywords.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
-            {state.keywords.map((kw) => <span key={kw} style={chip()}>{kw}</span>)}
-          </div>
-        )}
-        {(state.coherenceModel || state.parserModel) && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "2px" }}>
-            {state.coherenceModel && (
-              <p style={{ fontSize: "11px", color: "var(--fg-2)", margin: 0, fontFamily: "var(--font-mono)" }}>
-                {s.coherence_judge_label}: <span style={{ color: "var(--muted)" }}>{state.coherenceModel}</span>
-              </p>
-            )}
-            {state.parserModel && (
-              <p style={{ fontSize: "11px", color: "var(--fg-2)", margin: 0, fontFamily: "var(--font-mono)" }}>
-                {s.parser_label}: <span style={{ color: "var(--muted)" }}>{state.parserModel}</span>
-              </p>
-            )}
-          </div>
-        )}
-      </StepSummaryCard>
-
-      <StepSummaryCard title={s.step2_summary} icon={<Zap size={13} />}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "center" }}>
-          {state.filesImpacted !== null && (
-            <span style={{ fontSize: "12.5px", color: "var(--muted)" }}>
-              {s.files} <span style={{ color: "var(--fg)", fontWeight: 600 }}>{state.filesImpacted}</span>
-            </span>
-          )}
-          {state.riskLevel && <RiskBadge risk={state.riskLevel} />}
-        </div>
-        {state.modulesImpacted.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
-            {state.modulesImpacted.map((m) => <span key={m} style={chip()}>{m}</span>)}
-          </div>
-        )}
-      </StepSummaryCard>
+      <Step1SummaryCard state={state} strings={s} />
+      <Step2SummaryCard state={state} strings={s} />
 
       {(loading || forcing) && (
         <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--muted)", fontSize: "12px", padding: "4px 0" }}>

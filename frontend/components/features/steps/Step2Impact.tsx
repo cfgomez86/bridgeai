@@ -8,8 +8,7 @@ import type { WorkflowState } from "@/hooks/useWorkflow"
 import { StepSummaryCard } from "@/components/features/StepSummaryCard"
 import { RiskBadge } from "@/components/features/RiskBadge"
 import { Loader2, Zap, Search } from "lucide-react"
-
-const truncate = (t: string, n: number) => t.length > n ? t.slice(0, n) + "…" : t
+import { truncate } from "@/lib/workflow-ui"
 
 const chip = (text: string, accent?: boolean): CSSProperties => ({
   display: "inline-flex", alignItems: "center",
