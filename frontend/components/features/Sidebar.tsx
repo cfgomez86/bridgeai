@@ -112,15 +112,15 @@ export function Sidebar({ isOpen = false, onClose, isMobile = false }: SidebarPr
 
   const NAV_ITEMS: NavItem[] = [
     { href: `${prefix}/`, label: t.nav.home, icon: <IconDashboard /> },
-    { href: `${prefix}/workflow`, label: t.nav.workflow, icon: <IconWand /> },
+    { href: `${prefix}/connections`, label: t.nav.connections, icon: <IconPlug /> },
     { href: `${prefix}/indexing`, label: t.nav.indexing, icon: <IconDatabase /> },
+    { href: `${prefix}/workflow`, label: t.nav.workflow, icon: <IconWand /> },
     ...(isAdmin
       ? [
           { href: `${prefix}/feedback`, label: t.nav.feedback, icon: <IconFeedback /> },
           { href: `${prefix}/feedback-coherence`, label: t.nav.feedback_coherence, icon: <IconShield /> },
         ]
       : []),
-    { href: `${prefix}/connections`, label: t.nav.connections, icon: <IconPlug /> },
     { href: `${prefix}/settings`, label: t.nav.settings, icon: <IconSettings /> },
   ]
 

@@ -206,19 +206,13 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
         {(state.coherenceModel || state.parserModel) && (
           <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "2px" }}>
             {state.coherenceModel && (
-              <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0, fontFamily: "var(--font-mono)" }}>
-                {s.coherence_judge_label}: <span style={{ color: "var(--fg-2)" }}>{state.coherenceModel}</span>
-                {state.coherenceCalls > 0 && (
-                  <> · {state.coherenceCalls} {state.coherenceCalls === 1 ? s.calls_singular : s.calls_plural}</>
-                )}
+              <p style={{ fontSize: "11px", color: "var(--fg-2)", margin: 0, fontFamily: "var(--font-mono)" }}>
+                {s.coherence_judge_label}: <span style={{ color: "var(--muted)" }}>{state.coherenceModel}</span>
               </p>
             )}
             {state.parserModel && (
-              <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0, fontFamily: "var(--font-mono)" }}>
-                {s.parser_label}: <span style={{ color: "var(--fg-2)" }}>{state.parserModel}</span>
-                {state.parserCalls > 0 && (
-                  <> · {state.parserCalls} {state.parserCalls === 1 ? s.calls_singular : s.calls_plural}</>
-                )}
+              <p style={{ fontSize: "11px", color: "var(--fg-2)", margin: 0, fontFamily: "var(--font-mono)" }}>
+                {s.parser_label}: <span style={{ color: "var(--muted)" }}>{state.parserModel}</span>
               </p>
             )}
           </div>
@@ -259,14 +253,6 @@ export function Step4Ticket({ state, setTicketProjectKey, completeStep4, reset }
                 </span>
                 <RiskBadge risk={story.risk_level} />
               </div>
-              {state.generatorModel && (
-                <p style={{ fontSize: "11px", color: "var(--muted)", margin: "6px 0 0", fontFamily: "var(--font-mono)" }}>
-                  {s.generator_label}: <span style={{ color: "var(--fg-2)" }}>{state.generatorModel}</span>
-                  {state.generatorCalls > 0 && (
-                    <> · {state.generatorCalls} {state.generatorCalls === 1 ? s.calls_singular : s.calls_plural}</>
-                  )}
-                </p>
-              )}
             </div>
 
             <div style={divider} />
