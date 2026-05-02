@@ -1,11 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "git status, git log, git diff, git branch, git show",
-      "cd, pwd, ls, find, which, which python, which npm",
-      "python -m pytest, pytest, npm test, npm run",
-      "python -m alembic, alembic",
-      "npm install, pip install, pip list, python -m pip",
+      "Git status, git log, git diff, git branch, git show",
+      "Cd, pwd, ls, find, which, which python, which npm",
+      "Python -m pytest, pytest, npm test, npm run",
+      "Python -m alembic, alembic",
+      "Npm install, pip install, pip list, python -m pip",
       "Read: *",
       "Glob: *",
       "Grep: *",
