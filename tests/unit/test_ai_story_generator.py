@@ -706,5 +706,10 @@ def test_ac_repair_skipped_for_frontend_missing_kind():
     provider.generate_story = fake_generate  # type: ignore[assignment]
     gen = AIStoryGenerator(provider, settings)
     # UI-implying context so _check_frontend_explicit fires.
+    result = gen.generate({
+        "requirement_text": "Add a registration form for new users",
+        "keywords": ["registro", "formulario"],
+    })
     assert provider.repair_calls == 0, "AC repair must not run for frontend_missing"
     assert provider.generate_calls == 2  # full retry path
+    assert len(result["subtasks"]["frontend"]) >= 1

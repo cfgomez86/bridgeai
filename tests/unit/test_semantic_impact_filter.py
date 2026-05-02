@@ -132,7 +132,7 @@ class TestSemanticFilterBatchProcessing:
 
     def test_filter_multiple_batches(self):
         """Verify multiple batches (40+ files) are split and processed."""
-        response = '{"relevant_files": [{"path": "relevant.py", "score": 85}]}'
+        response = '{"relevant_files": [{"path": "file_0.py", "score": 85}]}'
         filter_impl = ConcreteSemanticFilter(llm_response=response)
 
         # Create 100 candidates (triggers 3 batches of 40 each)
@@ -141,8 +141,13 @@ class TestSemanticFilterBatchProcessing:
             for i in range(100)
         }
 
+        # Actually invoke the filter with the candidates
+        result = filter_impl.filter("requirement", candidates)
+
         # Should have processed multiple batches
         assert len(filter_impl.llm_calls) > 1
+        # Should have file_0.py in result
+        assert "file_0.py" in result
 
     def test_filter_batch_error_keeps_all_in_batch(self):
         """Verify batch failure returns all files in that batch (fail-open)."""
