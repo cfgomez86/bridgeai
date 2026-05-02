@@ -37,6 +37,7 @@ eval_report.json
 .pytest_cache/
 .coverage
 .coverage.*
+coverage.json
 htmlcov/
 .tox/
 nosetests.xml
