@@ -193,5 +193,6 @@ Always read `app/api/routes/` to confirm backend route paths before adding a fun
 
 ## Post-generation quality gates (mandatory, in order)
 
-1. **`/simplify`** — review all written files. Fix duplication, unnecessary state, over-engineering. Re-run type check after any fix.
-2. **`/security-review`** — audit all changes. Fix any HIGH or MEDIUM findings (XSS, token leakage, open redirects) before delivering.
+1. **i18n compliance** — grep all modified `components/features/steps/Step*.tsx`, `components/features/feedback/*.tsx`, and `components/` feature files for hardcoded user-visible strings. Flag strings that appear outside `t.` translation keys. Pattern to block: any quoted text after `{` (except in variable names, URLs, classNames). Any string like `"Failed to..."`, `"Lang:"`, `"Intent:"`, error messages must come from `t.workflow.stepN.*` or `t.coherencePage.*`. Run: `grep -rn '"[A-Z].*"' components/features/steps/ | grep -v "t\." | grep -v "export\|import\|key=" | head -20` after edits.
+2. **`/simplify`** — review all written files. Fix duplication, unnecessary state, over-engineering. Re-run type check after any fix.
+3. **`/security-review`** — audit all changes. Fix any HIGH or MEDIUM findings (XSS, token leakage, open redirects) before delivering.

@@ -70,6 +70,21 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 **Tenant context** (`app/core/context.py`) — `ContextVar`-based isolation. `get_tenant_id()` raises `RuntimeError` if the context is not set, making missing auth hard to miss. All repositories call `_tid()` which delegates to `get_tenant_id()` — no cross-tenant query is possible at the data layer.
 
+**Repository query ordering rule** — **critical for multi-tenant safety**: any query that uses `.join()` or `.outerjoin()` must apply `.filter(Model.tenant_id == self._tid())` on the primary table **before** the join. Correct pattern:
+```python
+rows = (
+    self._db.query(Model)
+    .filter(Model.tenant_id == self._tid())  # ← BEFORE join
+    .outerjoin(OtherModel, ...)
+    .all()
+)
+```
+Incorrect (cross-tenant leak risk):
+```python
+rows = self._db.query(Model).outerjoin(...).filter(Model.tenant_id == self._tid()).all()  # ← AFTER join — too late
+```
+The reason: joins are resolved before filters in SQL order of operations. A join without a prior tenant filter can match rows from other tenants before the filter excludes them.
+
 **Repository isolation** (`app/models/code_file.py`) — `CodeFile` has a `source_connection_id` FK scoping files to a specific SCM connection. The unique constraint is `(tenant_id, source_connection_id, file_path)`. All `CodeFileRepository` methods accept an optional `source_connection_id` to filter to a single repo. `ImpactAnalysisService` resolves the active connection before iterating files, so analysis never mixes repos. This means:
 - Two different users never see each other's files.
 - A single user switching repos never gets cross-repo contamination in analysis or status counts.
@@ -78,7 +93,7 @@ core/            ← cross-cutting: config, logging middleware, security middlew
 
 **Coherence pre-filter** (`app/services/requirement_coherence_validator.py`, `app/services/requirement_gibberish_filter.py`) — 3-layer input gate that runs inside `RequirementUnderstandingService.understand()` **before** the cache lookup, so rejected text is never stored as a valid requirement:
 1. **Gibberish filter** (deterministic, no LLM cost) — rejects random character sequences (`sddssdd`, `fghfgh`).
-2. **Coherence validator** (LLM) — `RequirementCoherenceValidator` ABC; factory `get_coherence_validator(settings)` picks the right implementation (`anthropic`, `openai`, `groq`, `gemini`, or `stub`). Raises `IncoherentRequirementError` on rejection. **Fail-open**: network/timeout errors skip the gate rather than blocking the user.
+2. **Coherence validator** (LLM) — `RequirementCoherenceValidator` ABC; factory `get_coherence_validator(settings)` picks the right implementation (`anthropic`, `openai`, `groq`, `gemini`, or `stub`). Raises `IncoherentRequirementError` on rejection. **Fail-open**: network/timeout errors skip the gate rather than blocking the user. **Prompt injection safety**: when inserting user-supplied text into LLM prompts, always use `.replace("{placeholder}", user_text)`, never `.format(user_text)` or f-strings. This prevents prompt injection where user input could escape template variables and hijack the prompt.
 3. **Invalid-intent fallback** — if the main parser returns `intent="invalid_requirement"`, it is also rejected here.
 
 Rejected requirements are persisted to `incoherent_requirements` table via `IncoherentRequirementRepository`. The admin endpoint `GET /api/v1/admin/incoherent-requirements` (role `admin` only) returns a paginated list filterable by `reason` code. Valid reason codes: `non_software_request`, `contradictory`, `unintelligible`, `conversational`, `empty_intent`.

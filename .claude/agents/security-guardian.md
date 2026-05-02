@@ -61,9 +61,10 @@ grep -rn "^@router\." app/api/routes/ --include="*.py" -A5 | grep -v "get_curren
 ### C. Injection & SSRF
 
 8. **SSRF via user-supplied URLs**: any place a user-controlled URL (from DB or request body) is used to make an outbound HTTP request must call `validate_instance_url()` from `app/services/scm_providers/base.py` first. Grep for `httpx.get\|httpx.post\|requests.get\|aiohttp` and verify each call site.
-9. **Path traversal in local indexing**: `CodeIndexingService._walk_files()` uses `os.path.commonpath` to verify files stay inside `project_root`. Verify this guard is present and covers symlink resolution (`os.path.realpath`).
-10. **SQL injection via raw queries**: grep for `text(`, `execute(`, f-strings inside `.filter()`. SQLAlchemy ORM protects parameterized queries; raw `text()` with string interpolation does not.
-11. **Command injection**: grep for `subprocess`, `os.system`, `os.popen`. Any shell=True with user data is critical.
+9. **Prompt injection in LLM prompts**: any function that sends user-supplied text to an LLM must use `.replace(user_text)` or safe parameterization, never `.format(user_text)` or f-strings. Grep for `\.format(\|f".*{.*requirement_text` in `app/services/` files that call LLM APIs. Flag any occurrence of `.format()` with `requirement_text`, `requirement`, or user input in the argument list. Correct pattern: `prompt_template.replace("{requirement_text}", user_text)`.
+10. **Path traversal in local indexing**: `CodeIndexingService._walk_files()` uses `os.path.commonpath` to verify files stay inside `project_root`. Verify this guard is present and covers symlink resolution (`os.path.realpath`).
+11. **SQL injection via raw queries**: grep for `text(`, `execute(`, f-strings inside `.filter()`. SQLAlchemy ORM protects parameterized queries; raw `text()` with string interpolation does not.
+12. **Command injection**: grep for `subprocess`, `os.system`, `os.popen`. Any shell=True with user data is critical.
 
 ### D. Information disclosure
 
