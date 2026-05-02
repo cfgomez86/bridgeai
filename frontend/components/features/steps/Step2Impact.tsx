@@ -91,17 +91,11 @@ export function Step2Impact({ state, completeStep2 }: Step2Props) {
             {state.coherenceModel && (
               <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0, fontFamily: "var(--font-mono)" }}>
                 {s.coherence_judge_label}: <span style={{ color: "var(--fg-2)" }}>{state.coherenceModel}</span>
-                {state.coherenceCalls > 0 && (
-                  <> · {state.coherenceCalls} {state.coherenceCalls === 1 ? s.calls_singular : s.calls_plural}</>
-                )}
               </p>
             )}
             {state.parserModel && (
               <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0, fontFamily: "var(--font-mono)" }}>
                 {s.parser_label}: <span style={{ color: "var(--fg-2)" }}>{state.parserModel}</span>
-                {state.parserCalls > 0 && (
-                  <> · {state.parserCalls} {state.parserCalls === 1 ? s.calls_singular : s.calls_plural}</>
-                )}
               </p>
             )}
           </div>
