@@ -54,11 +54,14 @@ class CodeScanner:
 
     def _walk(self, directory: Path):  # type: ignore[no-untyped-def]
         for entry in directory.iterdir():
-            if entry.is_dir():
-                if entry.name not in IGNORED_DIRS:
-                    yield from self._walk(entry)
-            elif entry.is_file() and entry.suffix.lower() in SUPPORTED_EXTENSIONS:
-                yield entry
+            try:
+                if entry.is_dir():
+                    if entry.name not in IGNORED_DIRS:
+                        yield from self._walk(entry)
+                elif entry.is_file() and entry.suffix.lower() in SUPPORTED_EXTENSIONS:
+                    yield entry
+            except OSError as exc:
+                logger.warning("scan_skip path=%s reason=%s", entry, exc)
 
     def supported_extensions(self) -> list[str]:
         return sorted(SUPPORTED_EXTENSIONS)
